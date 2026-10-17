@@ -4,6 +4,7 @@ import { WebSocket } from "ws";
 import {
   buildFrame,
   buildRawFrame,
+  extensionOrigin,
   type MessageType,
   type PayloadOf,
   type Role,
@@ -122,3 +123,30 @@ export function connect(opts: ConnectOptions): Promise<TestClient> {
 
 /** Sleep helper for "nothing should have happened" assertions. */
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** The Origin a legitimate client of this role sends to a production-mode server on `port`. */
+export function originFor(role: Role, port: number): string {
+  return role === "extension" ? extensionOrigin() : `http://127.0.0.1:${port}`;
+}
+
+/**
+ * Connect with the role's legitimate Origin, say hello and consume welcome (and, for voice, the
+ * initial state push). The returned client's next unread frame is whatever comes after the bind.
+ */
+export async function bindClient(
+  port: number,
+  role: Role,
+  opts: { origin?: string | undefined } = {},
+): Promise<TestClient> {
+  const origin = "origin" in opts ? opts.origin : originFor(role, port);
+  const c = await connect({ port, origin });
+  if (c.status !== 101) throw new Error(`upgrade refused with ${c.status}`);
+  c.hello(role);
+  const welcome = await c.nextMessage();
+  if (welcome.type !== "welcome") throw new Error(`expected welcome, got ${welcome.type}`);
+  if (role === "voice") {
+    const state = await c.nextMessage();
+    if (state.type !== "state") throw new Error(`expected state, got ${state.type}`);
+  }
+  return c;
+}
