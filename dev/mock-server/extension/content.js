@@ -205,8 +205,17 @@ function reportChange() {
   clearTimeout(changeTimer);
   changeTimer = setTimeout(() => {
     const snapshot = createSnapshot(-1);
-    chrome.runtime.sendMessage({ kind: "blip.page-changed", structuralHash: snapshot.structuralHash });
+    chrome.runtime.sendMessage({ kind: "blip.page-changed", reason: "mutation", structuralHash: snapshot.structuralHash });
   }, 500);
+}
+
+function reportHistoryRestore() {
+  clearTimeout(changeTimer);
+  changeTimer = setTimeout(() => {
+    snapshotVersion += 1;
+    const snapshot = createSnapshot(-1);
+    chrome.runtime.sendMessage({ kind: "blip.page-changed", reason: "history-restored", structuralHash: snapshot.structuralHash });
+  }, 0);
 }
 
 function findTarget(id) {
@@ -294,4 +303,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 document.addEventListener("input", reportChange, true);
 document.addEventListener("change", reportChange, true);
+window.addEventListener("pageshow", reportHistoryRestore);
 chrome.runtime.sendMessage({ kind: "blip.page-ready", structuralHash: createSnapshot(-1).structuralHash });

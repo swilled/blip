@@ -1,8 +1,8 @@
 // Core's real server in-process (dev true, fake brain) serving apps/voice/dist, plus the PTT hook and voice window.
 // Imports core modules read-only. The fake extension is the default; --browser-extension selects local DOM bridge mode.
 //   node --import tsx dev/mock-server/src/run-real.ts [--fixture=booking|broken] [--port=7777] [--fake-delay=1500] [--browser-extension]
-import { existsSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { DEFAULT_PORT, type ActRequest } from "@blip/protocol";
@@ -84,11 +84,18 @@ if (entry?.endsWith("/run-real.ts")) {
       port: { type: "string" },
       "fake-delay": { type: "string" },
       "browser-extension": { type: "boolean", default: false },
+      "demo-run-id": { type: "string" },
+      "demo-root": { type: "string" },
     },
     strict: true,
   });
   if (!(FIXTURE_NAMES as readonly string[]).includes(values.fixture)) {
     console.error(`--fixture must be one of ${FIXTURE_NAMES.join(", ")}`);
+    process.exit(2);
+  }
+  const repoRoot = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
+  if (values["demo-run-id"] && values["demo-root"] !== repoRoot) {
+    console.error("--demo-root must match the repository containing run-real.ts");
     process.exit(2);
   }
   const real = await startReal({
@@ -100,11 +107,27 @@ if (entry?.endsWith("/run-real.ts")) {
   console.log(`blip real server (fake brain, ${values.fixture}${values["browser-extension"] ? ", live Chrome form bridge" : ""}): http://127.0.0.1:${real.server.port}/`);
   const stopPtt = await startPttWire(real.server.port);
   await launchVoiceWindow({ port: real.server.port, demoExtension: Boolean(values["browser-extension"]) });
-  const pidFile = join(fileURLToPath(new URL("../../../", import.meta.url)), ".demo-pid");
-  writeFileSync(pidFile, String(process.pid), "utf8");
+  const pidFile = join(repoRoot, ".demo-pid");
+  const readyFile = join(repoRoot, ".demo-ready");
+  const runRecord = values["demo-run-id"]
+    ? JSON.stringify({ pid: process.pid, runId: values["demo-run-id"], repoRoot })
+    : null;
+  if (runRecord !== null) {
+    writeFileSync(pidFile, runRecord, "utf8");
+    writeFileSync(readyFile, runRecord, "utf8");
+  }
   console.log("ready. Press Ctrl+C to stop");
+  const removeOwnMarker = (path: string): void => {
+    if (runRecord === null) return;
+    try {
+      if (readFileSync(path, "utf8") === runRecord) rmSync(path, { force: true });
+    } catch {
+      // Marker files may already be gone or replaced by a newer reset run.
+    }
+  };
   const shutdown = (): void => void stopPtt().then(() => real.close()).finally(() => {
-    rmSync(pidFile, { force: true });
+    removeOwnMarker(pidFile);
+    removeOwnMarker(readyFile);
     process.exit(0);
   });
   process.once("SIGINT", shutdown);
