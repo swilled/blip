@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { MESSAGES, type MessageType } from "../src/index";
+import { CLOSE_CODES, ERROR_CODES, MESSAGES, extensionOrigin, type MessageType } from "../src/index";
 
 // D-18: PROTOCOL.md and the registry must not drift. Every table whose header's first cell is
 // `type` lists registry types; other tables (origins, close codes, error codes) start with a
@@ -77,6 +77,13 @@ describe("PROTOCOL.md matches the registry (D-18)", () => {
       seen.add(r.type);
     }
     expect(dupes, `types listed more than once: ${dupes.join(", ")}`).toEqual([]);
+  });
+
+  it("names the pinned extension origin, every error code and every close code", () => {
+    const md = readFileSync(PROTOCOL_MD, "utf8");
+    expect(md).toContain(extensionOrigin());
+    for (const code of ERROR_CODES) expect(md, `error code ${code}`).toContain(`| ${code} |`);
+    for (const code of Object.values(CLOSE_CODES)) expect(md, `close code ${code}`).toContain(`| ${code} |`);
   });
 
   it("has from and to columns equal to the registry senders and receivers", () => {

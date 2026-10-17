@@ -10,3 +10,4 @@ export * from "./intent";
 export * from "./act";
 export * from "./payloads-extension";
 export * from "./payloads-voice";
+export * from "./extension-id";
