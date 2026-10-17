@@ -45,6 +45,16 @@ The user delegated all four discussion areas ("do whatever you think best, just 
 - **D-19:** Highlight (ACT-03): a fixed-position overlay box in a closed shadow root attached to `document.documentElement`, `pointer-events: none`, maximum z-index, high-contrast 3 px outline that follows scroll/resize. It does not touch the page's own styles or focus. `highlight {targetId: null}` clears it. Moved on every `fill`/`focus`/`select`/`check` automatically.
 - **D-20:** Snapshot size: the wire cap is 250 elements, 40 headings and 20 alerts (frozen). The roughly 8k-token trim belongs at the model-prompt boundary in Phase 4; Phase 2 only sets `truncated: true` when it hits the wire caps. Hidden/off-screen elements are included with `visible: false`.
 
+### Amendments from research (02-RESEARCH.md flags F1-F5, accepted)
+- **A-01 (F1):** Server-side act path is IN scope. Add `executeUngated` in the turn handler (fill/select/check only, never gated), fake-brain phrases like `fill <label> with <value>`, and `npm run dev -- --no-fake-extension` so the REPL drives the real extension. Required for success criterion 3.
+- **A-02 (F2, amends D-03):** Script writes ignore `maxlength`, so the fill clamps to `maxLength` itself before writing; `observedValue` then reports the truncated value.
+- **A-03 (F3, amends D-02):** When the page is not OS-focused, native focus/blur do not fire. The fill dispatches synthetic `focus`/`focusin`/`blur`/`focusout` when the native ones were not observed, so on-blur validation runs.
+- **A-04 (F4, amends D-20):** `visible` means rendered and not hidden, never viewport intersection (the baseline builder drops `visible: false`). Below-the-fold fields stay `visible: true`.
+- **A-05 (F5, amends D-15):** No server debounce on top of the extension's 500 ms. The server always re-snapshots after an act (version may not change). Re-snapshot on read-back/requirements intents when the cached model is older than about 2 s, to catch values the user typed themselves.
+- **A-06:** `classifyAction` lives in a zod-free module (own ungated-kinds set plus a parity test against `@blip/protocol`), because a runtime import adds about 464 KB of zod to the content script. The server does not re-run it.
+- **A-07:** Test stack: vitest + jsdom 29.1.1 (not 30.x) for pure DOM logic, a roughly 60-line `ws` + headless `--load-extension` script for real-browser checks, no Playwright. New dev dependencies (jsdom, @types/chrome, react, react-dom) need the package-legitimacy checkpoint.
+- **A-08:** The demo browser on this machine is Edge 155 (Chrome is not installed); `ext:chrome` honors a `BLIP_BROWSER` override and falls back to Edge.
+
 ### Claude's Discretion
 - Exact label-candidate heuristics and confidence numbers (aria-labelledby, label[for], wrapping label, placeholder, nearby text, legend), as long as the server's baseline builder in `apps/server/src/baseline` stays unchanged.
 - Backoff schedule, overlay styling, and internal module layout of `apps/extension`.
