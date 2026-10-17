@@ -29,6 +29,32 @@ function readSecondSurveyBatch() {
 }
 
 describe("dialogue read and option picks", () => {
+  it("spells each page-observed email character and names punctuation", () => {
+    const emailForm = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e2"
+        ? { ...field, hasValue: true, value: "jane@example.com" }
+        : field),
+    });
+    const result = reduce(initialState(), say("spell email"), ctx(emailForm));
+    expect(result.effects).toEqual([speak("j, a, n, e, at, e, x, a, m, p, l, e, dot, c, o, m")]);
+  });
+
+  it("clarifies a missing or ambiguous spell target without model parsing", () => {
+    expect(reduce(initialState(), say("spell nonexistent"), ctx(survey)).effects).toEqual([
+      speak("I couldn't find that field. Which field should I spell?"),
+    ]);
+    const ambiguous = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e3"
+        ? { ...field, label: "Email" }
+        : field),
+    });
+    const result = reduce(initialState(), say("spell email"), ctx(ambiguous));
+    expect((result.effects[0] as { text: string }).text).toMatch(/^Which field\?/);
+    expect(result.effects.some((effect) => effect.kind === "parseIntent")).toBe(false);
+  });
+
   it("reads exactly three fields and records the cursor and current field", () => {
     const result = readSurvey();
     expect(result.effects[0]?.kind).toBe("speak");

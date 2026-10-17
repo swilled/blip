@@ -4,7 +4,7 @@ import type { DialogueState } from "./state";
 import { cancelEffect, speakEffect } from "./state";
 import { fillableFields, matchOption, optionLabelFor, optionList, resolveField, spokenLabel } from "./fields";
 import { cleanValue, normalizeCommand, normalizeEmail, normalizeNumberish } from "./normalize";
-import { echoText, readBatchText, requiredEmptyText } from "./templates";
+import { echoText, readBatchText, requiredEmptyText, spellValueText } from "./templates";
 import type { DialogueEvent } from "./events";
 
 type DialogueResult = { state: DialogueState; effects: Effect[] };
@@ -92,6 +92,28 @@ function sayOr(labels: string[]): string {
 
 function speakableLabels(labels: string[]): string[] {
   return labels.map((label) => label.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/\s+/g, " ").trim().slice(0, 80));
+}
+
+/** Handle the exact local spell grammar using only the current form snapshot. */
+export function handleSpellUtterance(
+  state: DialogueState,
+  norm: string,
+  ctx: DialogueContext,
+): DialogueResult | null {
+  if (norm !== "spell" && !norm.startsWith("spell ")) return null;
+  if (ctx.form === null) return answer(state, "I can't see a page yet. Which field should I spell?");
+  const requested = norm.slice("spell".length).trim();
+  if (!requested) return answer(state, "Which field should I spell?");
+  const match = resolveField(ctx.form, requested);
+  if (match.kind === "ambiguous") {
+    return answer(state, `Which field? ${sayOr(speakableLabels(match.labels))}?`);
+  }
+  if (match.kind === "none") return answer(state, "I couldn't find that field. Which field should I spell?");
+  if (match.field.sensitive !== "none") return handoffSensitive(state, match.field, ctx.form);
+  if (!match.field.hasValue || match.field.value === null || match.field.value === "") {
+    return answer(state, `${spokenLabel(match.field, fieldNumber(ctx.form, match.field))} is empty, so there is nothing to spell.`);
+  }
+  return answer(state, spellValueText(match.field.value));
 }
 
 function handoffSensitive(state: DialogueState, field: Field, form: FormModel): DialogueResult {

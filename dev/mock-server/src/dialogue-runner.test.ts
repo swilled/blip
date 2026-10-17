@@ -14,7 +14,7 @@ import { createDialogueHandlers, sendSpeakEffect } from "../../../apps/server/sr
 import type { SpeakEffect } from "@blip/dialogue";
 import { Session } from "../../../apps/server/src/session/session";
 import type { HandlerContext, Hub } from "../../../apps/server/src/hub/hub";
-import { echoText, requiredEmptyText } from "../../../packages/dialogue/src/templates";
+import { echoText, requiredEmptyText, spellValueText } from "../../../packages/dialogue/src/templates";
 import fixtureJson from "../../../fixtures/forms/broken-form.model.json" with { type: "json" };
 import { startReal } from "./run-real";
 
@@ -146,6 +146,13 @@ describe("real voice dialogue runner", () => {
     expect(echo.payload.text).toBe(echoText(firstTextField!, actResult!.observedValue!, false));
     expect(speaks(frames).length).toBe(echoStart + 1);
     await done(echo);
+
+    const spelled = await utter(`spell ${firstTextField!.label}`);
+    expect(spelled.payload.text).toBe(spellValueText(actResult!.observedValue!));
+    expect(spelled.payload.speakId).toMatch(/^b\d+$/);
+    const spelledStart = speaks(frames).length - 1;
+    await done(spelled);
+    expect(frames.filter((frame) => frame.type === "speak").at(spelledStart)?.payload.speakId).toBe(spelled.payload.speakId);
 
     const missingText = requiredEmptyText(form);
     const missing = await utter("submit");

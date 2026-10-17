@@ -2,7 +2,7 @@ import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
-import { handleActResult, handleFillUtterance, handleOptionPick, handleReadUtterance } from "./read-fill";
+import { handleActResult, handleFillUtterance, handleOptionPick, handleReadUtterance, handleSpellUtterance } from "./read-fill";
 import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
@@ -85,6 +85,9 @@ export function reduce(
     const text = ctx.form === null ? "I can't see a page yet." : describe(ctx.form);
     return answer(state, text);
   }
+
+  const spellResult = handleSpellUtterance(state, norm, ctx);
+  if (spellResult !== null) return spellResult;
 
   const readResult = handleReadUtterance(state, norm, raw, ctx);
   if (readResult !== null) return readResult;

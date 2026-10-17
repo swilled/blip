@@ -13,6 +13,47 @@ function spokenValue(value: string, field: Field): string {
   return cleanSpoken(speakable(clean, kind));
 }
 
+const SPELL_NAMES: Readonly<Record<string, string>> = {
+  "@": "at",
+  ".": "dot",
+  "-": "hyphen",
+  "_": "underscore",
+  "+": "plus",
+  "/": "slash",
+  "\\": "backslash",
+  ",": "comma",
+  ":": "colon",
+  ";": "semicolon",
+  "'": "apostrophe",
+  '"': "quotation mark",
+  "#": "number sign",
+  "$": "dollar sign",
+  "%": "percent sign",
+  "&": "ampersand",
+  "!": "exclamation mark",
+  "?": "question mark",
+  "(": "open parenthesis",
+  ")": "close parenthesis",
+  "[": "open bracket",
+  "]": "close bracket",
+  "{": "open brace",
+  "}": "close brace",
+  "=": "equals sign",
+  "*": "asterisk",
+};
+
+/** Spell a page-observed value one character at a time, naming punctuation. */
+export function spellValueText(value: string): string {
+  const characters = Array.from(cleanSpoken(value, 300));
+  if (characters.length === 0) return "The field is empty.";
+  const spelled = characters.map((character) => {
+    if (/^[a-z0-9]$/i.test(character)) return character;
+    if (/^\s$/.test(character)) return "space";
+    return SPELL_NAMES[character] ?? "symbol";
+  });
+  return spelled.join(", ");
+}
+
 function readOptions(field: Field): string {
   const options = optionList(field);
   if (options.length === 0) return "";
