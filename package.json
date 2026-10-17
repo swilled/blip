@@ -14,6 +14,10 @@
     "dev": "tsx scripts/dev.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "ext:build": "npm run build --workspace @blip/extension",
+    "ext:watch": "npm run watch --workspace @blip/extension",
+    "ext:typecheck": "npm run typecheck --workspace @blip/extension",
+    "ext:test": "npm run test --workspace @blip/extension",
     "gen:extension-key": "tsx scripts/gen-extension-key.ts",
     "fixtures:update": "tsx scripts/gen-golden.ts",
     "protocol:lock": "tsx scripts/gen-lock.ts"
