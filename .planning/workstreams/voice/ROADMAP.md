@@ -127,7 +127,7 @@ Plans:
 
 ### Phase 3: Full Command Set with Real Claude
 
-**Goal**: With real Claude in the loop, the user can fill from their profile, inspect and correct what Blip did, and always hear Blip be honest about guessed labels, sensitive fields and instructions planted in the page.
+**Goal**: As a person completing forms by voice, I want to complete a form with profile fill and truthful guidance, so that I can enter accurate information while keeping sensitive data private.
 **Mode:** mvp
 **Depends on**: Phase 2
 **Needs from core**: BRAIN-01..03 (locked-down Claude, `parseIntent` fallback, watchdog), PAGE-04 (labelSource and confidence from label repair), PAGE-05 (re-snapshot on change), GATE-06/07 (seeded injection page and injection flag).
@@ -150,7 +150,7 @@ Plans:
 
 ### Phase 4: NVDA Mode and Demo-Safe
 
-**Goal**: Blip can be demoed live alongside NVDA and on a real public form, and the demo survives a failure of the voice input, the network or the live site.
+**Goal**: As a demo presenter, I want to complete the public-form demo with accessible speech and rehearsed fallbacks, so that the team can deliver a reliable demonstration.
 **Mode:** mvp
 **Depends on**: Phase 3
 **Needs from core**: PROT-03 (one-command startup that opens the voice window) and RES-01 (reading the confirmation page after submit).
