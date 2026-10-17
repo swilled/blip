@@ -15,19 +15,23 @@ updated: 2026-10-17T00:23:32Z
 
 ### 1. Cold Start Smoke Test
 expected: `npm run dev -- --brain=fake` boots clean, listens on 127.0.0.1:7777, REPL prompt appears.
-result: [pending]
+result: pass
+verified_by: claude automated run (listened on 127.0.0.1:7777, REPL ready)
 
 ### 2. Grammar turn: "what's here"
 expected: Typing `what's here` in the REPL prints `speak[answer]: Hotel booking. 9 fields, 6 required, 3 actions.` immediately, no filler.
-result: [pending]
+result: pass
+verified_by: claude automated run (reply matched exactly)
 
 ### 3. Model-routed turn shows filler and delay
 expected: A free-form utterance (e.g. `help me book a room for two nights`) shows an earcon, the filler "One moment.", then an answer after ~1.5 s.
-result: [pending]
+result: pass
+verified_by: claude automated run (earcon, filler, offline answer seen; 1.5s delay covered by fake-brain.test.ts, not timed live)
 
 ### 4. --brain=claude refuses cleanly
 expected: `npm run dev -- --brain=claude` exits with code 2 and a clear message that the Claude brain arrives in Phase 4.
-result: [pending]
+result: pass
+verified_by: claude automated run (exit 2, Phase 4 message)
 
 ### 5. Voice UI attaches to the server
 expected: With `npm run dev -- --brain=fake --no-repl` running, the voice UI pointed at ws://127.0.0.1:7777/ws receives welcome then state, and speaks a reply to "what's here".
