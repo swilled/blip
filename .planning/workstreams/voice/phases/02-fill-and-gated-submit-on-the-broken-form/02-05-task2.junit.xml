@@ -1,0 +1,899 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="57" failures="35" errors="0" time="0.0417957">
+    <testsuite name="packages/dialogue/src/submit.test.ts" timestamp="2026-10-17T05:22:57.586Z" hostname="LAPTOP-OAMU4RG3" tests="57" failures="35" errors="0" skipped="0" time="0.0417957">
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; speaks the full read-back for read back" time="0.004368">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; speaks the full read-back for read it back" time="0.0003715">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; speaks the full read-back for read everything back" time="0.0002637">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; answers when there is no page, gated action, or unambiguous primary action" time="0.0007027">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; explains required fields and never arms when submit is requested too early" time="0.0003438">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; submit waits for the uninterrupted read-back before arming" time="0.0006888">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; does not arm from an earlier or unknown speak.done" time="0.0002828">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; does not arm after an interrupted read-back" time="0.0003127">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; abandons a read-back if the form digest changed before speech completed" time="0.0008713">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; arms only the primary gated action when there are multiple gated actions" time="0.000451">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; uses the only gated action when none is marked primary" time="0.0002777">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; accepts confirm.armed only after a read-back arm request" time="0.0003626">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; clears a confirm grant returned outside reading-back" time="0.0001432">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; resets on confirm.refused and ignores a cleared event for another grant" time="0.0002189">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (expired)" time="0.0001861">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (page-changed)" time="0.0001177">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (value-changed)" time="0.0000967">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (executed)" time="0.0000735">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (cancelled)" time="0.0000843">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; clears an awaiting grant if the live form digest changes" time="0.0003245">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; resolves gated outcomes fail-closed" time="0.0002245">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;yes&quot; without model routing or redeem" time="0.0078969">
+            <failure message="expected [ Array(1) ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ Array(1) ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;yes&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;yeah&quot; without model routing or redeem" time="0.0009775">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;yeah&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;yep&quot; without model routing or redeem" time="0.0009255">
+            <failure message="expected [ Array(1) ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ Array(1) ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;yep&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;ok&quot; without model routing or redeem" time="0.0005524">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, text: &apos;ok&apos; } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, text: &apos;ok&apos; } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;ok&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;okay&quot; without model routing or redeem" time="0.000634">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;okay&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;sure&quot; without model routing or redeem" time="0.000474">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;sure&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;do it&quot; without model routing or redeem" time="0.0004921">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;do it&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;go ahead&quot; without model routing or redeem" time="0.0004524">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;go ahead&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;confirm&quot; without model routing or redeem" time="0.0004638">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;confirm&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;submit&quot; without model routing or redeem" time="0.000629">
+            <failure message="expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;category&quot;: &quot;readback&quot;,
+    &quot;interruptible&quot;: true,
+    &quot;kind&quot;: &quot;speak&quot;,
+    &quot;speakId&quot;: &quot;b3&quot;,
+    &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;submit it&quot; without model routing or redeem" time="0.0004775">
+            <failure message="expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;category&quot;: &quot;readback&quot;,
+    &quot;interruptible&quot;: true,
+    &quot;kind&quot;: &quot;speak&quot;,
+    &quot;speakId&quot;: &quot;b3&quot;,
+    &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;yes submit survey&quot; without model routing or redeem" time="0.0004322">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;yes submit survey&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;submit the survey&quot; without model routing or redeem" time="0.0004048">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;submit the survey&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;submit surveys&quot; without model routing or redeem" time="0.0005361">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;submit surveys&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;submit survey now&quot; without model routing or redeem" time="0.0004541">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;submit survey now&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;I confirm&quot; without model routing or redeem" time="0.0003924">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;I confirm&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;correct&quot; without model routing or redeem" time="0.0003907">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;correct&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;affirmative&quot; without model routing or redeem" time="0.0003871">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;affirmative&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;absolutely&quot; without model routing or redeem" time="0.0004941">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;absolutely&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;please do&quot; without model routing or redeem" time="0.0004586">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;please do&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;send it&quot; without model routing or redeem" time="0.000421">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;send it&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;yup&quot; without model routing or redeem" time="0.0003614">
+            <failure message="expected [ Array(1) ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ Array(1) ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;yup&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;right&quot; without model routing or redeem" time="0.0004514">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;right&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;sounds good&quot; without model routing or redeem" time="0.0004441">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;sounds good&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;go for it&quot; without model routing or redeem" time="0.0003761">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;go for it&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;please submit survey&quot; without model routing or redeem" time="0.0003669">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;please submit survey&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;submit survey please&quot; without model routing or redeem" time="0.0003645">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;submit survey please&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses &quot;yes please&quot; without model routing or redeem" time="0.0004167">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;yes please&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:312:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses the exact phrase while the prompt is outstanding" time="0.0008342">
+            <failure message="expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;category&quot;: &quot;readback&quot;,
+    &quot;interruptible&quot;: true,
+    &quot;kind&quot;: &quot;speak&quot;,
+    &quot;speakId&quot;: &quot;b3&quot;,
+    &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:325:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses while any earlier refusal speak remains outstanding, then opens at 1000 ms" time="0.0009776">
+            <failure message="expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b4&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b4&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b4&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;category&quot;: &quot;readback&quot;,
+    &quot;interruptible&quot;: true,
+    &quot;kind&quot;: &quot;speak&quot;,
+    &quot;speakId&quot;: &quot;b3&quot;,
+    &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:338:37
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses an exact phrase at 999 ms and redeems at the 1000 ms boundary" time="0.0004854">
+            <failure message="expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;speak&apos;, …(4) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;category&quot;: &quot;readback&quot;,
+    &quot;interruptible&quot;: true,
+    &quot;kind&quot;: &quot;speak&quot;,
+    &quot;speakId&quot;: &quot;b3&quot;,
+    &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:357:31
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; cancels and returns to ready with a tracked acknowledgement" time="0.0018521">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ Array(2) ]" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ Array(2) ]
+
+- Expected
++ Received
+
+  [
+    {
+-     &quot;grantId&quot;: &quot;g1&quot;,
+-     &quot;kind&quot;: &quot;clearConfirm&quot;,
+-     &quot;reason&quot;: &quot;cancelled&quot;,
+-   },
+-   {
+-     &quot;category&quot;: &quot;answer&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b3&quot;,
+-     &quot;text&quot;: &quot;Okay, not submitting.&quot;,
++     &quot;kind&quot;: &quot;parseIntent&quot;,
++     &quot;text&quot;: &quot;never mind&quot;,
+    },
+  ]
+
+ ❯ src/submit.test.ts:370:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; keeps the armed mode when stop cancels speech using a tracked Stopped speakId" time="0.0016352">
+            <failure message="expected &apos;ready&apos; to be &apos;awaiting-confirm&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;ready&apos; to be &apos;awaiting-confirm&apos; // Object.is equality
+
+Expected: &quot;awaiting-confirm&quot;
+Received: &quot;ready&quot;
+
+ ❯ src/submit.test.ts:383:33
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; repeats and reads back through tracked speaks while remaining armed" time="0.0006577">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; voids the grant before applying a named field edit" time="0.000869">
+            <failure message="expected [ { kind: &apos;fill&apos;, …(2) } ] to deeply equal [ Array(3) ]" type="AssertionError">
+AssertionError: expected [ { kind: &apos;fill&apos;, …(2) } ] to deeply equal [ Array(3) ]
+
+- Expected
++ Received
+
+  [
+    {
+-     &quot;grantId&quot;: &quot;g1&quot;,
+-     &quot;kind&quot;: &quot;clearConfirm&quot;,
+-     &quot;reason&quot;: &quot;value-changed&quot;,
+-   },
+-   {
+-     &quot;category&quot;: &quot;error&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b3&quot;,
+-     &quot;text&quot;: &quot;The form changed, so I&apos;m not submitting. Say submit when you&apos;re ready.&quot;,
+-   },
+-   {
+      &quot;fieldId&quot;: &quot;e1&quot;,
+      &quot;kind&quot;: &quot;fill&quot;,
+      &quot;value&quot;: &quot;Ada Lovelace&quot;,
+    },
+  ]
+
+ ❯ src/submit.test.ts:409:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; armed-mode utterance gate &gt; refuses bare values and ignores utterances once executing" time="0.00044">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deep equally contain { kind: &apos;speak&apos;, speakId: &apos;b3&apos;, …(3) }
+
+- Expected:
+{
+  &quot;category&quot;: &quot;confirm-prompt&quot;,
+  &quot;interruptible&quot;: true,
+  &quot;kind&quot;: &quot;speak&quot;,
+  &quot;speakId&quot;: &quot;b3&quot;,
+  &quot;text&quot;: &quot;Not submitting. I need you to say &apos;submit survey&apos;.&quot;,
+}
+
++ Received:
+[
+  {
+    &quot;kind&quot;: &quot;parseIntent&quot;,
+    &quot;text&quot;: &quot;Ada Lovelace&quot;,
+  },
+]
+
+ ❯ src/submit.test.ts:422:33
+            </failure>
+        </testcase>
+    </testsuite>
+</testsuites>

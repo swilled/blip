@@ -4,7 +4,7 @@ import surveyJson from "../../../fixtures/forms/survey-form.model.json" with { t
 import type { DialogueContext, DialogueState } from "./effects";
 import type { DialogueEvent } from "./events";
 import { formDigest } from "./fields";
-import { confirmPromptText, readBackText, requiredEmptyText } from "./templates";
+import { confirmPromptText, readBackText, refusalText, requiredEmptyText } from "./templates";
 import { initialState, speakEffect } from "./state";
 import { reduce } from "./reduce";
 
@@ -37,6 +37,13 @@ function armEffect(form = filledSurvey) {
   const id = submit.state.readBack?.speakId;
   if (!id) throw new Error("submit did not create a read-back speak");
   return reduce(submit.state, done(id), ctx(form, 1200));
+}
+
+function armed(form = filledSurvey) {
+  const armRequest = armEffect(form);
+  return reduce(armRequest.state, {
+    type: "confirm.armed", grantId: "g1", phrase: "submit survey", expiresAt: 30_000,
+  }, ctx(form, 1201));
 }
 
 describe("submit and read-back flow", () => {
@@ -289,5 +296,141 @@ describe("submit and read-back flow", () => {
     expect(success.effects).toEqual([{
       kind: "speak", speakId: "b1", text: "Submitted.", category: "answer", interruptible: true,
     }]);
+  });
+
+  describe("armed-mode utterance gate", () => {
+    const refusalPhrases = [
+      "yes", "yeah", "yep", "ok", "okay", "sure", "do it", "go ahead", "confirm", "submit",
+      "submit it", "yes submit survey", "submit the survey", "submit surveys", "submit survey now",
+      "I confirm", "correct", "affirmative", "absolutely", "please do", "send it", "yup", "right",
+      "sounds good", "go for it", "please submit survey", "submit survey please", "yes please",
+    ];
+
+    it.each(refusalPhrases)("refuses %j without model routing or redeem", (phrase) => {
+      const start = armed();
+      const result = reduce(start.state, say(phrase), ctx(filledSurvey, 2000));
+      expect(result.effects).toContainEqual({
+        kind: "speak", speakId: "b3", text: refusalText("submit survey"), category: "confirm-prompt", interruptible: true,
+      });
+      expect(result.effects).toContainEqual({ kind: "earcon", name: "blocked" });
+      expect(result.effects.some((effect) => effect.kind === "redeem")).toBe(false);
+      expect(result.effects.some((effect) => effect.kind === "parseIntent")).toBe(false);
+      expect(result.state.mode).toBe("awaiting-confirm");
+      expect(result.state.confirm).toEqual(start.state.confirm);
+    });
+
+    it("refuses the exact phrase while the prompt is outstanding", () => {
+      const start = armed();
+      const result = reduce(start.state, say("submit survey"), ctx(filledSurvey, 3000));
+      expect(result.effects).toContainEqual({
+        kind: "speak", speakId: "b3", text: refusalText("submit survey"), category: "confirm-prompt", interruptible: true,
+      });
+      expect(result.effects).toContainEqual({ kind: "earcon", name: "blocked" });
+      expect(result.effects.some((effect) => effect.kind === "redeem")).toBe(false);
+      expect(result.state.mode).toBe("awaiting-confirm");
+    });
+
+    it("refuses while any earlier refusal speak remains outstanding, then opens at 1000 ms", () => {
+      const start = armed();
+      const refused = reduce(start.state, say("yes"), ctx(filledSurvey, 2000));
+      const promptDone = reduce(refused.state, done("b2"), ctx(filledSurvey, 2100));
+      const duringRefusal = reduce(promptDone.state, say("submit survey"), ctx(filledSurvey, 3100));
+      expect(duringRefusal.effects).toContainEqual({
+        kind: "speak", speakId: "b4", text: refusalText("submit survey"), category: "confirm-prompt", interruptible: true,
+      });
+      expect(duringRefusal.effects.some((effect) => effect.kind === "redeem")).toBe(false);
+
+      const refusalDone = reduce(duringRefusal.state, done("b3"), ctx(filledSurvey, 3200));
+      const tooSoon = reduce(refusalDone.state, say("submit survey"), ctx(filledSurvey, 4199));
+      expect(tooSoon.effects.some((effect) => effect.kind === "redeem")).toBe(false);
+      const refusalDoneAgain = reduce(tooSoon.state, done("b4"), ctx(filledSurvey, 4200));
+      const redeemed = reduce(refusalDoneAgain.state, say("submit survey"), ctx(filledSurvey, 5200));
+      expect(redeemed.effects).toEqual([{ kind: "redeem", grantId: "g1" }]);
+      expect(redeemed.state.mode).toBe("executing");
+      expect(reduce(redeemed.state, say("submit survey"), ctx(filledSurvey, 7000)).effects).toEqual([]);
+    });
+
+    it("refuses an exact phrase at 999 ms and redeems at the 1000 ms boundary", () => {
+      const start = armed();
+      const promptDone = reduce(start.state, done("b2"), ctx(filledSurvey, 3000));
+      const tooSoon = reduce(promptDone.state, say("submit survey"), ctx(filledSurvey, 3999));
+      expect(tooSoon.effects).toContainEqual({
+        kind: "speak", speakId: "b3", text: refusalText("submit survey"), category: "confirm-prompt", interruptible: true,
+      });
+      expect(tooSoon.effects.some((effect) => effect.kind === "redeem")).toBe(false);
+      const refusalDone = reduce(tooSoon.state, done("b3"), ctx(filledSurvey, 4000));
+      const redeemed = reduce(refusalDone.state, say("submit survey"), ctx(filledSurvey, 5000));
+      expect(redeemed.effects).toEqual([{ kind: "redeem", grantId: "g1" }]);
+      expect(redeemed.state.mode).toBe("executing");
+    });
+
+    it("cancels and returns to ready with a tracked acknowledgement", () => {
+      const start = armed();
+      const result = reduce(start.state, say("never mind"), ctx(filledSurvey, 2000));
+      expect(result.effects).toEqual([
+        { kind: "clearConfirm", grantId: "g1", reason: "cancelled" },
+        { kind: "speak", speakId: "b3", text: "Okay, not submitting.", category: "answer", interruptible: true },
+      ]);
+      expect(result.state.mode).toBe("ready");
+      expect(result.state.confirm).toBeNull();
+      expect(result.state.outstanding).toContain("b3");
+    });
+
+    it("keeps the armed mode when stop cancels speech using a tracked Stopped speakId", () => {
+      const start = armed();
+      const result = reduce(start.state, { type: "control", cmd: "stop" }, ctx(filledSurvey, 2000));
+      expect(result.effects).toEqual([{ kind: "cancelSpeech", speakId: "b3" }]);
+      expect(result.state.mode).toBe("awaiting-confirm");
+      expect(result.state.confirm).toEqual(start.state.confirm);
+      // The runner renders this tracked cancelSpeech as “Stopped.” with the same id.
+      expect(result.state.outstanding).toContain("b3");
+    });
+
+    it("repeats and reads back through tracked speaks while remaining armed", () => {
+      const start = armed();
+      const repeated = reduce(start.state, say("repeat"), ctx(filledSurvey, 2000));
+      expect(repeated.effects).toEqual([{
+        kind: "speak", speakId: "b3", text: start.state.lastSpoken, category: "answer", interruptible: true,
+      }]);
+      expect(repeated.state.mode).toBe("awaiting-confirm");
+      expect(repeated.state.outstanding).toContain("b3");
+
+      const reread = reduce(start.state, say("read back"), ctx(filledSurvey, 2000));
+      expect(reread.effects).toEqual([{
+        kind: "speak", speakId: "b3", text: readBackText(filledSurvey), category: "readback", interruptible: true,
+      }]);
+      expect(reread.state.mode).toBe("awaiting-confirm");
+      expect(reread.state.outstanding).toContain("b3");
+    });
+
+    it("voids the grant before applying a named field edit", () => {
+      const start = armed();
+      const result = reduce(start.state, say("Your name is Ada Lovelace"), ctx(filledSurvey, 2000));
+      expect(result.effects).toEqual([
+        { kind: "clearConfirm", grantId: "g1", reason: "value-changed" },
+        { kind: "speak", speakId: "b3", text: "The form changed, so I'm not submitting. Say submit when you're ready.", category: "error", interruptible: true },
+        { kind: "fill", fieldId: "e1", value: "Ada Lovelace" },
+      ]);
+      expect(result.state.mode).toBe("awaiting-value");
+      expect(result.state.confirm).toBeNull();
+      expect(result.state.outstanding).toContain("b3");
+    });
+
+    it("refuses bare values and ignores utterances once executing", () => {
+      const start = armed();
+      const bareValue = reduce(start.state, say("Ada Lovelace"), ctx(filledSurvey, 2000));
+      expect(bareValue.effects).toContainEqual({
+        kind: "speak", speakId: "b3", text: refusalText("submit survey"), category: "confirm-prompt", interruptible: true,
+      });
+      expect(bareValue.effects.some((effect) => effect.kind === "parseIntent" || effect.kind === "redeem")).toBe(false);
+
+      const executing = {
+        ...start.state,
+        mode: "executing" as const,
+      };
+      const ignored = reduce(executing, say("submit survey"), ctx(filledSurvey, 8000));
+      expect(ignored.effects).toEqual([]);
+      expect(ignored.state).toEqual(executing);
+    });
   });
 });
