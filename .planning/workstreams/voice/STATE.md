@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: 02
-current_phase_name: Fill and Gated Submit on the Broken Form
+current_phase: 3
+current_phase_name: Full Command Set with Real Claude
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-10-17T07:08:02.697Z"
+stopped_at: Phase 3 planned; Phase 2 I2 human run pending before Phase 3 execution
+last_updated: "2026-10-17T07:32:41.227Z"
 last_activity: 2026-10-17
-last_activity_desc: Plan 02-06 complete; Plan 02-07 ready
-state_head: 20dd20fb4fe4c7b7116e490f0739dfe6d6a354e9
+last_activity_desc: Phase 3 planning complete; 4 plans ready; Phase 2 I2 run remains the execution prerequisite
+state_head: f697dc743a72dbb3a02bfc878a20fd71ae9ef0b2
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 18
+  total_plans: 22
   completed_plans: 17
 milestone_name: milestone
 ---
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 02 — Fill and Gated Submit on the Broken Form
+**Current focus:** Phase 02 — Finish the pending I2 human run before executing the Phase 03 plans
 
 ## Current Position
 
-Phase: 02 (Fill and Gated Submit on the Broken Form) — EXECUTING
-Plan: 7 of 7
-Status: Ready to execute
-Last activity: 2026-10-17 — Plan 02-06 complete; Plan 02-07 ready
+Phase: 3 (Full Command Set with Real Claude) — READY TO EXECUTE
+Plan: 1 of 4
+Status: Phase 03 plans ready; execution waits for the Phase 02 I2 human run
+Last activity: 2026-10-17 — Phase 3 planning complete; Phase 2 I2 prerequisite remains
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -92,7 +92,8 @@ Recent decisions affecting the voice track:
 
 ### Pending Todos
 
-None yet.
+- Complete Phase 2 Plan 02-07 and its human I2 run before starting Phase 3 execution.
+- Keep the “only ‘submit survey’ submits” criterion `human_needed` until HO-8's core Gate/Executor handoff and the separate I2 run pass.
 
 ### Blockers/Concerns
 
@@ -111,5 +112,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-10-17T07:08:02.318Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-CONTEXT.md
+Stopped at: Phase 3 plans ready; Phase 2 I2 human run pending before Phase 3 execution
+Resume file: .planning/workstreams/voice/phases/02-fill-and-gated-submit-on-the-broken-form/02-07-PLAN.md

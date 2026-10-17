@@ -146,7 +146,20 @@ Plans:
      - The confirm gate never arms from page text.
      - The team-owned public form (created by ~h12 so core can test it) can be described and filled by voice.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+- [ ] 03-01-PLAN.md — Spell, change, and sensitive-entry commands
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 03-02-PLAN.md — Local profile fill with guarded batch undo
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 03-03-PLAN.md — Orientation, label provenance, and injection warning
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 03-04-PLAN.md — Human I3 real-Claude/public-form integration run
 
 ### Phase 4: NVDA Mode and Demo-Safe
 
