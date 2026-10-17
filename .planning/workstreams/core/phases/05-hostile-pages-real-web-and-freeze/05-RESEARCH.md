@@ -178,29 +178,28 @@ For a React controlled field, the official React pattern passes the current valu
 | DOM setter alone updates React forms | Controlled React fields need synchronous state updates from input/change handlers | Trigger supported events, wait for rerender and read back |
 | Seeing an ARIA role means the widget is actionable | Radio/listbox roles define focus and keyboard behavior; Blip's current widget actions do not cover arbitrary custom controls | Preserve unsupported-widget for custom listboxes until explicitly implemented |
 
-## Open Questions
+## Open Questions and Planning Dispositions
 
-1. **What is the team-owned public form URL and which question types does it use?**
-   - What we know: Phase 5 expects a voice/team-selected form, likely Google Forms; no URL is supplied here.
-   - What's unclear: exact DOM roles, step behavior, whether test responses are retained, and the confirmation the page presents.
-   - Recommendation: keep local ARIA widget tests and code work moving; mark real-site interaction pending until the target owner supplies a team-owned test form and its safe synthetic-data expectations.
+The implementation choices below are resolved. Missing external targets remain open inputs and must not be inferred from those planning decisions.
 
-2. **What URL or executable will launch the voice client?**
-   - What we know: `apps/voice` is absent from this checkout and no local voice launch target is present.
-   - What's unclear: whether voice will be served by the core server or started separately.
-   - Recommendation: implement only an optional, documented local launch URL hook; keep voice UI ownership with the voice track and leave full voice startup pending until its target exists.
+1. **Team-owned public form URL and question types — planning decision resolved; external input pending.**
+   - Decision: keep local ARIA widget coverage and mark real-site interaction pending until the target owner supplies a team-owned test form and safe synthetic-data expectations. Do not substitute or open an arbitrary public form.
+   - Still unknown: the exact target, DOM roles, step behavior, response-retention behavior, and confirmation text. These facts require the owning team; no URL or question types were provided in this checkout.
 
-3. **Can the existing real-browser E2E harness use a dedicated test browser after Chrome 137?**
-   - What we know: official Chrome guidance says Chrome for Testing retains `--load-extension`; branded Chrome stable does not.
-   - What's unclear: which test binary is installed on either developer's machine; browser introspection was intentionally not performed for this research.
-   - Recommendation: support an explicit `BLIP_BROWSER` override and fail with a clear extension-not-connected result. Do not silently pass with no extension.
+2. **Voice client URL or executable — planning decision resolved; external input pending.**
+   - Decision: retain only the optional documented launch hook, keep voice UI ownership with the voice track, and leave full voice startup and DLG-14 speech pending until the voice client target exists.
+   - Still unknown: whether the voice client is served or launched separately and its URL/executable. `apps/voice` and a launch target are absent from this checkout.
+
+3. **Dedicated browser for real-browser E2E after Chrome 137 — resolved by execution evidence.**
+   - Decision: use the explicit `BLIP_BROWSER` override and require extension-connected readiness.
+   - Evidence: on 2026-10-17, the opted-in injection E2E passed twice with Microsoft Edge `155.0.4283.45` at `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`; the harness used isolated test profiles. This resolves the test-browser choice for this machine, not browser availability on other machines.
 
 ## Environment Availability
 
 | Dependency | Required by | Available in repo | Version / observed state | Fallback |
 |------------|-------------|-------------------|--------------------------|----------|
 | Core server / extension / test framework | Local GATE-06, GATE-07 and startup | Yes | Existing TypeScript/Vitest workspaces | Existing local fake extension/REPL for server-only checks |
-| Chrome or Edge | Real-browser E2E and demo launch | Resolver exists; installed browser not inspected | Not probed | Set `BLIP_BROWSER` to a selected compatible executable |
+| Chrome or Edge | Real-browser E2E and demo launch | Resolver exists; Edge executable selected explicitly for E2E | Edge `155.0.4283.45`; opted-in injection E2E passed twice on 2026-10-17 | Set `BLIP_BROWSER` to a selected compatible executable and require extension readiness |
 | Team-owned public form | Real-site/I3 criterion | No target URL in supplied phase context | Missing external input | Local fixture only; mark real-site criterion pending |
 | Voice client URL/executable | DLG-14 speech and full PROT-03 startup | No `apps/voice` directory or launch target | Missing from checkout | Optional launcher URL hook; core REPL can expose signal only |
 | Phase 4 Claude brain | Roadmap Phase 5 dependency and Claude-in-loop hostile-page criterion | Phase 4 is still marked in progress | Prerequisite unresolved | Complete Phase 4 first; fake-brain gate tests can proceed independently |
