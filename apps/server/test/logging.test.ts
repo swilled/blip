@@ -54,13 +54,13 @@ describe("payload-free logging", () => {
     const errB = await ext.nextMessage();
     expect(errB.payload.code).toBe("invalid-payload");
 
-    // (c) The same values through a role-violation path and an utterance with the sentinel as text.
+    // (c) The same values through a role-violation path and a malformed payload carrying the sentinel.
     voice.sendUnchecked("snapshot.result", { ok: true, snapshot: snap });
     const errC = await nextError(voice);
     expect(errC.payload.code).toBe("role-violation");
-    voice.sendUnchecked("utterance", { utteranceId: "u1", text: NAME, source: "typed" });
+    voice.sendUnchecked("ptt", { state: NAME });
     const errD = await nextError(voice);
-    expect(errD.payload.code).toBe("not-implemented");
+    expect(errD.payload.code).toBe("invalid-payload");
 
     await sleep(50);
     const everything = [...lines, ...ext.frames.map((f) => JSON.stringify(f)), ...voice.frames.map((f) => JSON.stringify(f))];

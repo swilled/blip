@@ -6,6 +6,7 @@ import { createHub, type Handlers, type Hub } from "./hub/hub";
 import { hostAllowed, parseAllowedOrigin } from "./hub/guard";
 import { createStaticHandler, type StaticRoot } from "./hub/static";
 import { Session, type Brain } from "./session/session";
+import { handleUtterance } from "./turn";
 
 export type StartServerOptions = {
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
@@ -82,6 +83,18 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       });
   });
 
+  const snapshotTimeoutMs = options.snapshotTimeoutMs ?? 5000;
+
+  // Turns run one at a time so busy/state pushes and reply order stay coherent.
+  let turnQueue: Promise<void> = Promise.resolve();
+  const defaultHandlers: Handlers = {
+    utterance: ({ message, hub: h, session: s }) => {
+      const run = turnQueue.then(() => handleUtterance({ message, hub: h, session: s, snapshotTimeoutMs }));
+      turnQueue = run.catch(() => {}); // a failed turn is logged by the hub and must not block the next one
+      return run;
+    },
+  };
+
   const hub = createHub({
     server,
     session,
@@ -90,7 +103,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     extensionId: options.extensionId ?? EXTENSION_ID,
     extraVoiceOrigins,
     ...(options.helloTimeoutMs !== undefined ? { helloTimeoutMs: options.helloTimeoutMs } : {}),
-    ...(options.handlers ? { handlers: options.handlers } : {}),
+    handlers: { ...defaultHandlers, ...options.handlers },
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -112,7 +125,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       dev,
       brain: session.brain,
       fakeDelayMs: options.fakeDelayMs ?? 1500,
-      snapshotTimeoutMs: options.snapshotTimeoutMs ?? 5000,
+      snapshotTimeoutMs,
       extensionId: options.extensionId ?? EXTENSION_ID,
     },
     session,
