@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Implicit Enter submit</title>
+    <script src="/report.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Implicit Enter submit test</h1>
+      <form id="enter-form">
+        <label for="search-query">Search query</label>
+        <input id="search-query" name="query" type="text" required>
+        <button type="submit">Submit search</button>
+      </form>
+    </main>
+    <script>
+      document.getElementById("enter-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        window.blipReport("enter-form-submit", { form: "enter-form" });
+      });
+    </script>
+  </body>
+</html>

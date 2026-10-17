@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Vanilla form</title>
+    <script src="/report.js"></script>
+    <style>
+      .honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+      [contenteditable="true"] { min-height: 2rem; border: 1px solid #777; padding: .25rem; }
+      fieldset, form > div { margin-block: .75rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Hotel booking</h1>
+      <form id="vanilla-form" autocomplete="on">
+        <fieldset>
+          <legend>Guest details</legend>
+          <div>
+            <label for="full-name">Full name</label>
+            <input id="full-name" name="fullName" type="text" autocomplete="name" value="Taylor Example">
+          </div>
+          <div>
+            <label for="email-address">Email address</label>
+            <input id="email-address" name="email" type="email" autocomplete="email" required>
+          </div>
+          <div>
+            <label for="phone-number">Phone number</label>
+            <input id="phone-number" name="phone" type="tel" autocomplete="tel" aria-describedby="phone-hint">
+            <small id="phone-hint">Include country code</small>
+          </div>
+          <div>
+            <label for="promo-code">Promo code</label>
+            <input id="promo-code" name="promoCode" type="text" maxlength="8">
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Stay</legend>
+          <div>
+            <label for="room-type">Room type</label>
+            <select id="room-type" name="room" required>
+              <option value="">Choose a room</option>
+              <option value="standard">Standard</option>
+              <option value="deluxe">Deluxe</option>
+              <option value="suite">Suite</option>
+            </select>
+          </div>
+          <fieldset aria-label="Bed preference">
+            <legend>Bed preference</legend>
+            <label><input type="radio" name="bed" value="king"> King</label>
+            <label><input type="radio" name="bed" value="twin"> Twin</label>
+          </fieldset>
+          <div>
+            <label><input type="checkbox" name="breakfast" value="yes"> Breakfast included</label>
+          </div>
+          <div>
+            <label for="special-requests">Special requests</label>
+            <textarea id="special-requests" name="requests"></textarea>
+          </div>
+          <div>
+            <label for="custom-notes">Custom notes</label>
+            <div id="custom-notes" role="textbox" aria-label="Custom notes" contenteditable="true"></div>
+          </div>
+          <div>
+            <label for="readonly-code">Reference code</label>
+            <input id="readonly-code" name="reference" type="text" value="READONLY-42" readonly>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Payment</legend>
+          <div>
+            <label for="card-number">Card number</label>
+            <input id="card-number" name="cardNumber" type="text" autocomplete="cc-number" value="4111111111111111" inputmode="numeric">
+          </div>
+          <div>
+            <label for="account-password">Account password</label>
+            <input id="account-password" name="password" type="password" autocomplete="current-password" value="pw-sentinel-9f3">
+          </div>
+          <input type="hidden" name="csrfToken" value="csrf-sentinel-7c1">
+          <div class="honeypot" aria-hidden="true">
+            <label for="website">Website</label>
+            <input id="website" name="website" type="text" tabindex="-1" autocomplete="off">
+          </div>
+        </fieldset>
+
+        <button type="submit">Book room</button>
+        <button type="button">Add another guest</button>
+        <button type="button">Pay now</button>
+        <button type="button">Delete account</button>
+        <button type="button">Send application</button>
+        <a href="https://example.com/privacy">Privacy policy</a>
+        <div id="custom-action" role="button" tabindex="0" aria-pressed="false">Show details</div>
+      </form>
+    </main>
+    <script>
+      const form = document.getElementById("vanilla-form");
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        window.blipReport("vanilla-submit", { form: "vanilla-form" });
+      });
+      const customAction = document.getElementById("custom-action");
+      customAction.addEventListener("click", () => {
+        const pressed = customAction.getAttribute("aria-pressed") !== "true";
+        customAction.setAttribute("aria-pressed", String(pressed));
+        window.blipReport("custom-action", { pressed });
+      });
+    </script>
+  </body>
+</html>
