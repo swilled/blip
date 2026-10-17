@@ -64,6 +64,8 @@ Each task was committed atomically:
 2. **Task 2: Armed-mode utterance handling** - RED `353956b`, GREEN `91a23ff`.
 3. **Task 3: Seeded random-walk invariant** - test GREEN `478114c`.
 
+**Plan metadata:** `c45b802` (summary, STATE.md, and ROADMAP.md); summary verification details were added in `71b85ad`.
+
 Task 1 and Task 2 RED evidence was accepted by GSD (`RED_EVIDENCE_OK`) before the implementation commits. Task 3 was deliberately test-only: Task 2 already satisfied the invariant, so a manufactured failure or production mutation would not have tested a real gap.
 
 ## Files Created/Modified
