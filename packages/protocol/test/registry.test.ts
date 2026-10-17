@@ -150,6 +150,8 @@ describe("registry and Message union parity", () => {
       error: { code: "bad-json", message: "x", fatal: false },
       utterance: { utteranceId: "u1", text: "what's here", source: "typed" },
       speak: { speakId: "k1", text: "hi", category: "answer", interrupt: false },
+      "snapshot.request": { reason: "user" },
+      "snapshot.result": { ok: false, error: { code: "no-tab", message: "none" } },
     };
     for (const type of Object.keys(MESSAGES) as MessageType[]) {
       const payload = samples[type];

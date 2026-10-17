@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MAX_UTTERANCE_CHARS } from "./constants";
 import { ErrorMsg, Envelope, Hello, Welcome, type Sender } from "./envelope";
 import { newId } from "./ids";
+import { SnapshotRequestPayload, SnapshotResultPayload } from "./payloads-extension";
 
 // ---------------------------------------------------------------------------------------------
 // Payload schemas owned by this file (the tracer set). Plan 01-02 adds the rest of the D-14 set.
@@ -44,6 +45,8 @@ export const MESSAGES = {
   error: { senders: ["server"], receivers: ["extension", "voice"], payload: ErrorMsg },
   utterance: { senders: ["voice"], receivers: ["server"], payload: Utterance },
   speak: { senders: ["server"], receivers: ["voice"], payload: Speak },
+  "snapshot.request": { senders: ["server"], receivers: ["extension"], payload: SnapshotRequestPayload },
+  "snapshot.result": { senders: ["extension"], receivers: ["server"], payload: SnapshotResultPayload },
 } as const satisfies Record<string, RegistryEntry>;
 
 export type MessageType = keyof typeof MESSAGES;
@@ -69,6 +72,8 @@ export const Message = z.discriminatedUnion("type", [
   frame("error", MESSAGES.error.payload),
   frame("utterance", MESSAGES.utterance.payload),
   frame("speak", MESSAGES.speak.payload),
+  frame("snapshot.request", MESSAGES["snapshot.request"].payload),
+  frame("snapshot.result", MESSAGES["snapshot.result"].payload),
 ]);
 export type Message = z.infer<typeof Message>;
 
