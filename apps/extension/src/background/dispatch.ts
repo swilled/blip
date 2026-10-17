@@ -1,5 +1,5 @@
 import { buildFrame } from "@blip/protocol";
-import type { Message } from "@blip/protocol";
+import type { ActRequest, Message } from "@blip/protocol";
 import {
   captureTabSnapshot,
   type FrameInfo,
@@ -89,7 +89,9 @@ function visibilityByFrameId(
   return assignments;
 }
 
-function frameAdapter(tabId: number, tabUrl: string): FrameCaptureAdapter {
+export function createFrameCaptureAdapter(tabId: number, _tabUrl: string): FrameCaptureAdapter & {
+  sendAct(frameId: number, request: ActRequest, snapshotVersion: number): Promise<unknown>;
+} {
   let frames: FrameInfo[] = [];
   const visibilityByParent = new Map<number, Promise<Map<number, boolean>>>();
 
@@ -129,6 +131,11 @@ function frameAdapter(tabId: number, tabUrl: string): FrameCaptureAdapter {
       if (frame?.errorOccurred) throw new Error("frame navigation failed");
       return browserApi().tabs.sendMessage(tabId, { t: "snapshot", topOrigin }, { frameId });
     },
+    async sendAct(frameId, request, snapshotVersion) {
+      const frame = frames.find((candidate) => candidate.frameId === frameId);
+      if (!frame || frame.errorOccurred) throw new Error("target frame is unavailable");
+      return browserApi().tabs.sendMessage(tabId, { t: "act", request, snapshotVersion }, { frameId });
+    },
     async isFrameVisible(frame) {
       const byId = await inspectParent(frame.parentFrameId);
       return byId.get(frame.frameId) ?? true;
@@ -161,7 +168,7 @@ export function dispatchSnapshotRequest(message: SnapshotRequest, socket: Snapsh
         tabId: tab.id,
         tabUrl: tab.url,
         ...(tab.title !== undefined ? { tabTitle: tab.title } : {}),
-        adapter: frameAdapter(tab.id, tab.url),
+        adapter: createFrameCaptureAdapter(tab.id, tab.url),
       });
     } catch {
       reply(socket, message, { ok: false, error: { code: "snapshot-unavailable", message: "The page could not be read safely." } });

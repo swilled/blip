@@ -29,8 +29,16 @@ if (isolatedWorld.__blipContentShellInstalled !== true) {
       return;
     }
 
-    if (message.t === "act" && "request" in message) {
+    if (message.t === "act" && "request" in message && "snapshotVersion" in message) {
       const request = message as Extract<BackgroundToContentMessage, { t: "act" }>;
+      if (!Number.isSafeInteger(request.snapshotVersion) || request.snapshotVersion < 1) {
+        const response: ContentResponse = {
+          t: "act.result",
+          result: { actId: request.request.actId, ok: false, error: "stale-snapshot" },
+        };
+        sendResponse(response);
+        return;
+      }
       void executeAct(request.request, { frameId: sender.frameId ?? 0 }).then((result) => {
         const response: ContentResponse = { t: "act.result", result };
         sendResponse(response);

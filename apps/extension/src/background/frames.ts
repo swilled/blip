@@ -8,6 +8,43 @@ export const MAX_SNAPSHOT_ELEMENTS = 250;
 export const FRAME_REQUEST_TIMEOUT_MS = 1_500;
 export const FRAME_FALLBACK_ALERT = "Part of this page could not be read.";
 
+/** Detect high-risk value shapes again at the background trust boundary. */
+export function sensitiveValueShape(value: string): "card-number" | "ssn" | undefined {
+  const normalized = value.trim();
+  if (/^[\d -]+$/.test(normalized)) {
+    const digits = normalized.replace(/[ -]/g, "");
+    if (digits.length >= 13 && digits.length <= 19) {
+      let sum = 0;
+      let double = false;
+      for (let index = digits.length - 1; index >= 0; index -= 1) {
+        let digit = Number(digits[index]);
+        if (double) {
+          digit *= 2;
+          if (digit > 9) digit -= 9;
+        }
+        sum += digit;
+        double = !double;
+      }
+      if (sum % 10 === 0) return "card-number";
+    }
+  }
+
+  const match = /^(\d{3})-(\d{2})-(\d{4})$/.exec(normalized);
+  if (match) {
+    const [, area, group, serial] = match;
+    if (area !== "000" && area !== "666" && !area.startsWith("9") && group !== "00" && serial !== "0000") {
+      return "ssn";
+    }
+  }
+  return undefined;
+}
+
+function sanitizeElement(element: RawElement): RawElement {
+  const shape = element.value === null ? undefined : sensitiveValueShape(element.value);
+  const sensitive = element.sensitive === "none" ? (shape ?? "none") : element.sensitive;
+  return sensitive === "none" ? element : { ...element, sensitive, value: null };
+}
+
 export interface FrameInfo {
   frameId: number;
   parentFrameId: number;
@@ -139,7 +176,7 @@ export function mergeFrameSnapshots(options: MergeFrameSnapshotsOptions): Snapsh
       aFrameWasTruncated ||= frame.snapshot.truncated;
       for (const element of frame.snapshot.elements) {
         allElements.push({
-          ...element,
+          ...sanitizeElement(element),
           id: qualifyElementId(frame.frameId, element.id),
           frameId: frame.frameId,
         });

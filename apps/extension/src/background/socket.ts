@@ -2,6 +2,7 @@ import { buildFrame, CLOSE_CODES, DEFAULT_PORT, LOOPBACK_HOST, PING_INTERVAL_MS,
 import type { Message } from "@blip/protocol";
 import { SOCKET_PONG_TIMEOUT_MS, SocketState } from "./socket-state.js";
 import { dispatchSnapshotRequest } from "./dispatch.js";
+import { dispatchActRequest } from "./acts.js";
 
 declare const __BLIP_WS_URL__: string;
 
@@ -76,7 +77,7 @@ function notImplemented(message: Extract<Message, { type: "act.request" }>, sock
     socketForReply,
     buildFrame(
       "act.result",
-      { actId: message.payload.actId, ok: false, error: "exception", detail: "action dispatch is not implemented yet" },
+      { actId: message.payload.actId, ok: false, error: "exception", detail: "action dispatch is not ready yet" },
       { replyTo: message.id },
     ),
   );
@@ -85,7 +86,10 @@ function notImplemented(message: Extract<Message, { type: "act.request" }>, sock
 /** Handle only request/reply frames whose eventual handlers are added by later extension plans. */
 function dispatch(message: Message, socketForReply: WebSocket): void {
   if (message.type === "snapshot.request") return dispatchSnapshotRequest(message, socketForReply);
-  if (message.type === "act.request") return notImplemented(message, socketForReply);
+  if (message.type === "act.request") {
+    void dispatchActRequest(message, socketForReply);
+    return;
+  }
   // Remaining server-to-extension messages are intentionally inert in this first shell.
 }
 
