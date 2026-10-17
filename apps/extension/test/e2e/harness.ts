@@ -86,6 +86,8 @@ export interface BrowserFixtureSession {
   stateEvents(): StateObservation[];
   model(): ModelObservation | null;
   pageChangedCount(): number;
+  /** Send the matching voice-role completion frame for a selected spoken message. */
+  sendSpeakDone(speakId: string, interrupted?: boolean): void;
   waitForState(afterCount: number, predicate: (state: StateObservation) => boolean, timeoutMs?: number): Promise<StateObservation>;
   waitForReport(pagePath: string, type: string, timeoutMs?: number): Promise<TestPageReport>;
   requestSnapshot(): Promise<SnapshotData>;
@@ -107,6 +109,11 @@ export type VoiceClient = {
 export type OpenFixturePageOptions = {
   /** Start a clean native-browser baseline without the extension. Defaults to true. */
   withExtension?: boolean;
+  /** Test-only fake-brain trigger; when paired with an id, only this exact phrase requests an action. */
+  fakeRequestActionId?: string;
+  fakeRequestActionPhrase?: string;
+  /** Withhold speech completion frames when testing the post-speech confirmation barrier. */
+  autoCompleteSpeech?: boolean;
 };
 
 type VoiceClientRig = { socket: VoiceWebSocket; frames: Message[] };
@@ -267,8 +274,14 @@ export async function openFixturePage(
   options: OpenFixturePageOptions = {},
 ): Promise<BrowserFixtureSession> {
   const withExtension = options.withExtension ?? true;
+  const autoCompleteSpeech = options.autoCompleteSpeech ?? true;
   const serverModule = await import("../../../server/src/server.js");
-  const running: RunningServer = await serverModule.startServer({ port: 0, dev: false });
+  const running: RunningServer = await serverModule.startServer({
+    port: 0,
+    dev: false,
+    ...(options.fakeRequestActionId !== undefined ? { fakeRequestActionId: options.fakeRequestActionId } : {}),
+    ...(options.fakeRequestActionPhrase !== undefined ? { fakeRequestActionPhrase: options.fakeRequestActionPhrase } : {}),
+  });
   const pages = await startTestPages({ port: 0, build: false });
   const browser = resolveBrowser();
   const profileDir = path.join(profileRoot, `act-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -318,7 +331,7 @@ export async function openFixturePage(
       stateEvents.push({ receivedAt: Date.now(), payload, model: observeModel(running.session.model) });
     }, (message) => {
       voiceFrames.push(message);
-      if (message.type === "speak" && voice?.readyState === VoiceWebSocket.OPEN) {
+      if (autoCompleteSpeech && message.type === "speak" && voice?.readyState === VoiceWebSocket.OPEN) {
         voice.send(JSON.stringify(buildFrame("speak.done", { speakId: message.payload.speakId, interrupted: false })));
       }
     });
@@ -395,6 +408,10 @@ export async function openFixturePage(
       stateEvents: () => stateEvents.slice(),
       model: () => observeModel(running.session.model),
       pageChangedCount: () => pageChangedCount,
+      sendSpeakDone(speakId, interrupted = false) {
+        if (voice?.readyState !== VoiceWebSocket.OPEN) throw new Error("voice-role socket is not open");
+        voice.send(JSON.stringify(buildFrame("speak.done", { speakId, interrupted })));
+      },
       async waitForState(afterCount, predicate, timeoutMs = 15_000) {
         const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {

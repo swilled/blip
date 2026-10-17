@@ -10,6 +10,8 @@ export type FakeBrainOptions = {
   sleep?: (ms: number) => Promise<void>;
   /** Test-only: make every parse return request_action for this action id. */
   requestActionId?: string;
+  /** Test-only: when paired with requestActionId, trigger only on this exact model-routed utterance. */
+  requestActionPhrase?: string;
 };
 
 export type IntentBrain = {
@@ -24,9 +26,10 @@ const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
 export function createFakeBrain(options: FakeBrainOptions): IntentBrain {
   const sleep = options.sleep ?? realSleep;
   return {
-    async parseIntent(_text: string): Promise<Intent> {
+    async parseIntent(text: string): Promise<Intent> {
       await sleep(options.delayMs);
-      if (options.requestActionId !== undefined) {
+      if (options.requestActionId !== undefined &&
+          (options.requestActionPhrase === undefined || text === options.requestActionPhrase)) {
         return { type: "request_action", actionId: options.requestActionId };
       }
       return { type: "clarify", question: FAKE_CLARIFY_QUESTION };

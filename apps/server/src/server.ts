@@ -22,6 +22,8 @@ export type StartServerOptions = {
   extensionId?: string;
   /** Test-only: the fake brain answers every model-routed utterance with request_action for this id. */
   fakeRequestActionId?: string;
+  /** Test-only: with fakeRequestActionId, trigger request_action only for this exact utterance. */
+  fakeRequestActionPhrase?: string;
   /** Message handlers by type; anything without one gets not-implemented (D-14). Plan 01-05 fills these. */
   handlers?: Handlers;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
@@ -116,6 +118,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const brain = createFakeBrain({
     delayMs: fakeDelayMs,
     ...(options.fakeRequestActionId !== undefined ? { requestActionId: options.fakeRequestActionId } : {}),
+    ...(options.fakeRequestActionPhrase !== undefined ? { requestActionPhrase: options.fakeRequestActionPhrase } : {}),
   });
 
   // Turns run one at a time so busy/state pushes and reply order stay coherent.
