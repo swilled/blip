@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { EXTENSION_ID } from "@blip/protocol";
 import {
   browserLaunchArgs,
   classifyExtensionReadiness,
   demoProfilePath,
+  hasExtensionInProfile,
   parseDemoArgs,
   resolveVoiceTarget,
   waitForExtensionReady,
@@ -85,5 +90,20 @@ describe("extension readiness gate", () => {
     expect(classifyExtensionReadiness(false, false)).toBe("setup-required");
     expect(classifyExtensionReadiness(false, true)).toBe("timeout");
     expect(classifyExtensionReadiness(true, false)).toBe("setup-required");
+  });
+
+  it("detects unpacked extensions in Edge Secure Preferences", async () => {
+    const profileDirectory = await mkdtemp(path.join(tmpdir(), "blip-demo-profile-"));
+    const defaultDirectory = path.join(profileDirectory, "Default");
+    try {
+      await mkdir(defaultDirectory, { recursive: true });
+      await writeFile(path.join(defaultDirectory, "Secure Preferences"), JSON.stringify({
+        extensions: { settings: { [EXTENSION_ID]: { path: "C:\\repo\\apps\\extension\\dist" } } },
+      }));
+
+      await expect(hasExtensionInProfile(profileDirectory)).resolves.toBe(true);
+    } finally {
+      await rm(profileDirectory, { recursive: true, force: true });
+    }
   });
 });

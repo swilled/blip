@@ -3,7 +3,8 @@ import { access, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_PORT, EXTENSION_ID } from "@blip/protocol";
+import { buildExtension } from "../apps/extension/build.js";
+import { DEFAULT_PORT, EXTENSION_ID, LOOPBACK_HOST, WS_PATH } from "@blip/protocol";
 import { parseAllowedOrigin } from "../apps/server/src/hub/guard.js";
 import { startServer, type RunningServer } from "../apps/server/src/server.js";
 import { startTestPages, type TestPagesServer } from "../tools/test-pages/serve.js";
@@ -12,7 +13,6 @@ import { resolveBrowser } from "./browser.js";
 const modulePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(modulePath), "..");
 const extensionDist = path.join(repoRoot, "apps", "extension", "dist");
-const extensionManifest = path.join(extensionDist, "manifest.json");
 const READY_TIMEOUT_MS = 30_000;
 const READY_POLL_MS = 200;
 
@@ -140,21 +140,25 @@ export async function waitForExtensionReady(
   }
 }
 
+function hasExtensionSetting(preferences: unknown): boolean {
+  if (typeof preferences !== "object" || preferences === null || !("extensions" in preferences)) return false;
+  const extensions = (preferences as { extensions?: unknown }).extensions;
+  if (typeof extensions !== "object" || extensions === null || !("settings" in extensions)) return false;
+  const settings = (extensions as { settings?: unknown }).settings;
+  return typeof settings === "object" && settings !== null && EXTENSION_ID in settings;
+}
+
 /** Reads only this launcher's dedicated profile to verify that it owns the extension connection. */
 export async function hasExtensionInProfile(profileDirectory: string): Promise<boolean> {
-  const preferencesPath = path.join(profileDirectory, "Default", "Preferences");
-  try {
-    const contents = await readFile(preferencesPath, "utf8");
-    const preferences: unknown = JSON.parse(contents);
-    if (typeof preferences === "object" && preferences !== null && "extensions" in preferences) {
-      const extensions = (preferences as { extensions?: unknown }).extensions;
-      if (typeof extensions === "object" && extensions !== null && "settings" in extensions) {
-        const settings = (extensions as { settings?: unknown }).settings;
-        if (typeof settings === "object" && settings !== null && EXTENSION_ID in settings) return true;
-      }
+  // Chromium stores unpacked extension registration in Preferences. Edge keeps
+  // the same record in Secure Preferences, so check both files in the profile.
+  for (const preferenceFile of ["Preferences", "Secure Preferences"]) {
+    try {
+      const contents = await readFile(path.join(profileDirectory, "Default", preferenceFile), "utf8");
+      if (hasExtensionSetting(JSON.parse(contents))) return true;
+    } catch {
+      // A fresh profile may not have written both preference files yet.
     }
-  } catch {
-    // A fresh profile has no Preferences file until the browser starts.
   }
   try {
     await access(path.join(profileDirectory, "Default", "Extensions", EXTENSION_ID));
@@ -164,35 +168,17 @@ export async function hasExtensionInProfile(profileDirectory: string): Promise<b
   }
 }
 
-async function buildExtensionIfMissing(): Promise<void> {
+async function buildExtensionForDemo(): Promise<void> {
+  // The demo always listens on its fixed port. An earlier E2E build may have
+  // embedded a temporary port, so rebuild when the current bundle is stale.
+  const socketUrl = `ws://${LOOPBACK_HOST}:${DEFAULT_PORT}${WS_PATH}`;
   try {
-    await access(extensionManifest);
-    return;
+    const background = await readFile(path.join(extensionDist, "background.js"), "utf8");
+    if (background.includes(socketUrl)) return;
   } catch {
-    // A fresh checkout or cleaned build needs one production extension build.
+    // A fresh checkout or cleaned build needs a production extension build.
   }
-
-  await runProcess(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "ext:build"], {
-    cwd: repoRoot,
-    shell: process.platform === "win32",
-    windowsHide: true,
-    stdio: "inherit",
-  });
-}
-
-function runProcess(
-  command: string,
-  args: string[],
-  options: Parameters<typeof spawn>[2],
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, options);
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error(`${command} failed (${signal ?? `exit ${code ?? "unknown"}`})`));
-    });
-  });
+  await buildExtension({ socketUrl });
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {
@@ -230,7 +216,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
   };
 
   try {
-    await buildExtensionIfMissing();
+    await buildExtensionForDemo();
     await mkdir(profileDirectory, { recursive: true });
     server = await startServer({
       port: DEFAULT_PORT,
