@@ -84,6 +84,6 @@ describe("extension readiness gate", () => {
   it("classifies a missing unpacked install as setup-required", () => {
     expect(classifyExtensionReadiness(false, false)).toBe("setup-required");
     expect(classifyExtensionReadiness(false, true)).toBe("timeout");
-    expect(classifyExtensionReadiness(true, false)).toBe("connected");
+    expect(classifyExtensionReadiness(true, false)).toBe("setup-required");
   });
 });

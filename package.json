@@ -12,6 +12,7 @@
   },
   "scripts": {
     "dev": "tsx scripts/dev.ts",
+    "demo": "tsx scripts/demo.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "ext:build": "npm run build --workspace @blip/extension",
