@@ -77,6 +77,7 @@ async function stopOwnedBrowser(child: ChildProcess): Promise<void> {
 
 export interface BrowserFixtureSession {
   pages: TestPagesServer;
+  browser: string;
   voiceClient: VoiceClient;
   actResults(): ActResultObservation[];
   serverLogs(): string[];
@@ -91,6 +92,8 @@ export interface BrowserFixtureSession {
   requestAct(snapshot: SnapshotData, action: ActRequest["action"], expectedKind: ActRequest["expectedKind"]): Promise<Extract<Message, { type: "act.result" }>["payload"]>;
   reports(pagePath: string): Promise<TestPageReport[]>;
   evaluateInPage(expression: string): Promise<unknown>;
+  pressEnter(selector: string): Promise<void>;
+  clickElement(selector: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -99,6 +102,11 @@ export type VoiceClient = {
   sendUtterance(text: string, timeoutMs?: number): Promise<Message[]>;
   /** All inbound frames seen on the voice-role socket, including state, speak and error frames. */
   frames(): Message[];
+};
+
+export type OpenFixturePageOptions = {
+  /** Start a clean native-browser baseline without the extension. Defaults to true. */
+  withExtension?: boolean;
 };
 
 type VoiceClientRig = { socket: VoiceWebSocket; frames: Message[] };
@@ -146,7 +154,17 @@ async function debuggerPort(profileDir: string): Promise<number> {
   throw new Error("browser did not expose its isolated fixture debugger endpoint");
 }
 
-async function evaluateInTarget(profileDir: string, targetPageUrl: string, expression: string): Promise<unknown> {
+type DebuggerResponse = {
+  result?: { result?: { value?: unknown }; exceptionDetails?: { text?: string } };
+  error?: { message?: string };
+};
+
+async function sendDebuggerCommand(
+  profileDir: string,
+  targetPageUrl: string,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<DebuggerResponse> {
   const port = await debuggerPort(profileDir);
   const deadline = Date.now() + 10_000;
   let debuggerTarget: DebuggerTarget | undefined;
@@ -167,7 +185,7 @@ async function evaluateInTarget(profileDir: string, targetPageUrl: string, expre
       connection.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
       connection.addEventListener("error", () => { clearTimeout(timer); reject(new Error("fixture debugger connection failed")); }, { once: true });
     });
-    const result = await new Promise<{ result?: { result?: { value?: unknown }; exceptionDetails?: { text?: string } }; error?: { message?: string } }>((resolve, reject) => {
+    const result = await new Promise<DebuggerResponse>((resolve, reject) => {
       const id = 1;
       const timer = setTimeout(() => reject(new Error("timed out evaluating the fixture page")), 5_000);
       const onMessage = (event: MessageEvent) => {
@@ -179,18 +197,76 @@ async function evaluateInTarget(profileDir: string, targetPageUrl: string, expre
         resolve(message as typeof result);
       };
       connection.addEventListener("message", onMessage);
-      connection.send(JSON.stringify({ id, method: "Runtime.evaluate", params: { expression, returnByValue: true, awaitPromise: true } }));
+      connection.send(JSON.stringify({ id, method, params }));
     });
-    if (result.error) throw new Error(result.error.message ?? "fixture page evaluation failed");
-    if (result.result?.exceptionDetails) throw new Error(result.result.exceptionDetails.text ?? "fixture page expression threw");
-    return result.result?.result?.value;
+    return result;
   } finally {
     connection.close();
   }
 }
 
+async function evaluateInTarget(profileDir: string, targetPageUrl: string, expression: string): Promise<unknown> {
+  const result = await sendDebuggerCommand(profileDir, targetPageUrl, "Runtime.evaluate", {
+    expression,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (result.error) throw new Error(result.error.message ?? "fixture page evaluation failed");
+  if (result.result?.exceptionDetails) throw new Error(result.result.exceptionDetails.text ?? "fixture page expression threw");
+  return result.result?.result?.value;
+}
+
+async function pressEnterInTarget(profileDir: string, targetPageUrl: string, selector: string): Promise<void> {
+  const selectorLiteral = JSON.stringify(selector);
+  const focused = await evaluateInTarget(profileDir, targetPageUrl, `(() => {
+    const target = document.querySelector(${selectorLiteral});
+    if (!(target instanceof HTMLElement) || target.matches(':disabled')) return false;
+    target.focus();
+    return document.activeElement === target;
+  })()`);
+  if (focused !== true) throw new Error(`could not focus the Enter target ${selector}`);
+
+  const key = { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 };
+  await sendDebuggerCommand(profileDir, targetPageUrl, "Input.dispatchKeyEvent", { type: "rawKeyDown", ...key });
+  await sendDebuggerCommand(profileDir, targetPageUrl, "Input.dispatchKeyEvent", {
+    type: "char",
+    text: "\r",
+    unmodifiedText: "\r",
+    ...key,
+  });
+  await sendDebuggerCommand(profileDir, targetPageUrl, "Input.dispatchKeyEvent", { type: "keyUp", ...key });
+}
+
+async function clickElementInTarget(profileDir: string, targetPageUrl: string, selector: string): Promise<void> {
+  const selectorLiteral = JSON.stringify(selector);
+  const box = await evaluateInTarget(profileDir, targetPageUrl, `(() => {
+    const target = document.querySelector(${selectorLiteral});
+    if (!(target instanceof HTMLElement) || target.matches(':disabled')) return null;
+    const rect = target.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  })()`);
+  if (!box || typeof box !== "object" || !("x" in box) || !("y" in box) ||
+      typeof box.x !== "number" || typeof box.y !== "number") {
+    throw new Error(`could not locate a visible pointer target ${selector}`);
+  }
+
+  const point = { x: box.x, y: box.y };
+  await sendDebuggerCommand(profileDir, targetPageUrl, "Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
+  await sendDebuggerCommand(profileDir, targetPageUrl, "Input.dispatchMouseEvent", {
+    type: "mousePressed", ...point, button: "left", clickCount: 1,
+  });
+  await sendDebuggerCommand(profileDir, targetPageUrl, "Input.dispatchMouseEvent", {
+    type: "mouseReleased", ...point, button: "left", clickCount: 1,
+  });
+}
+
 /** Start a fixture page in a unique browser profile connected to an isolated production-mode server. */
-export async function openFixturePage(pagePath: string): Promise<BrowserFixtureSession> {
+export async function openFixturePage(
+  pagePath: string,
+  options: OpenFixturePageOptions = {},
+): Promise<BrowserFixtureSession> {
+  const withExtension = options.withExtension ?? true;
   const serverModule = await import("../../../server/src/server.js");
   const running: RunningServer = await serverModule.startServer({ port: 0, dev: false });
   const pages = await startTestPages({ port: 0, build: false });
@@ -253,34 +329,56 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
       return result;
     };
     const client = voiceClient({ socket: voice, frames: voiceFrames });
-    await buildExtension({ socketUrl: running.url });
+    if (withExtension) await buildExtension({ socketUrl: running.url });
     const normalizedPath = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
     const fixtureUrl = `${pages.origins.primary}${normalizedPath}`;
-    child = spawn(browser, [
+    const browserArgs = [
       "--headless=new",
       `--user-data-dir=${profileDir}`,
       "--remote-debugging-port=0",
       "--remote-allow-origins=*",
       "--no-first-run",
       "--no-default-browser-check",
-      `--disable-extensions-except=${distDir}`,
-      `--load-extension=${distDir}`,
-      "--disable-features=DisableLoadExtensionCommandLineSwitch",
+      ...(withExtension
+        ? [
+            `--disable-extensions-except=${distDir}`,
+            `--load-extension=${distDir}`,
+            "--disable-features=DisableLoadExtensionCommandLineSwitch",
+          ]
+        : ["--disable-extensions"]),
       fixtureUrl,
-    ], { stdio: "ignore", windowsHide: true });
+    ];
+    child = spawn(browser, browserArgs, { stdio: "ignore", windowsHide: true });
     let spawnError: Error | undefined;
     child.on("error", (error) => { spawnError = error; });
 
     const deadline = Date.now() + 30_000;
-    while (!running.session.extensionConnected && Date.now() < deadline) {
+    while (withExtension && !running.session.extensionConnected && Date.now() < deadline) {
       if (spawnError) throw new Error(`could not start browser ${browser}: ${spawnError.message}`);
       if (child.exitCode !== null) throw new Error(`browser exited before extension connected (code ${child.exitCode})`);
       await delay(100);
     }
-    if (!running.session.extensionConnected) throw new Error("timed out waiting for the extension connection");
+    if (withExtension && !running.session.extensionConnected) throw new Error("timed out waiting for the extension connection");
+
+    const pageDeadline = Date.now() + 15_000;
+    let pageReady = false;
+    while (!pageReady && Date.now() < pageDeadline) {
+      try {
+        const documentComplete = await evaluateInTarget(profileDir, fixtureUrl, "document.readyState") === "complete";
+        const pageReportedReady = pages.reports.some((report) =>
+          report.page === normalizedPath && report.type === "page-ready",
+        );
+        pageReady = documentComplete && (withExtension || pageReportedReady);
+        if (!pageReady) await delay(50);
+      } catch {
+        await delay(50);
+      }
+    }
+    if (!pageReady) throw new Error("fixture page did not finish loading in its isolated browser profile");
 
     return {
       pages,
+      browser,
       voiceClient: client,
       actResults: () => actResultRecords.map((result) => ({ ...result })),
       serverLogs: () => serverLogLines.slice(),
@@ -347,6 +445,12 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
       },
       evaluateInPage(expression) {
         return evaluateInTarget(profileDir, fixtureUrl, expression);
+      },
+      pressEnter(selector) {
+        return pressEnterInTarget(profileDir, fixtureUrl, selector);
+      },
+      clickElement(selector) {
+        return clickElementInTarget(profileDir, fixtureUrl, selector);
       },
       close,
     };
