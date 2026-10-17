@@ -30,19 +30,21 @@ describe("walkDocument", () => {
       <form action="/book">
         <label for="name">Guest name</label>
         <input id="name" name="guestName" required value="Alex">
-        <label for="locked">Locked</label><input id="locked" readonly value="cannot change">
+        <label for="locked">Locked</label><input id="locked" name="locked" readonly value="cannot change">
         <input id="secret" type="hidden" value="never read">
         <fieldset><legend>Bed preference</legend>
           <label><input type="radio" name="bed" value="king">King</label>
           <label><input type="radio" name="bed" value="twin" checked>Twin</label>
         </fieldset>
         <label><input type="checkbox" name="breakfast" checked>Breakfast</label>
-        <label for="room">Room</label><select id="room"><option value="">Choose</option><option value="suite" selected>Suite</option></select>
+        <label for="room">Room</label><select id="room" name="room"><option value="">Choose</option><option value="suite" selected>Suite</option></select>
         <div role="combobox" aria-label="Custom choice">Unsupported control</div>
         <button type="button">Close</button>
         <a href="/help?campaign=pay" target="_blank">Help</a>
+        <a href="/dialog" target="close and confirm">Dismiss dialog</a>
       </form>
     `;
+    Object.defineProperty(document.getElementById("secret"), "value", { get: () => { throw new Error("hidden value read"); } });
 
     const elements = walkDocument(document, { frameId: 7 });
     const byName = (name: string) => elements.find((element) => element.name === name);
@@ -78,7 +80,8 @@ describe("walkDocument", () => {
     expect(elements.find((element) => element.text === "Close")).toMatchObject({ category: "action", kind: "click-safe" });
 
     const help = elements.find((element) => element.text === "Help");
-    expect(help).toMatchObject({ category: "action", kind: "pay", href: "https://example.com/help" });
+    expect(help).toMatchObject({ category: "action", kind: "pay", href: "http://localhost:3000/help" });
+    expect(elements.find((element) => element.text === "Dismiss dialog")).toMatchObject({ category: "action", kind: "submit" });
   });
 
   it("discovers controls in open and Chrome-exposed closed shadow roots", () => {
