@@ -1,4 +1,5 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,7 +7,7 @@ import { WebSocket } from "ws";
 import { buildFrame, FormModel, parseFrame, type Message } from "@blip/protocol";
 import { initialState, reduce } from "@blip/dialogue";
 import fixtureJson from "../../../fixtures/forms/broken-form.model.json" with { type: "json" };
-import { startReal } from "./run-real";
+import { DEMO_EXTENSION_ID, startReal } from "./run-real";
 
 const form = FormModel.parse(fixtureJson);
 const closers: Array<() => Promise<void> | void> = [];
@@ -15,6 +16,22 @@ afterEach(async () => {
 });
 
 describe("run-real", () => {
+  it("uses the pinned local Chrome extension origin without connecting the in-memory fixture", async () => {
+    const real = await startReal({ port: 0, browserExtension: true, fakeDelayMs: 0 });
+    closers.push(() => real.close());
+
+    expect(real.extension).toBeUndefined();
+    expect(real.server.config.extensionId).toBe(DEMO_EXTENSION_ID);
+    expect(real.server.hub.send("extension", "highlight", { targetId: null })).toBe(false);
+  });
+
+  it("pins the extension origin to the public key in the local bridge manifest", () => {
+    const manifest = JSON.parse(readFileSync(new URL("../extension/manifest.json", import.meta.url), "utf8")) as { key: string };
+    const digest = createHash("sha256").update(Buffer.from(manifest.key, "base64")).digest().subarray(0, 16);
+    const id = Array.from(digest, (byte) => String.fromCharCode(97 + (byte >> 4), 97 + (byte & 15))).join("");
+    expect(id).toBe(DEMO_EXTENSION_ID);
+  });
+
   it("5: real server + fake extension reply like the reducer and serve the static root", async () => {
     const dir = mkdtempSync(join(tmpdir(), "blip-static-"));
     writeFileSync(join(dir, "index.html"), "<title>Blip</title>temp-index");

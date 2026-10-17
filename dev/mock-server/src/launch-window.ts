@@ -18,9 +18,10 @@ export type Layout = "pinned" | "docked";
 
 const repoRoot = new URL("../../../", import.meta.url);
 
-export function buildChromeArgs(opts: { port?: number; screenWidth?: number } = {}): string[] {
+export function buildChromeArgs(opts: { port?: number; screenWidth?: number; demoExtension?: boolean } = {}): string[] {
   const port = opts.port ?? DEFAULT_PORT;
-  const profile = fileURLToPath(new URL(".chrome-profile", repoRoot)).replace(/[\\/]$/, "");
+  const profileName = opts.demoExtension ? ".chrome-profile-demo" : ".chrome-profile";
+  const profile = fileURLToPath(new URL(profileName, repoRoot)).replace(/[\\/]$/, "");
   const args = [
     `--user-data-dir=${profile}`,
     `--app=http://${LOOPBACK_HOST}:${port}/`,
@@ -28,6 +29,10 @@ export function buildChromeArgs(opts: { port?: number; screenWidth?: number } = 
     "--no-first-run",
     "--no-default-browser-check",
   ];
+  if (opts.demoExtension) {
+    const extension = fileURLToPath(new URL("dev/mock-server/extension", repoRoot)).replace(/[\\/]$/, "");
+    args.push(`--load-extension=${extension}`);
+  }
   if (opts.screenWidth !== undefined) {
     args.push(`--window-position=${Math.max(0, opts.screenWidth - WINDOW_WIDTH)},0`);
   }
@@ -69,6 +74,8 @@ export interface LaunchOptions {
   log?: (line: string) => void;
   /** Re-apply the pin this often (ms) so the window returns to the front after you click elsewhere. 0 disables. */
   repinMs?: number;
+  /** Load the isolated local form bridge in a dedicated Chrome profile. */
+  demoExtension?: boolean;
 }
 
 export async function launchVoiceWindow(opts: LaunchOptions = {}): Promise<void> {
@@ -76,7 +83,11 @@ export async function launchVoiceWindow(opts: LaunchOptions = {}): Promise<void>
   const layout = opts.layout ?? LAYOUT;
   const chrome = opts.chromePath ?? resolveChromePath();
   const screenWidth = opts.screenWidth ?? (await primaryScreenWidth());
-  const args = buildChromeArgs({ ...(opts.port !== undefined ? { port: opts.port } : {}), ...(screenWidth !== undefined ? { screenWidth } : {}) });
+  const args = buildChromeArgs({
+    ...(opts.port !== undefined ? { port: opts.port } : {}),
+    ...(screenWidth !== undefined ? { screenWidth } : {}),
+    ...(opts.demoExtension ? { demoExtension: true } : {}),
+  });
   const spawn = opts.spawn ?? ((c, a, o) => nodeSpawn(c, a, o as never));
   // Args array, no shell: nothing here is ever interpreted by a shell (T-01-16).
   const child = spawn(chrome, args, { detached: true, stdio: "ignore" });

@@ -138,7 +138,7 @@ describe("real voice dialogue runner", () => {
     expect(actRequests).toHaveLength(1);
     expect(actRequests[0]?.action.op).toBe("fill");
     const firstAct = actRequests[0]!;
-    const actResult = real.extension.sent()
+    const actResult = real.extension!.sent()
       .filter((frame) => frame.type === "act.result")
       .map((frame) => frame.payload as { actId?: string; observedValue?: string | null })
       .find((result) => result.actId === firstAct.actId);
