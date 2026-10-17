@@ -55,6 +55,7 @@ describe("tracer: guarded upgrade -> hello -> welcome -> state", () => {
       extensionConnected: false,
       brain: "fake",
     });
+    expect(srv.session.voiceConnected).toBe(true);
   });
 
   it("an ordinary web page Origin gets HTTP 403", async () => {
@@ -290,12 +291,17 @@ describe("replacement and presence (research Pitfall 10)", () => {
     const s = await start();
     const a = await bind(s, "voice");
     const b = await bind(s, "voice");
+    expect(s.session.voiceConnected).toBe(true);
     const err = await a.nextMessage();
     expect(err.payload).toMatchObject({ code: "replaced", fatal: true });
     expect((await a.closed).code).toBe(4004);
     // The new connection is the live voice slot.
     expect(s.hub.send("voice", "earcon", { name: "done" })).toBe(true);
     expect((await b.nextMessage()).type).toBe("earcon");
+    b.close();
+    await b.closed;
+    await sleep(30);
+    expect(s.session.voiceConnected).toBe(false);
   });
 
   it("extension A then B: A closed 4004, extensionConnected stays true, voice sees true", async () => {

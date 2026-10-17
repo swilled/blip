@@ -7,12 +7,19 @@ import { buildExtension } from "../apps/extension/build.js";
 import { DEFAULT_PORT, EXTENSION_ID, LOOPBACK_HOST, WS_PATH } from "@blip/protocol";
 import { parseAllowedOrigin } from "../apps/server/src/hub/guard.js";
 import { startServer, type RunningServer } from "../apps/server/src/server.js";
+import type { StaticRoot } from "../apps/server/src/hub/static.js";
 import { startTestPages, type TestPagesServer } from "../tools/test-pages/serve.js";
 import { resolveBrowser } from "./browser.js";
 
 const modulePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(modulePath), "..");
 const extensionDist = path.join(repoRoot, "apps", "extension", "dist");
+const voicePublic = path.join(repoRoot, "apps", "voice", "public");
+const DEMO_PAGES_PORT = 7791;
+export function demoRepairCachePath(root = repoRoot): string {
+  return path.resolve(root, ".chrome-profile", "demo-repair-cache-v1");
+}
+const DEMO_REPAIR_CACHE = demoRepairCachePath();
 const READY_TIMEOUT_MS = 30_000;
 const READY_POLL_MS = 200;
 
@@ -37,10 +44,12 @@ export interface ReadinessWaitOptions {
 
 const USAGE = `usage: npm run demo -- [--brain=fake|claude] [--smoke]
   --brain=fake|claude  local brain; defaults to fake
-  --smoke              exit after extension-connected readiness and print a pass marker
+  --smoke              exit after extension and voice readiness and print a pass marker
   --help               show this help
 
-The launcher always uses .chrome-profile/demo and never auto-loads the extension.`;
+The launcher uses .chrome-profile/demo for the extension and .chrome-profile/demo-voice
+for the voice window, keeping the extension focused on the survey tab. It never auto-loads
+the extension. It serves the synthetic survey on port ${DEMO_PAGES_PORT}.`;
 
 export function parseDemoArgs(args: string[]): DemoOptions {
   let brain: DemoBrain = "fake";
@@ -99,6 +108,10 @@ export function demoProfilePath(root = repoRoot): string {
   return path.resolve(root, ".chrome-profile", "demo");
 }
 
+export function demoVoiceProfilePath(root = repoRoot): string {
+  return path.resolve(root, ".chrome-profile", "demo-voice");
+}
+
 export function browserLaunchArgs(profileDirectory: string, fixtureUrl: string): string[] {
   return [
     `--user-data-dir=${profileDirectory}`,
@@ -114,8 +127,8 @@ export function voiceLaunchArgs(profileDirectory: string, voiceUrl: string): str
     `--user-data-dir=${profileDirectory}`,
     "--no-first-run",
     "--no-default-browser-check",
-    "--new-window",
-    voiceUrl,
+    "--window-size=720,860",
+    `--app=${voiceUrl}`,
   ];
 }
 
@@ -199,9 +212,10 @@ async function stopChild(child: ChildProcess): Promise<void> {
 }
 
 async function runDemo(options: DemoOptions): Promise<number> {
-  const voiceTarget = resolveVoiceTarget(process.env["BLIP_VOICE_URL"]);
+  const configuredVoiceTarget = resolveVoiceTarget(process.env["BLIP_VOICE_URL"]);
   const browser = resolveBrowser(); // Honors BLIP_BROWSER and the existing Chrome/Edge resolver.
   const profileDirectory = demoProfilePath();
+  const voiceProfileDirectory = demoVoiceProfilePath();
   const children: ChildProcess[] = [];
   let server: RunningServer | undefined;
   let pages: TestPagesServer | undefined;
@@ -222,16 +236,23 @@ async function runDemo(options: DemoOptions): Promise<number> {
       port: DEFAULT_PORT,
       dev: true,
       brain: options.brain,
-      extraVoiceOrigins: voiceTarget === undefined ? [] : [voiceTarget.origin],
+      repairCacheDirectory: DEMO_REPAIR_CACHE,
+      staticRoots: [{ urlPrefix: "/voice", dir: voicePublic } satisfies StaticRoot],
+      extraVoiceOrigins: configuredVoiceTarget === undefined ? [] : [configuredVoiceTarget.origin],
     });
-    pages = await startTestPages({ port: 0, build: true });
-    const fixtureUrl = `${pages.origins.primary}/injection.html`;
+    pages = await startTestPages({ port: DEMO_PAGES_PORT, build: true });
+    const fixtureUrl = `${pages.origins.primary}/demo-form.html`;
+    const voiceTarget = configuredVoiceTarget ?? {
+      url: `http://127.0.0.1:${server.port}/voice/`,
+      origin: `http://127.0.0.1:${server.port}`,
+    };
     process.stdout.write(`Browser: ${browser}\n`);
     process.stdout.write(`Profile: ${profileDirectory}\n`);
+    process.stdout.write(`Voice profile: ${voiceProfileDirectory}\n`);
     process.stdout.write(`Server: ws://127.0.0.1:${server.port}/ws (brain=${options.brain})\n`);
     process.stdout.write(`Local fixture: ${fixtureUrl}\n`);
     process.stdout.write(`Load unpacked once from: ${extensionDist}\n`);
-    if (voiceTarget === undefined) process.stdout.write("Voice client: not configured (BLIP_VOICE_URL is unset)\n");
+    process.stdout.write(`Voice client: ${voiceTarget.url}\n`);
 
     const browserChild = spawn(browser, browserLaunchArgs(profileDirectory, fixtureUrl), {
       stdio: "ignore",
@@ -260,7 +281,9 @@ async function runDemo(options: DemoOptions): Promise<number> {
     const readiness = waitForExtensionReady(async () => {
       if (launchError !== undefined) throw launchError;
       if (browserChild.exitCode !== null) throw new Error(`browser exited before extension readiness (code ${browserChild.exitCode})`);
-      return server!.session.extensionConnected && await hasExtensionInProfile(profileDirectory);
+      return server!.session.extensionConnected &&
+        server!.session.model?.url === fixtureUrl &&
+        await hasExtensionInProfile(profileDirectory);
     }, { timeoutMs: options.smoke ? READY_TIMEOUT_MS : Number.POSITIVE_INFINITY, intervalMs: READY_POLL_MS });
     const ready = await Promise.race([
       readiness,
@@ -287,22 +310,29 @@ async function runDemo(options: DemoOptions): Promise<number> {
       return 1;
     }
 
-    if (voiceTarget !== undefined) {
-      const voiceChild = spawn(browser, voiceLaunchArgs(profileDirectory, voiceTarget.url), {
-        stdio: "ignore",
-        windowsHide: true,
-      });
-      children.push(voiceChild);
-      await new Promise<void>((resolve, reject) => {
-        voiceChild.once("error", reject);
-        voiceChild.once("spawn", resolve);
-      });
-      process.stdout.write(`Voice client opened: ${voiceTarget.url}\n`);
+    await mkdir(voiceProfileDirectory, { recursive: true });
+    const voiceChild = spawn(browser, voiceLaunchArgs(voiceProfileDirectory, voiceTarget.url), {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    children.push(voiceChild);
+    await new Promise<void>((resolve, reject) => {
+      voiceChild.once("error", reject);
+      voiceChild.once("spawn", resolve);
+    });
+    const voiceReady = await waitForExtensionReady(
+      () => server!.session.voiceConnected,
+      { timeoutMs: READY_TIMEOUT_MS, intervalMs: READY_POLL_MS },
+    );
+    if (!voiceReady) throw new Error("DEMO_VOICE_TIMEOUT: the local voice window did not connect to the server");
+    if (server.session.model?.url !== fixtureUrl) {
+      throw new Error("DEMO_PAGE_CONTEXT_CHANGED: the voice window replaced the local survey page in the extension profile");
     }
+    process.stdout.write(`Voice client connected: ${voiceTarget.url}\n`);
 
     if (options.smoke) {
       await cleanup();
-      process.stdout.write("BLIP_DEMO_SMOKE=PASS extension-connected=true profile=dedicated\n");
+      process.stdout.write("BLIP_DEMO_SMOKE=PASS extension-connected=true voice-connected=true survey-page-selected=true profiles=isolated\n");
       return 0;
     }
 

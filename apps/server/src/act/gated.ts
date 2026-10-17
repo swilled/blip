@@ -33,7 +33,13 @@ export type GatedContext = {
 };
 
 export type GatedIntent = Extract<Intent, { type: "request_action" | "click_safe" }>;
-export type GatedCommand = GatedIntent | { type: "confirmation"; text: string };
+export type GatedCommand = GatedIntent | {
+  type: "confirmation";
+  text: string;
+  /** Present for the reducer protocol; legacy typed/recognized utterances use the server session. */
+  grantId?: string;
+  speakId?: string;
+};
 
 function audit(outcome: "allowed" | "refused", reason: string, kind?: string, targetId?: string): void {
   // The logger deliberately accepts only bounded protocol metadata; no URL, label, value, phrase, or
@@ -131,7 +137,7 @@ function safeBinding(session: Session, targetId: string, kind: NonNullable<Sessi
 
 /** The sole server path from a gated request or voice-role confirmation to dispatch. */
 export async function executeGatedAction(ctx: GatedContext, command: GatedCommand): Promise<void> {
-  if (command.type === "confirmation") return acceptConfirmation(ctx, command.text);
+  if (command.type === "confirmation") return acceptConfirmation(ctx, command);
 
   const { session } = ctx;
   const clock = ctx.clock ?? Date.now;
@@ -251,6 +257,7 @@ function armAfterCooldown(ctx: GatedContext, pending: PendingGatedAction): void 
   ctx.session.dialogue = "awaiting-confirm";
   if (!ctx.hub.send("voice", "confirm.armed", {
     grantId: grant.grantId,
+    speakId: pending.speakId,
     phrase: pending.phrase,
     kind: pending.kind,
     actionLabel: pending.actionLabel,
@@ -339,10 +346,20 @@ function refusalFor(error: ActResult["error"]): string {
   }
 }
 
-async function acceptConfirmation(ctx: GatedContext, text: string): Promise<void> {
+async function acceptConfirmation(ctx: GatedContext, command: Extract<GatedCommand, { type: "confirmation" }>): Promise<void> {
   const pending = ctx.session.pendingGatedAction;
   if (pending === null) return;
   if (pending.dispatching) return;
+
+  if (
+    (command.grantId !== undefined || command.speakId !== undefined) &&
+    (command.grantId !== pending.grantId || command.speakId !== pending.speakId || pending.speechCompletedAt === null)
+  ) {
+    return finishPending(ctx, pending, "voice-redeem-binding-mismatch", {
+      wireReason: "cancelled",
+      reply: MSG_CONFIRMATION_REQUIRED,
+    });
+  }
 
   let now: number;
   try {
@@ -350,7 +367,7 @@ async function acceptConfirmation(ctx: GatedContext, text: string): Promise<void
   } catch {
     now = Number.NaN;
   }
-  if (!matchesConfirmationPhrase(pending.kind, text)) {
+  if (!matchesConfirmationPhrase(pending.kind, command.text)) {
     return finishPending(ctx, pending, "phrase-mismatch", { wireReason: "cancelled", reply: MSG_CONFIRMATION_REQUIRED });
   }
   if (!Number.isFinite(now) || pending.readyAt === null || now < pending.readyAt || pending.grantId === undefined) {

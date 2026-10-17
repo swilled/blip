@@ -306,7 +306,7 @@ Rules:
 
 Safety invariants (never weaken without both people agreeing):
 - The model never acts: Claude is only called through tool-less structured-output calls (`repairFormModel`, `parseIntent`). Every page action goes through the Executor.
-- Gated kinds (submit/pay/delete/send/cross-domain) are default-deny; the confirm phrase is matched in code only on utterances from the voice socket.
+- Gated kinds (submit/pay/delete/send/cross-domain) are default-deny; the server matches the fixed phrase after the tracked read-back. The voice reducer sends `confirm.redeem` with its current grant/read-back IDs, while only the server holds the consumed proof sent to GatePort.
 - Agent SDK sessions: `tools: []`, `settingSources: []`, `strictMcpConfig: true`, `permissionMode: "dontAsk"`, empty cwd, `ANTHROPIC_API_KEY` stripped, auto-memory and claude.ai connectors disabled, tool list asserted at init. Never `bypassPermissions`.
 - Passwords/card numbers are never spoken, logged, or sent to the model.
 

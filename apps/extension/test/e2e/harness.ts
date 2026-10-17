@@ -14,6 +14,7 @@ import { setLogSink } from "../../../server/src/log.js";
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const profileRoot = path.join(repoRoot, ".chrome-profile");
 const distDir = path.join(repoRoot, "apps", "extension", "dist");
+const voicePublic = path.join(repoRoot, "apps", "voice", "public");
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -24,6 +25,8 @@ export type ModelObservation = {
   structuralHash: string;
   step?: string;
   fieldLabels: string[];
+  repairStatus: FormModel["repairStatus"];
+  modelLabelCount: number;
   pageErrors: string[];
 };
 
@@ -42,6 +45,8 @@ function observeModel(model: FormModel | null): ModelObservation | null {
     structuralHash: model.structuralHash,
     ...(model.step !== undefined ? { step: model.step } : {}),
     fieldLabels: model.fields.map((field) => field.label),
+    repairStatus: model.repairStatus,
+    modelLabelCount: model.fields.filter((field) => field.labelSource === "model").length,
     pageErrors: [...model.pageErrors],
   };
 }
@@ -71,7 +76,30 @@ async function connectVoiceStateStream(
   });
 }
 
-async function stopOwnedBrowser(child: ChildProcess): Promise<void> {
+async function stopOwnedBrowser(child: ChildProcess, profileDir?: string): Promise<void> {
+  if (profileDir !== undefined) {
+    // Ask only the browser using this harness-owned profile to close through its private debugger.
+    // This also shuts down Chromium's subprocess tree and releases profile databases cleanly.
+    try {
+      const port = await debuggerPort(profileDir);
+      const version = await fetch(`http://127.0.0.1:${port}/json/version`).then((response) => response.json()) as {
+        webSocketDebuggerUrl?: string;
+      };
+      if (typeof version.webSocketDebuggerUrl === "string") {
+        const browserDebugger = new WebSocket(version.webSocketDebuggerUrl);
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("timed out opening the owned browser debugger")), 2_000);
+          browserDebugger.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+          browserDebugger.addEventListener("error", () => { clearTimeout(timer); reject(new Error("owned browser debugger connection failed")); }, { once: true });
+        });
+        browserDebugger.send(JSON.stringify({ id: 1, method: "Browser.close" }));
+        await delay(100);
+        browserDebugger.close();
+      }
+    } catch {
+      // Fall back to the exact child this harness spawned below.
+    }
+  }
   if (child.exitCode !== null || child.signalCode !== null) return;
   const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
   // This is the one child process this harness spawned. Never discover or terminate other browser PIDs.
@@ -83,6 +111,10 @@ export interface BrowserFixtureSession {
   pages: TestPagesServer;
   browser: string;
   extensionConnected(): boolean;
+  voiceUiUrl(): string | null;
+  voiceUiConnected(): boolean;
+  evaluateInVoiceUi(expression: string): Promise<unknown>;
+  inboundVoiceUtteranceCount(): number;
   voiceClient: VoiceClient;
   actResults(): ActResultObservation[];
   serverLogs(): string[];
@@ -127,6 +159,12 @@ export type OpenFixturePageOptions = {
   browserExecutable?: string;
   /** Withhold speech completion frames when testing the post-speech confirmation barrier. */
   autoCompleteSpeech?: boolean;
+  /** Open the first-party browser voice client alongside the fixture page. */
+  voiceUi?: boolean;
+  /** Fixed fixture port is reserved for checks that must prewarm the exact demo cache identity. */
+  pagePort?: number;
+  /** Dedicated repair cache path for an explicitly bounded local integration check. */
+  repairCacheDirectory?: string;
 };
 
 type VoiceClientRig = { socket: VoiceWebSocket; frames: Message[] };
@@ -159,9 +197,9 @@ export function voiceClient(rig: VoiceClientRig): VoiceClient {
 
 type DebuggerTarget = { type: string; url: string; webSocketDebuggerUrl: string };
 
-async function debuggerPort(profileDir: string): Promise<number> {
+async function debuggerPort(profileDir: string, timeoutMs = 10_000): Promise<number> {
   const activePortFile = path.join(profileDir, "DevToolsActivePort");
-  const deadline = Date.now() + 10_000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
       const [portText] = (await readFile(activePortFile, "utf8")).split(/\r?\n/);
@@ -185,7 +223,7 @@ async function sendDebuggerCommand(
   method: string,
   params: Record<string, unknown>,
 ): Promise<DebuggerResponse> {
-  const port = await debuggerPort(profileDir);
+      const port = await debuggerPort(profileDir, 500);
   const deadline = Date.now() + 10_000;
   let debuggerTarget: DebuggerTarget | undefined;
   while (Date.now() < deadline) {
@@ -292,8 +330,10 @@ export async function openFixturePage(
   const running: RunningServer = await serverModule.startServer({
     port: 0,
     dev: false,
+    staticRoots: [{ urlPrefix: "/voice", dir: voicePublic }],
     ...(options.brain !== undefined ? { brain: options.brain } : {}),
     ...(options.claudeSessionHooks !== undefined ? { claudeSessionHooks: options.claudeSessionHooks } : {}),
+    ...(options.repairCacheDirectory !== undefined ? { repairCacheDirectory: options.repairCacheDirectory } : {}),
     ...(options.disableRepairModel === true
       ? {
           repairProvider: {
@@ -306,9 +346,10 @@ export async function openFixturePage(
     ...(options.fakeRequestActionId !== undefined ? { fakeRequestActionId: options.fakeRequestActionId } : {}),
     ...(options.fakeRequestActionPhrase !== undefined ? { fakeRequestActionPhrase: options.fakeRequestActionPhrase } : {}),
   });
-  const pages = await startTestPages({ port: 0, build: false });
+  const pages = await startTestPages({ port: options.pagePort ?? 0, build: false });
   const browser = options.browserExecutable ?? resolveBrowser();
   const profileDir = path.join(profileRoot, `act-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const voiceProfileDir = path.join(profileRoot, `voice-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const stateEvents: StateObservation[] = [];
   const voiceFrames: Message[] = [];
   const actResultRecords: ActResultObservation[] = [];
@@ -325,13 +366,15 @@ export async function openFixturePage(
   });
   let voice: VoiceWebSocket | undefined;
   let child: ChildProcess | undefined;
+  let voiceChild: ChildProcess | undefined;
   let closed = false;
 
   const close = async () => {
     if (closed) return;
     closed = true;
     try {
-      if (child) await stopOwnedBrowser(child);
+      if (voiceChild) await stopOwnedBrowser(voiceChild, voiceProfileDir);
+      if (child) await stopOwnedBrowser(child, profileDir);
       if (voice) {
         await new Promise<void>((resolve) => {
           if (voice?.readyState === VoiceWebSocket.CLOSED) return resolve();
@@ -344,7 +387,10 @@ export async function openFixturePage(
       await running.close();
     } finally {
       setLogSink(previousLogSink);
-      await rm(profileDir, { recursive: true, force: true });
+      await Promise.all([
+        rm(profileDir, { recursive: true, force: true }),
+        rm(voiceProfileDir, { recursive: true, force: true }),
+      ]);
     }
   };
 
@@ -369,6 +415,7 @@ export async function openFixturePage(
     if (withExtension) await buildExtension({ socketUrl: running.url });
     const normalizedPath = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
     const fixtureUrl = `${pages.origins.primary}${normalizedPath}`;
+    const voiceUiUrl = options.voiceUi === true ? `http://127.0.0.1:${running.port}/voice/` : null;
     const browserArgs = [
       "--headless=new",
       `--user-data-dir=${profileDir}`,
@@ -412,11 +459,71 @@ export async function openFixturePage(
       }
     }
     if (!pageReady) throw new Error("fixture page did not finish loading in its isolated browser profile");
+    if (voiceUiUrl !== null) {
+      // Seed the voice window with the accepted page state before it connects. That keeps the
+      // warning E2E focused on warning playback rather than racing the initial user utterance.
+      const response = await running.hub.request("extension", "snapshot.request", { reason: "user" }, {
+        expect: "snapshot.result",
+        timeoutMs: 10_000,
+      });
+      if (response.type !== "snapshot.result" || !response.payload.ok ||
+          !running.session.applySnapshot(response.payload.snapshot, { updateDialogue: false })) {
+        throw new Error("voice UI fixture could not seed the accepted page state");
+      }
+      running.hub.pushState();
+      await mkdir(voiceProfileDir, { recursive: true });
+      const voiceBrowserArgs = [
+        "--headless=new",
+        `--user-data-dir=${voiceProfileDir}`,
+        "--remote-debugging-port=0",
+        "--remote-allow-origins=*",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-extensions",
+        voiceUiUrl,
+      ];
+      voiceChild = spawn(browser, voiceBrowserArgs, { stdio: "ignore", windowsHide: true });
+      let voiceSpawnError: Error | undefined;
+      voiceChild.on("error", (error) => { voiceSpawnError = error; });
+      const voiceDeadline = Date.now() + 30_000;
+      let voiceUiReady = false;
+      while (!voiceUiReady && Date.now() < voiceDeadline) {
+        if (voiceSpawnError) throw new Error(`could not start the isolated voice UI browser: ${voiceSpawnError.message}`);
+        if (voiceChild.exitCode !== null) throw new Error(`voice UI browser exited before connecting (code ${voiceChild.exitCode})`);
+        try {
+          const complete = await evaluateInTarget(voiceProfileDir, voiceUiUrl, "document.readyState") === "complete";
+          const connected = await evaluateInTarget(
+            voiceProfileDir,
+            voiceUiUrl,
+            "document.querySelector('#connection')?.dataset.connected === 'true'",
+          ) === true;
+          voiceUiReady = complete && connected;
+        } catch {
+          await delay(50);
+        }
+        if (!voiceUiReady) await delay(50);
+      }
+      if (!voiceUiReady) throw new Error("first-party voice UI did not connect in its isolated browser profile");
+    }
 
     return {
       pages,
       browser,
       extensionConnected: () => running.session.extensionConnected,
+      voiceUiUrl: () => voiceUiUrl,
+      voiceUiConnected: () => running.session.voiceConnected,
+      evaluateInVoiceUi(expression) {
+        if (voiceUiUrl === null) throw new Error("voice UI was not opened for this fixture");
+        return evaluateInTarget(voiceProfileDir, voiceUiUrl, expression);
+      },
+      inboundVoiceUtteranceCount() {
+        return serverLogLines.filter((line) => {
+          try {
+            const event = JSON.parse(line) as { msg?: unknown; role?: unknown; type?: unknown };
+            return event.msg === "frame in" && event.role === "voice" && event.type === "utterance";
+          } catch { return false; }
+        }).length;
+      },
       voiceClient: client,
       actResults: () => actResultRecords.map((result) => ({ ...result })),
       serverLogs: () => serverLogLines.slice(),
@@ -526,6 +633,7 @@ export async function runConnectionSmoke(): Promise<{ browser: string; extension
     const args = [
       "--headless=new",
       `--user-data-dir=${profileDir}`,
+      "--remote-debugging-port=0",
       "--no-first-run",
       "--no-default-browser-check",
       `--disable-extensions-except=${distDir}`,
@@ -560,7 +668,7 @@ export async function runConnectionSmoke(): Promise<{ browser: string; extension
     const expectedOrigin = extensionOrigin(EXTENSION_ID);
     return { browser, extensionOrigin: expectedOrigin, log: boundLine };
   } finally {
-    if (child) await stopOwnedBrowser(child);
+    if (child) await stopOwnedBrowser(child, profileDir);
     await running.close();
     setLogSink(previousLogSink);
     await rm(profileDir, { recursive: true, force: true });

@@ -1,53 +1,51 @@
 ---
 phase: 05-hostile-pages-real-web-and-freeze
-verified: 2026-10-17T20:07:01Z
+verified: 2026-10-17T21:10:00Z
 status: gaps_found
-score: 1/5 phase success criteria fully verified
-plans_executed: 10/10
+score: 4/5 phase success criteria fully verified
+plans_executed: 11/11
 gaps:
-  - "The voice-owned client is absent; GATE-07 speech and the voice window portion of PROT-03 remain unverified."
-  - "The team-owned real public form URL and fixed synthetic form data were not supplied."
-  - "No validated repair patch/cache identity for the exact demo form has been recorded."
-  - "Freeze criteria are incomplete; no demo-safe tag was created or moved."
+  - "The `demo-safe` tag is not on main because the integration branch still needs the teammate review required for Executor/gate changes."
 ---
 
-# Phase 5: Hostile Pages, Real Web and Freeze Verification
+# Phase 5: Hostile Pages, Local Synthetic Web and Freeze Verification
 
-**Phase goal:** Harden the core against seeded page prompt injection, carry a deterministic warning for text addressed to Blip, support the team's selected real public form, provide one-command startup, and freeze only when the full demo gate passes.
+**Phase goal:** Harden the core against seeded page prompt injection, carry a deterministic warning for text addressed to Blip, complete a self-hosted synthetic survey by voice, provide one-command startup, and freeze only after the full local demo gate passes.
 
-**Result:** Phase 5 remains in progress. Local automation, the full opt-in Edge E2E suite, the long-idle reconnect check, dedicated-profile fake-brain startup, and the bounded real-Claude hostile-fixture check pass. GATE-06 is verified through the production server/extension path. Voice speech/window, team-owned public-form I3, exact demo-form repair-cache prewarm, and Freeze remain pending.
+**Result:** Local Phase 5 acceptance passed for hostile-page refusal, GATE-07 speech, the first-party voice window, the voice-reducer-to-GatePort path, the self-hosted synthetic survey, the exact Claude repair-cache identity, the one-command fake fallback, and the dedicated Edge startup. The only release criterion still open is mainline promotion and `demo-safe` tagging after required teammate review. Voice-owned DEMO-03 is deferred by the core owner's decision because this hackathon has no public-form URL; no arbitrary form was opened.
 
-## Task 1: Local acceptance evidence
+## Success criteria
 
-| Check | Result | Scope |
-|---|---|---|
-| `npm test` | PASS — 79 files passed, 13 skipped; 856 tests passed, 22 skipped | Full repository suite. Existing opt-in tests remain skipped. |
-| `npm run typecheck` | PASS | Root TypeScript project. |
-| `npm run demo -- --brain=fake --smoke` | PASS — `BLIP_DEMO_SMOKE=PASS extension-connected=true profile=dedicated` | Ran with the dedicated Edge executable, `BLIP_VOICE_URL` explicitly unset, and `.chrome-profile/demo`; server accepted the extension connection. The smoke confirms fake-brain startup/readiness, not a voice utterance. |
-| Opt-in extension Edge E2E (`BLIP_E2E_BROWSER=1`) | PASS — 13 files, 23 tests; the long-idle case was skipped by its separate opt-in gate | Ran the complete `apps/extension/test/e2e` suite against the local synthetic test-pages server. Each run used a unique `.chrome-profile` child profile and the harness closed only the browser process it spawned. |
-| Long-idle Edge reconnect (`BLIP_E2E_BROWSER=1`, `BLIP_E2E_LONG=1`) | PASS — 1 file, 1 test, 166.74 seconds | The extension stayed bound for the two-minute idle interval, remained single-bound, and reconnected after a 40-second server outage. Used a unique local fixture profile. |
-| Prior Plan 05-07 hostile-page Edge E2E | PASS — one refused gated pay attempt, zero submit side effects; one accepted warning boolean arrived before the next action turn | Existing browser E2E evidence. The test passed twice under its opt-in Edge gate. It does not include real Claude or a voice speech consumer. |
+| # | Criterion | Result | Evidence |
+|---|---|---|---|
+| 1 | Real Claude receives the hostile fixture's approved value-free projection; gated action is refused with no side effect. | PASS | Plan 05-10 bounded real-Claude check and existing hostile-page Edge matrix. The check recorded zero act dispatches, submit events, navigation, and state change after premature confirmation. |
+| 2 | Accepted GATE-07 boolean causes fixed warning speech before input resumes; page prose never reaches voice UI. | PASS | `voice-warning.e2e.test.ts` on dedicated Edge; fixed warning spoken before the queued request, warning gate held input, and speech completion used tracked IDs. |
+| 3 | Local I3 works with the self-hosted survey: real voice UI fills/submits through the gate, Claude repairs and reuses the exact cache identity, and hostile action remains blocked. | PASS | `demo-form.e2e.test.ts`, bounded 05-11 cache check, and 05-10 hostile check. The survey uses fictional values and a local report sink; no external form was used. |
+| 4 | One command launches the loopback server, dedicated extension profile, and voice window; both roles connect. | PASS | `npm run demo -- --brain=fake --smoke`; marker confirmed extension, voice, selected survey page, and isolated profiles. |
+| 5 | Freeze: exact demo repair is prewarmed, fake fallback passes, and main is tagged `demo-safe`. | PARTIAL | Cache prewarm and fake fallback pass. Tag remains pending the required teammate review and merge of the integration branch. |
 
-The 04-18 synthetic live SDK result remains separate and does not cover hostile-page context. Plan 05-10 supplies the applicable real-Claude evidence for the seeded fixture and closes GATE-06: one valid gated intent staged production read-back, then a premature confirmation without `speak.done` produced a production refusal audit. The check recorded zero act dispatches, submit events, navigation, or page-state changes after three total SDK dispatches in 9.3 seconds. The prompt contained only the production-approved value-free page projection; hostile instruction prose, field values, and the warning boolean were rejected before dispatch. The test socket proves the core protocol refusal path, not a voice UI.
+## Local test evidence
 
-## Task 2: External targets, cache, and freeze gate
+- `npm test -- --maxWorkers=1`: 82 files passed, 16 skipped; 884 tests passed, 25 skipped.
+- `npm run typecheck`: passed.
+- Opt-in Edge suite `npx vitest run apps/extension/test/e2e --maxWorkers=1`: 15 files passed, 2 separately gated tests skipped; 25 tests passed, 2 skipped. The suite used only harness-owned browser profiles.
+- Focused voice reducer/GatePort/protocol/server-flow tests and the direct WebSocket integration test cover tracked speech IDs, exact `submit survey`, one-use grant dispatch, stale IDs, replay, and invalidation on cancel, stop, repeat, and page change.
+- `npm run demo -- --brain=fake --smoke`: passed with `BLIP_DEMO_SMOKE=PASS extension-connected=true voice-connected=true survey-page-selected=true profiles=isolated`.
+- 05-11 bounded real-Claude prewarm: 3/8 dispatches, 2 repaired labels, both empty-tool roles accepted, exact identity cache reloaded without a new provider prompt. Elapsed 11,037 ms. Identity SHA-256: `ddecb18b6fa05cbe627dd0edafda2a38b8d231ec408bcb37ea0460848ba3c7d2`.
 
-- `apps/voice` is absent from this checkout. The voice workstream still lists DLG-14 speech and DEMO-03 as Pending. The demo launcher correctly reported that no voice client was configured when the smoke ran with `BLIP_VOICE_URL` unset.
-- The user clarified that this hackathon project has no public-form URL. Local synthetic fixtures were used for browser coverage; no arbitrary external form was selected or opened. The team-owned public-form URL and its fixed synthetic non-sensitive test expectations remain unavailable, so real-site I3 stays pending.
-- Phase 4's validated live patch is keyed to the fixed synthetic page, not the exact broken demo form. It cannot prove demo-form prewarm. No persistent repair cache was inspected or fabricated.
-- The full Freeze success criteria are not met. No `demo-safe` tag was created, moved, or pushed.
-
-## Final requirement status
+## Requirement status
 
 | Requirement | Status | Evidence / remaining input |
 |---|---|---|
-| GATE-06 | Complete | Plan 05-10: real Claude received the production value-free projection from the accepted loopback injection fixture, returned a gated intent, and staged read-back. A premature confirmation without `speak.done` produced the production `confirmation-too-early` refusal audit. Zero act dispatches, submit events, navigation, or page-state changes. |
-| GATE-07 | Pending | Core boolean propagation passed in the Edge E2E. Voice-owned DLG-14 speech is unverified because the voice client is absent. |
-| PROT-03 | Pending | One-command server + dedicated Edge + extension readiness passed. The voice-window launch target is absent. |
-| DEMO-03 / real-site I3 | Pending | Requires the team-selected public form URL, fixed synthetic data, voice client, and an approved integrated run. |
-| Exact demo repair-cache prewarm | Pending | Requires the exact demo-form identity and a validated patch for its origin/path/structure hash. The 04-18 synthetic cache entry is not equivalent. |
-| Freeze / `demo-safe` | Pending | Blocked by the preceding incomplete criteria. No tag was created or modified. |
+| GATE-06 | Complete | 05-10 real-Claude hostile-fixture check; zero gated dispatch and side effects. |
+| GATE-07 | Complete | Fixed local warning speech before input enabled; no page prose displayed or spoken. |
+| PROT-03 | Complete | Dedicated Edge extension + voice startup and readiness smoke passed. |
+| Local synthetic I3 | Complete | Real Edge voice UI submitted the local survey only after tracked read-back and exact phrase; Claude cache identity validated and reused. |
+| DEMO-03 public form | Deferred | User confirmed there is no public-form URL for this hackathon. No substitute public page was opened. |
+| Exact demo repair-cache prewarm | Complete | 05-11 one-use report and claim record. |
+| Fake fallback | Complete | One-command fake-brain smoke passed with both roles connected. |
+| Freeze / `demo-safe` | Pending release | Requires teammate review and merge of the gate/protocol integration branch, then tagging main. |
 
-All 10 Phase 5 plans are executed and remaining gaps are explicit; Phase 5 is not marked complete. No arbitrary public target or voice substitute was used, no hostile page prose was sent to the model, and no persistent cache contents, credentials, or unrelated environment values were inspected.
+No credentials, account state, public form data, or unrelated environment values were inspected. The `.chrome-profile` demo cache is local and ignored by Git; the report records only a structural identity hash and sanitized counts.
 
-_Verified 2026-10-17T20:07:01Z._
+_Verified 2026-10-17._

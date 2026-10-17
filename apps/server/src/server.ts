@@ -16,6 +16,7 @@ import type { ClaudeSdkAdapter, ClaudeSessionOptions } from "./brain/claude/sess
 import { handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
 import { createGatePort } from "./act/gate-port";
+import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
 
 export type StartServerOptions = {
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
@@ -166,6 +167,39 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         }
       });
       turnQueue = run.catch(() => {}); // a failed turn is logged by the hub and must not block the next one
+      return run;
+    },
+    "confirm.redeem": ({ message, hub: h, session: s }) => {
+      if (message.type !== "confirm.redeem") return;
+      const run = turnQueue.then(async () => {
+        s.busy = true;
+        s.dialogue = "awaiting-confirm";
+        h.pushState();
+        h.send("voice", "transcript", {
+          utteranceId: message.payload.utteranceId,
+          heardAs: "confirmation phrase received",
+          routedTo: "grammar",
+        });
+        try {
+          const gatedContext: GatedContext = {
+            hub: h,
+            gatePort: createGatePort(h, s.grants),
+            session: s,
+            refresher,
+            clock,
+            ...(schedule !== undefined ? { schedule } : {}),
+          };
+          await createVoiceGateAdapter(gatedContext).redeem(message.payload);
+        } finally {
+          s.busy = false;
+          s.dialogue = s.pendingGatedAction !== null
+            ? s.pendingGatedAction.grantId === undefined ? "reading-back" : "awaiting-confirm"
+            : s.model !== null && s.extensionConnected ? "ready" : "no-page";
+          h.pushState();
+          repairCoordinator?.schedulePending();
+        }
+      });
+      turnQueue = run.catch(() => {});
       return run;
     },
     "speak.done": ({ message, hub: h, session: s }) => {

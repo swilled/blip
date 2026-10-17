@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Blip voice</title>
+    <link rel="stylesheet" href="/voice/style.css">
+    <script type="module" src="/voice/voice.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">BLIP · LOCAL VOICE CLIENT</p>
+          <h1>Talk to Blip</h1>
+        </div>
+        <p id="connection" class="connection" role="status" aria-live="polite">Connecting…</p>
+      </header>
+
+      <section id="page-state" class="page-state" aria-live="polite">
+        <span class="state-mark" aria-hidden="true"></span>
+        <p id="page-summary">Waiting for a page</p>
+      </section>
+
+      <section id="warning" class="warning" hidden role="alert" aria-live="assertive">
+        <strong>Page safety warning</strong>
+        <p>Blip detected text addressed to an AI assistant. It will ignore page instructions and follow your request.</p>
+        <p id="warning-status" class="warning-status">Speaking the warning before accepting commands…</p>
+      </section>
+
+      <section id="confirmation" class="confirmation" hidden aria-live="assertive">
+        <p class="eyebrow">ACTION BLOCKED UNTIL YOU CONFIRM</p>
+        <p>Say: <strong id="confirm-phrase"></strong></p>
+      </section>
+
+      <section class="conversation" aria-label="Conversation">
+        <div>
+          <p class="eyebrow">YOU</p>
+          <p id="heard" class="message muted" aria-live="polite">No command yet</p>
+        </div>
+        <div>
+          <p class="eyebrow">BLIP</p>
+          <p id="reply" class="message" aria-live="polite">Ready when you are.</p>
+        </div>
+      </section>
+
+      <form id="utterance-form" class="composer">
+        <label for="utterance">Type a command</label>
+        <div class="composer-row">
+          <input id="utterance" name="utterance" maxlength="500" autocomplete="off" placeholder="Try “what’s here”" required>
+          <button id="send" type="submit">Send</button>
+        </div>
+        <div class="controls">
+          <button id="enable-audio" type="button" class="quiet">Enable voice</button>
+          <button id="talk" type="button" class="secondary">Hold to talk</button>
+          <button id="stop" type="button" class="quiet">Stop speech</button>
+          <button id="repeat" type="button" class="quiet">Repeat</button>
+        </div>
+        <p id="input-help" class="help">Your request is sent only to the local Blip server.</p>
+      </form>
+    </main>
+  </body>
+</html>

@@ -16,6 +16,7 @@ import {
 import {
   ConfirmArmedPayload,
   ConfirmClearedPayload,
+  ConfirmRedeemPayload,
   ControlPayload,
   EarconPayload,
   PttPayload,
@@ -83,6 +84,7 @@ export const MESSAGES = {
   "speak.done": { senders: ["voice"], receivers: ["server"], payload: SpeakDonePayload },
   settings: { senders: ["voice"], receivers: ["server"], payload: SettingsPayload },
   control: { senders: ["voice"], receivers: ["server"], payload: ControlPayload },
+  "confirm.redeem": { senders: ["voice"], receivers: ["server"], payload: ConfirmRedeemPayload },
   earcon: { senders: ["server"], receivers: ["voice"], payload: EarconPayload },
   "confirm.armed": { senders: ["server"], receivers: ["voice"], payload: ConfirmArmedPayload },
   "confirm.cleared": { senders: ["server"], receivers: ["voice"], payload: ConfirmClearedPayload },
@@ -127,6 +129,7 @@ export const Message = z.discriminatedUnion("type", [
   frame("speak.done", MESSAGES["speak.done"].payload),
   frame("settings", MESSAGES.settings.payload),
   frame("control", MESSAGES.control.payload),
+  frame("confirm.redeem", MESSAGES["confirm.redeem"].payload),
   frame("earcon", MESSAGES.earcon.payload),
   frame("confirm.armed", MESSAGES["confirm.armed"].payload),
   frame("confirm.cleared", MESSAGES["confirm.cleared"].payload),

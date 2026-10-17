@@ -42,6 +42,14 @@
         "voice"
       ]
     },
+    "confirm.redeem": {
+      "senders": [
+        "voice"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
     "control": {
       "senders": [
         "voice"

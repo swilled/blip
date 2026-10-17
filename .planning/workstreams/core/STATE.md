@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 04 local plans complete; production live-evidence gaps remain after the single-use 04-11 check failed during initialization. Phase 05 final acceptance remains gated on Phase 04 and external integrations.
-stopped_at: Completed 04-11-PLAN.md; Phase 04 remains gaps_found with BRAIN-01/02/03 and PAGE-04 pending; Phase 05 05-09 final acceptance is still gated.
-last_updated: "2026-10-17T18:47:16Z"
+status: Phase 05 local acceptance is verified on integration/ho8-voice-gate; teammate review and mainline promotion remain before demo-safe tagging. Public-form DEMO-03 is explicitly deferred because no URL exists for this hackathon.
+stopped_at: Executed 05-11, passed the local voice-to-GatePort survey E2E, fake demo smoke, and bounded exact demo-cache prewarm; waiting on required teammate review before mainline freeze/tag.
+last_updated: "2026-10-17T21:10:00Z"
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 51
-  completed_plans: 50
+  completed_phases: 3
+  total_plans: 59
+  completed_plans: 59
 ---
 
 # Project State
@@ -20,18 +20,18 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 04 verification gaps — all local plans executed; production SDK evidence remains incomplete
+**Current focus:** Phase 05 local acceptance is complete, including the voice reducer integration and exact synthetic survey cache. The integration branch needs teammate review and mainline promotion before `demo-safe`; public-form DEMO-03 is deferred.
 
 ## Current Position
 
-Phase: 04 (claude-brain-and-label-repair) — VERIFYING / GAPS FOUND
-Plan: 11 of 11 Phase 04 plans executed; Phase 05 05-09 final acceptance remains gated on Phase 04 and external integrations
+Phase: 05 (hostile-pages-real-web-and-freeze) — LOCAL ACCEPTANCE VERIFIED / RELEASE REVIEW PENDING
+Plan: Phase 04 complete (18/18); Phase 05 plans executed (11/11). Freeze/tag waits for review and merge of the integration branch.
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 50
+- Total plans completed: 58
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -76,10 +76,13 @@ Plan: 11 of 11 Phase 04 plans executed; Phase 05 05-09 final acceptance remains 
 | Phase 04 P04-09 | 11m | 2 tasks | 2 files |
 | Phase 04 P10 | untracked continuation | 3 tasks | 12 files |
 | Phase 04 P11 | 4 min | 2 tasks | 11 files |
+| Phase 04 P18 | 4 min | 3 tasks | 11 files |
+| Phase 05 P09 | 3 min | 2 tasks | 5 files |
 | Phase 05 P04 | 1 min | 2 tasks | 1 files |
 | Phase 05 P05 | 8 min | 2 tasks | 4 files |
 | Phase 05 P06 | 15 min | 2 tasks | 11 files |
 | Phase 05 P07 | 6 min | 2 tasks | 1 files |
+| Phase 05 P11 | untracked continuation | 4 tasks | voice integration, local synthetic survey, and evidence |
 
 ## Accumulated Context
 
@@ -118,11 +121,17 @@ Recent decisions affecting current work:
 - [Phase 04]: All probes use injected fakes and synthetic data; requirements remain pending until separate approved live evidence exists.
 - [Phase 04]: Only fixed synthetic role operations may precede both valid empty-tool checks; bootstrap counts increment synchronously before SDK dispatch.
 - [Phase 04]: The one approved 04-10 initialization failure consumes its approval; no live retry is allowed and BRAIN-01/02/03/PAGE-04 remain pending.
-- [Phase 04]: The separate 04-11 no-retry check also failed during initialization after one intent bootstrap, with no role result or tool count. Its approval and one-time token are consumed; all four production-evidence requirements remain pending.
+- [Phase 04]: The 04-11 single-use check failed during initialization after one intent bootstrap, with no role result or tool count. Its approval and one-time token are consumed; all four production-evidence requirements remain pending.
+- [Phase 04]: On 2026-10-17, the user separately authorized repeated bounded synthetic checks as needed. Each attempt still gets a distinct plan-scoped one-use report and claim; no credentials, auth state, environment values, or real page/user data may be inspected or used.
+- [Phase 04]: The 04-18 production check completed both tool-less roles, live Intent/recovery, and strict synthetic repair/cache round trip in 20,514 ms with seven of eight dispatches. All four Phase 04 requirements are complete based on source configuration, live synthetic evidence, offline integration tests, and user-authorized local subscription allowance; credential/auth values were not inspected.
+- [Phase 04]: 04-12 and 04-13 both observed intent init with zero tools; 04-13 categorized the discarded bootstrap result as invalid JSON. Plan 04-14 will await SDK turn completion but will not gate startup on unused warmup text; actual intent and repair outputs remain strictly validated.
 - [Phase 05]: The user reported that the voice-track owner approved the exact optional GATE-07 warning fields on 2026-10-17; DLG-14 speech and UI remain voice-owned.
 - [Phase 05]: Add only the approved optional boolean fields to Snapshot and voice page state; legacy payloads remain valid and the signal grants no authority.
 - [Phase 05]: Aggregate the warning across captured frames and page-change signatures so child-frame and detector-only changes reach accepted state.
 - [Phase 05]: Real Edge E2E observed the accepted boolean before the next action and preserved the no-grant refusal; this does not verify voice speech.
+- [Phase 05]: The core owner confirmed there is no public-form URL for this hackathon. Use the self-hosted synthetic survey for Core I3 and leave voice-owned DEMO-03 explicitly deferred.
+- [Phase 05]: The voice reducer sends `confirm.redeem` with its active grant and completed read-back IDs; the server validates them and alone consumes the `ConsumedGrant` for GatePort dispatch.
+- [Phase 05]: GATE-07, PROT-03, local synthetic I3, and exact demo repair-cache identity have direct local evidence. Keep `demo-safe` untagged until the HO-8 integration branch receives teammate review and is merged to main.
 
 ### Pending Todos
 
@@ -131,11 +140,11 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; voice's `Effect` union remains a cross-track integration item
-- [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
-- [Phase 5] 05-09 final acceptance is gated on successful Phase 4 live-provider evidence, the team-owned form URL, the voice client target, and the exact demo repair identity; do not create `demo-safe` while these are missing.
+- [Phase 5] `integration/ho8-voice-gate` needs teammate review and merge before mainline `demo-safe` tagging.
+- [Phase 5] Voice-owned public-form DEMO-03 is deferred; the core owner confirmed no public-form URL exists for the hackathon. Core acceptance uses the local synthetic survey and makes no public-form claim.
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
-- [Phase 4] The 04-08 approved live check timed out during provider initialization after 900 seconds; that historical approval is consumed.
-- [Phase 4] The separate 04-10 approved bootstrap check failed during initialization after 6,454 ms, with one intent bootstrap, no repair bootstrap, no ordinary probes, and no role/tool result. Its approval is consumed. BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04 remain pending; Phase 4 stays open.
+- [Phase 4] Phase 04 is complete after 04-18. Subscription usage is attributed to the user's authorized local subscription allowance and source configuration; account identity was not independently inspected.
+- [Phase 5] Plan 05-11 completes all local acceptance, including real-Claude hostile context, voice speech and GatePort integration, synthetic survey submit, and exact demo cache reuse. The release tag remains pending teammate review and merge.
 
 ## Deferred Items
 
@@ -143,10 +152,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
-| *(none)* | | | | |
+| Voice / Demo | DEMO-03 public form | Deferred by core-owner decision: no public-form URL for this hackathon; local synthetic survey is the Core I3 target. | 2026-10-17 | v1.0 |
 
 ## Session Continuity
 
-Last session: 2026-10-17T18:26:12Z
-Stopped at: Completed 05-08-PLAN.md; 05-09 final acceptance remains gated on Phase 4 and external integrations
+Last session: 2026-10-17T21:10:00Z
+Stopped at: Executed 05-11 and verified the voice reducer → grant-bound Executor → GatePort path, local survey acceptance, exact Claude cache prewarm, and fake launcher. Only teammate review/mainline merge/tag remains for release freeze.
 Resume file: None

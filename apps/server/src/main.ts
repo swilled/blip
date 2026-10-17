@@ -5,7 +5,8 @@
 //   --fake-delay <ms>     default 1500: how long a model-routed turn waits (the fake brain "thinking")
 //   --fake-request-action <actionId>
 //                         TEST ONLY: the fake brain answers model-routed turns with request_action for
-//                         this id. The server still refuses it (no act.request, no confirm.armed).
+//                         this id. The server requires completed read-back, cooldown, and exact phrase;
+//                         the fake extension still refuses the final gated click.
 //   --allow-origin <o>    repeatable; requires --dev; loopback http origins; grants voice only
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -68,11 +69,11 @@ async function main(): Promise<void> {
     }
   }
 
-  // Static roots only when the directories exist (the voice build and fixtures arrive in other plans).
+  // Static roots only when their directories exist so server-only setups remain lightweight.
   const staticRoots: StaticRoot[] = [];
-  const voiceDist = fileURLToPath(new URL("../../../apps/voice/dist", import.meta.url));
+  const voicePublic = fileURLToPath(new URL("../../../apps/voice/public", import.meta.url));
   const fixtures = fileURLToPath(new URL("../../../fixtures/forms", import.meta.url));
-  if (existsSync(voiceDist)) staticRoots.push({ urlPrefix: "/", dir: voiceDist });
+  if (existsSync(voicePublic)) staticRoots.push({ urlPrefix: "/voice", dir: voicePublic });
   if (existsSync(fixtures)) staticRoots.push({ urlPrefix: "/fixtures/forms", dir: fixtures });
 
   let running;

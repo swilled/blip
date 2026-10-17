@@ -227,6 +227,8 @@ export function createHub(options: HubOptions): Hub {
       if (role === "extension") {
         session.extensionConnected = false;
         hub.pushState();
+      } else {
+        session.voiceConnected = false;
       }
       log("info", { msg: "connection closed", role });
     }
@@ -246,6 +248,7 @@ export function createHub(options: HubOptions): Hub {
     sendTo(conn, "welcome", { sessionId: session.sessionId, serverVersion: SERVER_VERSION, brain: session.brain }, { replyTo: helloId });
     log("info", { msg: "connection bound", role });
     if (role === "voice") {
+      session.voiceConnected = true;
       sendTo(conn, "state", session.statePayload());
     } else {
       session.extensionConnected = true;

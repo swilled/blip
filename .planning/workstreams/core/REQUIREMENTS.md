@@ -36,7 +36,7 @@
 - [x] **GATE-02**: Pressing Enter in a field, `form.submit()`, `requestSubmit()` or a div "button" cannot submit the form while no grant is armed (capture-phase interception in the extension)
 - [x] **GATE-03**: A grant is single-use, expires after 30 s, and is bound to target + kind + URL + snapshot version
 - [x] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
-- [x] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
+- [x] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant; the fixed phrase is matched in server code after tracked read-back, and the voice reducer redeems only its armed grant/read-back IDs
 - [x] **GATE-08**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
 - [x] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
 - [ ] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
@@ -67,7 +67,7 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | VIS-02 BLOCKED banner | I2 demo visibility of the armed gate | `confirm.armed` printed in REPL | I2 |
 | DLG-11 "I guessed" disclosure | Speaks PAGE-04 repair confidence | REPL prints labelSource/confidence | I3 |
 | DLG-14 injection warning | Speaks the GATE-07 flag | REPL prints the flag | I3 |
-| DEMO-03 real public form | Phase 5 I3 | none (voice picks the form by ~h11) | I3 |
+| DEMO-03 public form | Phase 5 I3 | none (no public-form URL exists for this hackathon; Core uses its local synthetic survey) | Deferred by core-owner decision |
 | DEMO-02 reset script, DEMO-04 fallback kit, VOX-08 NVDA mode | Freeze readiness | `--brain=fake` plan B (core side) | Freeze |
 
 ## v2 Requirements (core-relevant, deferred)
@@ -98,7 +98,7 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 |-------------|------------|-------|--------|
 | PROT-01 | core | Phase 1 | Pending |
 | PROT-02 | core | Phase 1 | Complete |
-| PROT-03 | core | Phase 5 | Pending |
+| PROT-03 | core | Phase 5 | Complete |
 | PROT-04 | core | Phase 1 | Complete |
 | PAGE-01 | core | Phase 2 | Complete |
 | PAGE-02 | core | Phase 1 | Complete |
@@ -115,7 +115,7 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | GATE-04 | core | Phase 3 | Complete |
 | GATE-05 | core | Phase 3 | Complete |
 | GATE-06 | core | Phase 5 | Complete |
-| GATE-07 | core | Phase 5 | Pending |
+| GATE-07 | core | Phase 5 | Complete |
 | GATE-08 | core | Phase 3 | Complete |
 | BRAIN-01 | core | Phase 4 | Complete |
 | BRAIN-02 | core | Phase 4 | Complete |
@@ -130,4 +130,4 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 
 ---
 *Requirements defined: 2026-10-16*
-*Last updated: 2026-10-17 after Phase 5 real-Claude hostile-fixture check; GATE-06 is complete, while GATE-07 and PROT-03 remain pending cross-track evidence*
+*Last updated: 2026-10-17 after Phase 5 voice-window and synthetic-survey verification; GATE-06/07 and PROT-03 are complete; public-form DEMO-03 is deferred by core-owner decision*

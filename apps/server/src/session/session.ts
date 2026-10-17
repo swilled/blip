@@ -53,6 +53,8 @@ export class Session {
   readonly grants: GrantStore;
 
   #extensionConnected = false;
+  /** Whether the current voice-role socket is bound to this session. */
+  voiceConnected = false;
   #snapshotOrder: { tabId: number; version: number; capturedAt: number } | null = null;
   #snapshotRevision = 0;
 

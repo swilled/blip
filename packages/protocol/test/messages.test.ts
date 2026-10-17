@@ -128,7 +128,7 @@ describe("invalid payloads fail with invalid-payload", () => {
   });
 
   it("rejects an unknown ActionKind in confirm.armed", () => {
-    expect(invalid("confirm.armed", { grantId: "g", phrase: "p", kind: "approve", actionLabel: "x", expiresAt: 1 })).toBe(true);
+    expect(invalid("confirm.armed", { grantId: "g", speakId: "s", phrase: "p", kind: "approve", actionLabel: "x", expiresAt: 1 })).toBe(true);
   });
 
   it("rejects a non-integer tabId", () => {

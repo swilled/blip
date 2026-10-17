@@ -30,7 +30,7 @@ Every frame is an envelope:
 
 ## Messages
 
-In the tables below `from` is the role allowed to put the frame on the wire and `to` is the role that receives it. Roles are `extension`, `voice` and `server`. There are 24 types. The server enforces `from` per connection (D-04): a frame whose type the connection's role may not send is answered with a `role-violation` error and never routed.
+In the tables below `from` is the role allowed to put the frame on the wire and `to` is the role that receives it. Roles are `extension`, `voice` and `server`. There are 25 types. The server enforces `from` per connection (D-04): a frame whose type the connection's role may not send is answered with a `role-violation` error and never routed.
 
 ### Handshake and shared
 
@@ -63,14 +63,15 @@ Includes the server-to-voice pushes.
 
 | type | from | to | payload | notes |
 |---|---|---|---|---|
-| `utterance` | voice | server | `{ utteranceId, text (1 to 500 chars), source: voice or typed, sttConfidence?, alternatives? }` | final transcripts only; the confirm phrase is matched in code only on these |
+| `utterance` | voice | server | `{ utteranceId, text (1 to 500 chars), source: voice or typed, sttConfidence?, alternatives? }` | final transcripts only; a mismatch while awaiting confirmation cancels it |
 | `ptt` | voice | server | `{ state: start or end }` | on `start` the server stops speech and cancels the pending brain turn |
 | `speak.done` | voice | server | `{ speakId, interrupted: boolean }` | required for read-back before arming a confirmation |
 | `settings` | voice | server | `{ outputMode: agent-voice, screen-reader or both, rate?: number, verbosity?: short or normal }` | |
 | `control` | voice | server | `{ cmd: stop, repeat or reconnect-browser }` | `stop` also works from a button and a hotkey |
+| `confirm.redeem` | voice | server | `{ grantId, speakId, utteranceId, phrase }` | reducer redemption for the tracked read-back; server rechecks the exact phrase and consumes the grant |
 | `speak` | server | voice | `{ speakId, text, category, interrupt, spell? }` | the UI queues it; `interrupt` flushes the queue. `category` is answer, filler, readback, confirm-prompt, error or result |
 | `earcon` | server | voice | `{ name: listening, thinking, done, blocked or error }` | non-verbal latency cue |
-| `confirm.armed` | server | voice | `{ grantId, phrase, kind: ActionKind, actionLabel, expiresAt: number }` | informational only; the UI displays "Say: submit form" |
+| `confirm.armed` | server | voice | `{ grantId, speakId, phrase, kind: ActionKind, actionLabel, expiresAt: number }` | the UI displays the server-owned confirmation prompt and binds redemption to its read-back id |
 | `confirm.cleared` | server | voice | `{ grantId, reason: executed, cancelled, expired, page-changed or value-changed }` | |
 | `state` | server | voice | `{ dialogue: DialogueStateName, page: object or null, focusFieldId?, busy, extensionConnected, brain }` | pushed on every change; `page` is `{ url, title, step?, fieldCount: int, requiredEmpty: int, untrustedInstructionDetected?: boolean }` |
 | `transcript` | server | voice | `{ utteranceId, heardAs, routedTo: grammar or model }` | debug and demo panel |
@@ -98,7 +99,7 @@ Includes the server-to-voice pushes.
 
 The model (or the grammar) produces an `Intent`, a union on `type` with 16 variants: `describe`, `read_form`, `whats_required`, `what_went_wrong`, `read_back`, `fill_profile`, `go_to_field` (`fieldId`), `set_fields` (`fills`, up to 20 of `{ fieldId, value }`), `spell` (`fieldId`), `undo`, `stop`, `request_action` (`actionId`), `click_safe` (`actionId`), `answer` (`text`), `clarify` (`question`), `unknown`.
 
-There is deliberately no `confirm`, `approve` or `submit_now` variant. The model may request an action but can never grant one; the confirm phrase is matched in server code on `utterance` frames from the voice socket only.
+There is deliberately no `confirm`, `approve` or `submit_now` Intent variant. The model may request an action but can never grant one. Voice may send `confirm.redeem` only with its currently armed grant, tracked read-back id and phrase; the server rechecks all three before it consumes the one-use grant and reaches GatePort. Ordinary `utterance` frames remain available for typed/recognized speech and cancel a pending confirmation when they do not match.
 
 ## DialogueStateName
 

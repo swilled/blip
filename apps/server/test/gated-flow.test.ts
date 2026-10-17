@@ -25,6 +25,42 @@ async function nextMatching(
   throw new Error("expected server frame was not received");
 }
 
+async function prepareLiveSubmitGrant() {
+  const fakeTime = { now: 50_000 };
+  const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+  const server = await startServer({
+    port: 0,
+    dev: true,
+    fakeDelayMs: 0,
+    fakeRequestActionId: "e10",
+    clock: () => fakeTime.now,
+    schedule: (callback, delayMs) => scheduled.push({ callback, delayMs }),
+  });
+  const extension = startFakeExtension({ url: server.url });
+  await extension.connected;
+  const voice = await bindClient(server.port, "voice", { origin: undefined });
+  voice.send("utterance", { utteranceId: "grant-request", text: "please submit the booking", source: "typed" });
+  const prompt = await nextMatching(voice, (frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt");
+  voice.send("speak.done", { speakId: prompt.payload.speakId, interrupted: false });
+  await nextMatching(voice, (frame) => frame.type === "state" && frame.payload.dialogue === "awaiting-confirm");
+  expect(scheduled[0]?.delayMs).toBe(1_000);
+  fakeTime.now += 1_000;
+  scheduled.shift()!.callback();
+  const armed = await nextMatching(voice, (frame) => frame.type === "confirm.armed");
+  return {
+    server,
+    extension,
+    voice,
+    prompt,
+    armed,
+    close: async () => {
+      voice.ws.terminate();
+      extension.close();
+      await server.close();
+    },
+  };
+}
+
 function preparationRig(options: { actResult?: { ok: boolean; error?: string; liveKind?: string }; syntheticPayAction?: boolean } = {}) {
   const snapshot = loadSnapshot("booking");
   if (options.syntheticPayAction) {
@@ -529,4 +565,94 @@ describe("gated Executor read-back preparation", () => {
       await server.close();
     }
   });
+
+  it("adapts the voice reducer redeem to one exact, tracked, grant-bound GatePort dispatch", async () => {
+    const rig = await prepareLiveSubmitGrant();
+    try {
+      expect(rig.armed.payload).toMatchObject({
+        grantId: expect.any(String),
+        speakId: rig.prompt.payload.speakId,
+        phrase: "submit survey",
+      });
+      rig.voice.send("confirm.redeem", {
+        grantId: rig.armed.payload.grantId,
+        speakId: rig.prompt.payload.speakId,
+        utteranceId: "exact-redeem-1",
+        phrase: "Submit survey!",
+      });
+      await nextMatching(rig.voice, (frame) => frame.type === "speak" && frame.payload.category === "error" && frame.payload.text.includes("page refused"));
+
+      const acts = rig.extension.received().filter((message) => message.type === "act.request");
+      expect(acts).toHaveLength(1);
+      expect(acts[0]!.payload).toMatchObject({
+        action: { op: "click", targetId: "e10" },
+        expectedKind: "submit",
+        gate: { grantId: rig.armed.payload.grantId, kind: "submit" },
+      });
+      expect(rig.voice.frames.find((frame) => frame.type === "transcript" && frame.payload.utteranceId === "exact-redeem-1")?.payload)
+        .toMatchObject({ heardAs: "confirmation phrase received", routedTo: "grammar" });
+
+      rig.voice.send("confirm.redeem", {
+        grantId: rig.armed.payload.grantId,
+        speakId: rig.prompt.payload.speakId,
+        utteranceId: "replay-redeem-2",
+        phrase: "submit survey",
+      });
+      await sleep(25);
+      expect(rig.extension.received().filter((message) => message.type === "act.request")).toHaveLength(1);
+      expect(rig.server.session.pendingGatedAction).toBeNull();
+    } finally {
+      await rig.close();
+    }
+  });
+
+  it("refuses redeem when its speakId is not the completed read-back id", async () => {
+    const rig = await prepareLiveSubmitGrant();
+    try {
+      rig.voice.send("confirm.redeem", {
+        grantId: rig.armed.payload.grantId,
+        speakId: "stale-readback-id",
+        utteranceId: "stale-redeem-1",
+        phrase: "submit survey",
+      });
+      const cleared = await nextMatching(rig.voice, (frame) => frame.type === "confirm.cleared");
+      expect(cleared.payload).toMatchObject({ grantId: rig.armed.payload.grantId, reason: "cancelled" });
+      expect(rig.extension.received().filter((message) => message.type === "act.request")).toHaveLength(0);
+      expect(rig.server.session.pendingGatedAction).toBeNull();
+    } finally {
+      await rig.close();
+    }
+  });
+
+  it.each(["cancel", "stop", "repeat", "page-change"] as const)(
+    "invalidates the armed voice reducer grant on %s and refuses a later redeem",
+    async (reason) => {
+      const rig = await prepareLiveSubmitGrant();
+      try {
+        if (reason === "cancel") {
+          rig.voice.send("utterance", { utteranceId: "cancel-confirm", text: "cancel", source: "typed" });
+        } else if (reason === "stop" || reason === "repeat") {
+          rig.voice.send("control", { cmd: reason });
+        } else {
+          rig.extension.emitPageChanged("navigation");
+        }
+        const cleared = await nextMatching(rig.voice, (frame) => frame.type === "confirm.cleared");
+        expect(cleared.payload).toMatchObject({
+          grantId: rig.armed.payload.grantId,
+          reason: reason === "page-change" ? "page-changed" : "cancelled",
+        });
+        rig.voice.send("confirm.redeem", {
+          grantId: rig.armed.payload.grantId,
+          speakId: rig.prompt.payload.speakId,
+          utteranceId: `after-${reason}`,
+          phrase: "submit survey",
+        });
+        await sleep(25);
+        expect(rig.extension.received().filter((message) => message.type === "act.request")).toHaveLength(0);
+        expect(rig.server.session.pendingGatedAction).toBeNull();
+      } finally {
+        await rig.close();
+      }
+    },
+  );
 });

@@ -7,9 +7,12 @@ import {
   browserLaunchArgs,
   classifyExtensionReadiness,
   demoProfilePath,
+  demoRepairCachePath,
+  demoVoiceProfilePath,
   hasExtensionInProfile,
   parseDemoArgs,
   resolveVoiceTarget,
+  voiceLaunchArgs,
   waitForExtensionReady,
 } from "./demo.js";
 
@@ -27,6 +30,8 @@ describe("local demo launcher inputs", () => {
 
   it("always uses the repo-local demo profile", () => {
     expect(demoProfilePath("C:\\repo")).toBe("C:\\repo\\.chrome-profile\\demo");
+    expect(demoRepairCachePath("C:\\repo")).toBe("C:\\repo\\.chrome-profile\\demo-repair-cache-v1");
+    expect(demoVoiceProfilePath("C:\\repo")).toBe("C:\\repo\\.chrome-profile\\demo-voice");
   });
 
   it("launches only the local fixture in the isolated profile without extension-load flags", () => {
@@ -35,6 +40,13 @@ describe("local demo launcher inputs", () => {
     expect(args).toContain("http://127.0.0.1:7790/injection.html");
     expect(args.some((arg) => arg.includes("--load-extension"))).toBe(false);
     expect(args.some((arg) => arg.includes("--user-data-dir=C:\\Users\\pranav\\AppData"))).toBe(false);
+  });
+
+  it("launches the voice window in an isolated profile without the extension", () => {
+    const args = voiceLaunchArgs("C:\\repo\\.chrome-profile\\demo-voice", "http://127.0.0.1:7777/voice/");
+    expect(args).toContain("--user-data-dir=C:\\repo\\.chrome-profile\\demo-voice");
+    expect(args).toContain("--app=http://127.0.0.1:7777/voice/");
+    expect(args.some((arg) => arg.includes("--load-extension"))).toBe(false);
   });
 });
 

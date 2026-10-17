@@ -32,7 +32,7 @@ Set your workstream once per machine: `setx GSD_WORKSTREAM core` (or `voice`), t
 ## Safety invariants (don't weaken without both of you agreeing)
 
 - The model never acts on the page. Claude is only called through tool-less structured-output calls. Every action goes through the Executor.
-- Gated actions (submit, pay, delete, send, cross-domain) are default-deny. The confirm phrase is matched in code, and only on utterances from the voice socket.
+- Gated actions (submit, pay, delete, send, cross-domain) are default-deny. The server matches the fixed phrase after the tracked read-back; the voice reducer's `confirm.redeem` carries the current grant/read-back IDs, and GatePort receives only the server's consumed proof.
 - Agent SDK sessions keep the lockdown: `tools: []`, `settingSources: []`, `strictMcpConfig: true`, `permissionMode: "dontAsk"`, an empty working directory, `ANTHROPIC_API_KEY` stripped, and the tool list asserted at startup. Never `bypassPermissions`.
 - Passwords and card numbers are never spoken, logged, or sent to the model.
 - Any PR that touches the Executor, the policy gate, or the lockdown config needs the other person's review.

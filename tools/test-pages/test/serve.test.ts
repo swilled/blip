@@ -102,6 +102,23 @@ describe("test page host", () => {
     expect(html).not.toMatch(/\b(?:\d[ -]*?){13,19}\b/);
   });
 
+  it("serves the local survey with fictional values and a same-origin submit sink", async () => {
+    const response = await fetch(`${server.origins.primary}/demo-form.html`);
+    expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("Blip Synthetic Survey");
+    expect(html).toContain('name="contact-name"');
+    expect(html).toContain('name="contact-email"');
+    expect(html).toContain('placeholder="Name"');
+    expect(html).toContain('placeholder="Email"');
+    expect(html).toContain('action="/submit-sink.html"');
+    expect(html).toContain('window.blipReport("demo-survey-submit"');
+    const destinations = [...html.matchAll(/\b(?:action|src|href)=["']([^"']+)["']/gi)].map((match) => match[1]!);
+    expect(destinations.every((destination) => new URL(destination, response.url).origin === server.origins.primary)).toBe(true);
+    expect(html).not.toMatch(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+    expect(html).not.toMatch(/\b(?:\d[ -]*?){13,19}\b/);
+  });
+
   it.each([
     ["literal traversal", "/../package.json"],
     ["encoded traversal", "/%2e%2e/package.json"],
