@@ -86,6 +86,7 @@ export const Snapshot = z.object({
   stepHint: z.string().max(100).optional(), // "Step 2 of 4" if detected
   elements: z.array(RawElement).max(250),
   truncated: z.boolean(),
+  untrustedInstructionDetected: z.boolean().optional(), // warning-only local detector result; no page prose
   structuralHash: z.string(), // hash of (tag,type,name,role,labelCandidate[0]) per element; EXCLUDES values
   capturedAt: z.number(),
 });

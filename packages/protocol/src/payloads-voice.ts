@@ -77,6 +77,7 @@ export const StatePayload = z.object({
       step: z.string().optional(),
       fieldCount: z.number().int(),
       requiredEmpty: z.number().int(), // counted with hasValue, never from a sensitive value
+      untrustedInstructionDetected: z.boolean().optional(), // warning-only; does not grant action authority
     })
     .nullable(),
   focusFieldId: z.string().optional(),
