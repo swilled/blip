@@ -7,6 +7,7 @@ import { openFixturePage } from "./harness.js";
 const enabled = process.env["BLIP_E2E_BROWSER"] === "1";
 const speakTexts = (frames: readonly Message[]) =>
   frames.filter((frame) => frame.type === "speak").map((frame) => frame.payload.text);
+const contains = (value: unknown, candidate: string) => JSON.stringify(value).includes(candidate);
 
 describe("real voice-role read and fill path", () => {
   it.skipIf(!enabled)("proves I1 replies and blocks a card-shaped post-write value at every server boundary", async () => {
@@ -34,9 +35,9 @@ describe("real voice-role read and fill path", () => {
 
       const sensitiveFocus = await fixture.voiceClient.sendUtterance(`fill Card number with ${cardNumber}`);
       expect(speakTexts(sensitiveFocus)).toContain("That is a private field. You can type it now.");
-      expect(JSON.stringify(sensitiveFocus)).not.toContain(cardNumber);
+      expect(contains(sensitiveFocus, cardNumber)).toBe(false);
       expect(fixture.actResults().at(-1)).toMatchObject({ ok: true, observedValue: null });
-      expect(JSON.stringify(fixture.actResults().at(-1))).not.toContain(cardNumber);
+      expect(contains(fixture.actResults().at(-1), cardNumber)).toBe(false);
 
       const cardWrite = await fixture.voiceClient.sendUtterance(`fill Full name with ${cardNumber}`);
       expect(speakTexts(cardWrite)).toContain("That is a private field. You can type it now.");
@@ -61,9 +62,9 @@ describe("real voice-role read and fill path", () => {
         lastSpoken: fixture.lastSpoken(),
         serverLogs: fixture.serverLogs(),
       };
-      expect(JSON.stringify(evidence)).not.toContain(cardNumber);
-      expect(JSON.stringify(evidence)).not.toContain(passwordSentinel);
-      expect(JSON.stringify(fixture.sessionField("Account password"))).not.toContain(passwordSentinel);
+      expect(contains(evidence, cardNumber)).toBe(false);
+      expect(contains(evidence, passwordSentinel)).toBe(false);
+      expect(contains(fixture.sessionField("Account password"), passwordSentinel)).toBe(false);
     } finally {
       await fixture.close();
     }
