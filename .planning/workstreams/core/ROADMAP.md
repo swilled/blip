@@ -102,7 +102,7 @@ Plans:
 - [x] 02-15-PLAN.md — Add dynamic/iframe/CSP/shadow fixtures and the dedicated browser launcher
 - [x] 02-16-PLAN.md — Implement live field writes, post-write sensitivity recheck and submit-event blocking
 - [x] 02-17-PLAN.md — Route acts through frames and prove privacy/auto-submit behavior in a browser
-- [ ] 02-18-PLAN.md — Add the closed-shadow highlight and structural mutation observer
+- [x] 02-18-PLAN.md — Add the closed-shadow highlight and structural mutation observer
 - [ ] 02-19-PLAN.md — Connect navigation/tab/structural changes to server freshness
 - [ ] 02-20-PLAN.md — Complete the browser matrix, voice-path privacy check and human-verify checklist
 **UI hint**: no
