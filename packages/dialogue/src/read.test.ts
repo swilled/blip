@@ -69,6 +69,34 @@ describe("dialogue read and option picks", () => {
     expect((result.effects[0] as { text: string }).text).toMatch(/^Which one/);
   });
 
+  it("hands sensitive fields to the user and confirms presence without retaining or speaking the value", () => {
+    const sentinel = "sensitive-sentinel-9472";
+    const sensitive = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e2"
+        ? { ...field, label: "Password", type: "password", sensitive: "password", hasValue: true, value: null }
+        : field),
+    });
+    const handoff = reduce(initialState(), say(`change password to ${sentinel}`), ctx(sensitive));
+    expect(handoff.effects.map((effect) => effect.kind)).toEqual(["focus", "speak"]);
+    expect(handoff.effects.some((effect) => effect.kind === "fill" || effect.kind === "parseIntent")).toBe(false);
+    expect(JSON.stringify(handoff.state)).not.toContain(sentinel);
+    expect(JSON.stringify(handoff.effects)).not.toContain(sentinel);
+
+    const spelling = reduce(initialState(), say("spell password"), ctx(sensitive));
+    expect(spelling.effects.map((effect) => effect.kind)).toEqual(["focus", "speak"]);
+    expect(JSON.stringify(spelling.effects)).not.toContain(sentinel);
+
+    const overlong = reduce(initialState(), say(`change password to ${sentinel}${"x".repeat(205)}`), ctx(sensitive));
+    expect(overlong.effects.some((effect) => effect.kind === "parseIntent")).toBe(false);
+    expect(JSON.stringify(overlong.effects)).not.toContain(sentinel);
+
+    const confirmed = reduce(handoff.state, say("done"), ctx(sensitive));
+    expect((confirmed.effects[0] as { text: string }).text).toBe("probably Password is entered, hidden.");
+    expect(JSON.stringify(confirmed.state)).not.toContain(sentinel);
+    expect(JSON.stringify(confirmed.effects)).not.toContain(sentinel);
+  });
+
   it("spells each page-observed email character and names punctuation", () => {
     const emailForm = FormModel.parse({
       ...survey,

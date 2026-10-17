@@ -98,9 +98,11 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     try {
       if (event.type === "utterance") {
         const routedTo = result.effects.some((effect) => effect.kind === "parseIntent") ? "model" : "grammar";
+        const sensitiveHandoff = result.effects.some((effect) => effect.kind === "focus"
+          && form?.fields.some((field) => field.id === effect.fieldId && field.sensitive !== "none"));
         hub.send("voice", "transcript", {
           utteranceId: event.utterance.utteranceId,
-          heardAs: event.utterance.text,
+          heardAs: sensitiveHandoff ? "[sensitive entry withheld]" : event.utterance.text,
           routedTo,
         });
       }

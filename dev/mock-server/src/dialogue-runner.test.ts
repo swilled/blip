@@ -272,6 +272,46 @@ describe("real voice dialogue runner", () => {
     expect(session.busy).toBe(false);
   });
 
+  it("withholds sensitive dictation from transcript, speech, reducer state, and intent parsing", async () => {
+    let clock = 0;
+    const sentinel = "secret-sentinel-82641";
+    const { hub, sent } = recordingHub();
+    const session = new Session("fake");
+    const sensitiveForm = FormModel.parse({
+      ...form,
+      fields: form.fields.map((field) => field.id === "e2"
+        ? { ...field, label: "Password", type: "password", sensitive: "password", hasValue: true, value: null }
+        : field),
+    });
+    session.model = sensitiveForm;
+    session.extensionConnected = true;
+    session.stale = false;
+    let intentCalls = 0;
+    const handlers = createDialogueHandlers({
+      gate: createStubGate(() => clock),
+      now: () => clock,
+      parseIntent: async () => { intentCalls += 1; },
+    });
+    const utter = async (text: string): Promise<void> => {
+      const ctx = voiceContext(hub, session, message("utterance", {
+        utteranceId: `sensitive-${clock++}`,
+        text,
+        source: "typed",
+      }));
+      await handlers.utterance?.(ctx);
+    };
+
+    await utter(`change password to ${sentinel}`);
+    await utter("done");
+
+    const transcript = sent.filter((frame) => frame.type === "transcript").map((frame) => frame.payload);
+    expect(transcript[0]).toEqual({ utteranceId: "sensitive-0", heardAs: "[sensitive entry withheld]", routedTo: "grammar" });
+    expect(JSON.stringify(sent)).not.toContain(sentinel);
+    expect(session.lastSpoken).not.toContain(sentinel);
+    expect(intentCalls).toBe(0);
+    expect(sent.some((frame) => frame.type === "speak" && (frame.payload as { text: string }).text.includes("entered, hidden"))).toBe(true);
+  });
+
   it("turns a rejecting GatePort redeem into a spoken refusal instead of staying executing", async () => {
     let clock = 5_000;
     const { hub, sent } = recordingHub();

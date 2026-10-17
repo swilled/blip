@@ -287,7 +287,13 @@ export function handleFillUtterance(
   if (state.currentFieldId === null) return null;
   const field = fillableFields(ctx.form).find((item) => item.id === state.currentFieldId);
   if (!field) return null;
-  if (field.sensitive !== "none") return handoffSensitive(state, field, ctx.form);
+  if (field.sensitive !== "none") {
+    if (norm === "done") {
+      const label = spokenLabel(field, fieldNumber(ctx.form, field));
+      return answer(state, field.hasValue ? `${label} is entered, hidden.` : `${label} is still empty.`);
+    }
+    return handoffSensitive(state, field, ctx.form);
+  }
   if (sttConfidence !== undefined && sttConfidence < 0.5) {
     return errorAnswer(state, "I'm not sure I heard that. Say it again.");
   }

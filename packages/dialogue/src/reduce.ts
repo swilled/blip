@@ -74,7 +74,19 @@ export function reduce(
   if (state.mode === "awaiting-confirm") return handleArmedUtterance(state, event, ctx);
   if (state.mode === "reading-back") return handleReadbackUtterance(state, event, ctx);
   if (state.mode === "executing") return { state, effects: [] };
-  if (raw.length > 200) return { state, effects: [{ kind: "parseIntent", text: raw }] };
+  if (raw.length > 200) {
+    const currentField = ctx.form?.fields.find((field) => field.id === state.currentFieldId);
+    const folded = raw.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ");
+    const mentionsSensitiveField = ctx.form?.fields.some((field) => field.sensitive !== "none"
+      && field.label.trim() !== ""
+      && folded.includes(field.label.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()));
+    if (currentField?.sensitive !== undefined && currentField.sensitive !== "none"
+      || mentionsSensitiveField
+      || /\b(password|passcode|credit card|card number|cvc|cvv|security code|one time code|otp|social security|ssn)\b/i.test(raw)) {
+      return answer(state, "Sensitive information must be typed directly. Please repeat your command without including it.");
+    }
+    return { state, effects: [{ kind: "parseIntent", text: raw }] };
+  }
   const norm = normalizeCommand(raw);
   if (norm === "") return { state, effects: [] };
 
