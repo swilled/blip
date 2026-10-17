@@ -1,0 +1,162 @@
+import { buildFrame, type Message, type Snapshot as SnapshotData, type RawElement } from "@blip/protocol";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { dispatchActRequest, type ActDispatchDependencies } from "../src/background/acts.js";
+import type { FrameCaptureAdapter } from "../src/background/frames.js";
+
+const CARD_NUMBER = "4111111111111111";
+
+function field(id: string, frameId: number, overrides: Partial<RawElement> = {}): RawElement {
+  return {
+    id,
+    frameId,
+    category: "field",
+    tag: "input",
+    inputType: "text",
+    role: "textbox",
+    labelCandidates: [{ text: "Name", source: "label", confidence: 1 }],
+    required: false,
+    requiredSource: "none",
+    invalid: false,
+    errorText: null,
+    value: null,
+    hasValue: false,
+    sensitive: "none",
+    disabled: false,
+    visible: true,
+    order: 1,
+    kind: "fill",
+    ...overrides,
+  };
+}
+
+function snapshot(version: number, elements: RawElement[] = [field("f7e1", 7)]): SnapshotData {
+  return {
+    snapshotId: `snapshot-${version}`,
+    version,
+    tabId: 41,
+    url: "https://forms.example/contact",
+    origin: "https://forms.example",
+    title: "Contact form",
+    headings: [],
+    alerts: [],
+    elements,
+    truncated: false,
+    structuralHash: `hash-${version}`,
+    capturedAt: version,
+  };
+}
+
+function request(snapshotVersion = 1) {
+  return buildFrame("act.request", {
+    actId: "act-1",
+    tabId: 41,
+    snapshotVersion,
+    action: { op: "fill", targetId: "f7e1", value: "Ada" },
+    expectedKind: "fill",
+  }, { id: "request-1" });
+}
+
+function setup(captures: SnapshotData[], actResponse: unknown) {
+  const adapter: FrameCaptureAdapter & { sendAct: ReturnType<typeof vi.fn> } = {
+    listFrames: vi.fn(async () => []),
+    readFrame: vi.fn(async () => undefined),
+    isFrameVisible: vi.fn(async () => true),
+    sendAct: vi.fn(async () => actResponse),
+  };
+  const capture = vi.fn(async () => {
+    const next = captures.shift();
+    if (!next) throw new Error("unexpected capture");
+    return next;
+  });
+  const dependencies: ActDispatchDependencies = {
+    findTargetTab: vi.fn(async () => ({ id: 41, url: "https://forms.example/contact" })),
+    createFrameAdapter: vi.fn(() => adapter),
+    captureTabSnapshot: capture as ActDispatchDependencies["captureTabSnapshot"],
+  };
+  const sent: string[] = [];
+  const socket = { readyState: 1, send: vi.fn((line: string) => sent.push(line)) };
+  return { adapter, capture, dependencies, sent, socket };
+}
+
+async function dispatchAndRead(sent: string[], socket: { readyState: number; send: (line: string) => void }, deps: ActDispatchDependencies, message = request()) {
+  await dispatchActRequest(message as Extract<Message, { type: "act.request" }>, socket as never, deps);
+  return JSON.parse(sent.at(-1) ?? "{}") as { type: string; replyTo?: string; payload: Record<string, unknown> };
+}
+
+describe("service-worker act routing", () => {
+  beforeEach(() => {
+    vi.stubGlobal("WebSocket", { OPEN: 1 });
+  });
+
+  it("routes frame-qualified ids to their owning frame and returns the refreshed version", async () => {
+    const setupState = setup(
+      [snapshot(1), snapshot(2)],
+      { t: "act.result", result: { actId: "act-1", ok: true, observedValue: "Ada" } },
+    );
+
+    const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies);
+
+    expect(setupState.adapter.sendAct).toHaveBeenCalledWith(7, expect.objectContaining({
+      action: expect.objectContaining({ targetId: "f7e1" }),
+    }), 1);
+    expect(setupState.capture).toHaveBeenCalledTimes(2);
+    expect(reply).toMatchObject({ type: "act.result", replyTo: "request-1", payload: {
+      actId: "act-1", ok: true, observedValue: "Ada", newSnapshotVersion: 2,
+    } });
+  });
+
+  it("rejects a stale version before acting and reports the freshly captured version", async () => {
+    const setupState = setup([snapshot(2)], { t: "act.result", result: { actId: "act-1", ok: true } });
+
+    const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies);
+
+    expect(setupState.adapter.sendAct).not.toHaveBeenCalled();
+    expect(setupState.capture).toHaveBeenCalledTimes(1);
+    expect(reply.payload).toMatchObject({ actId: "act-1", ok: false, error: "stale-snapshot", newSnapshotVersion: 2 });
+  });
+
+  it("redacts a post-write card-shaped result and refreshes to a sanitized snapshot", async () => {
+    const sanitizedCard = field("f7e1", 7, { value: null, hasValue: true, sensitive: "card-number" });
+    const setupState = setup(
+      [snapshot(1), snapshot(2, [sanitizedCard])],
+      { t: "act.result", result: { actId: "act-1", ok: true, observedValue: CARD_NUMBER } },
+    );
+
+    const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies);
+    const serialized = JSON.stringify(reply);
+
+    expect(setupState.capture).toHaveBeenCalledTimes(2);
+    expect(reply.payload).toEqual({
+      actId: "act-1", ok: false, error: "sensitive-field", observedValue: null, newSnapshotVersion: 2,
+    });
+    expect(serialized).not.toContain(CARD_NUMBER);
+  });
+
+  it("does not send an unclassified card-shaped value from a freshly merged snapshot", async () => {
+    const unsafe = field("e1", 0, { value: CARD_NUMBER, hasValue: true });
+    const captureState = setup([snapshot(1), snapshot(2)], {
+      t: "act.result", result: { actId: "act-1", ok: false, error: "sensitive-field", observedValue: null },
+    });
+    const { mergeFrameSnapshots } = await import("../src/background/frames.js");
+
+    const merged = mergeFrameSnapshots({
+      tabId: 41,
+      tabUrl: "https://forms.example/contact",
+      snapshotId: "privacy-check",
+      capturedAt: 3,
+      frames: [{
+        frameId: 0,
+        visible: true,
+        snapshot: {
+          title: "Contact form", url: "https://forms.example/contact", origin: "https://forms.example",
+          headings: [], alerts: [], elements: [unsafe], truncated: false, structuralHash: "unsafe", capturedAt: 3,
+        },
+      }],
+    });
+
+    expect(merged.elements[0]).toMatchObject({ value: null, hasValue: true, sensitive: "card-number" });
+    expect(JSON.stringify(merged)).not.toContain(CARD_NUMBER);
+    const reply = await dispatchAndRead(captureState.sent, captureState.socket, captureState.dependencies);
+    expect(reply.payload.error).toBe("sensitive-field");
+  });
+});
