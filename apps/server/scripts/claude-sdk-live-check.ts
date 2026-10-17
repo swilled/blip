@@ -1,4 +1,6 @@
-import { dirname, resolve } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Intent, type FormModel, type Intent as IntentData, type Snapshot } from "@blip/protocol";
 import { routeIntent } from "../src/brain/claude/intent-router";
@@ -469,7 +471,7 @@ export async function runOfflineFirstLiveCheck(
         return "failed";
       }
 
-      const spendPrompt = <T>(role: "intent" | "repair", action: () => Promise<T>): Promise<T> => {
+      const spendPrompt = async <T>(role: "intent" | "repair", action: () => Promise<T>): Promise<T> => {
         if (blockState.current !== null) throw new Error("Live check blocked after init tools were reported.");
         if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Live check aborted.");
         if (counts[role] >= LIVE_CHECK_PROMPT_LIMITS[role] || counts.total >= LIVE_CHECK_PROMPT_LIMITS.total) {
@@ -532,8 +534,13 @@ async function main(): Promise<void> {
       const { createClaudeProvider } = await import("../src/brain/claude/provider");
       return createClaudeProvider({ startupSignal });
     },
-    async verify() {
-      throw new Error("The production probe sequence is not configured.");
+    async verify(provider, signal, evidence) {
+      const cacheDirectory = await mkdtemp(join(tmpdir(), "blip-claude-live-check-"));
+      try {
+        await runApprovedProbeSequence(provider, signal, evidence, { cacheDirectory });
+      } finally {
+        await rm(cacheDirectory, { recursive: true, force: true });
+      }
     },
   });
 

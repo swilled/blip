@@ -1,6 +1,6 @@
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Intent, type FormModel, type Snapshot } from "@blip/protocol";
 import {
@@ -251,6 +251,31 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     }
   });
 
+  it("does not pass the actual deferred report to provider creation or prompt dispatch", async () => {
+    const report = await readFile(resolve(
+      process.cwd(),
+      ".planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-08-LIVE-CHECK.md",
+    ), "utf8");
+    const provider = fakeProvider();
+    const createProvider = vi.fn(async () => provider);
+    const verify = vi.fn(async () => {});
+
+    const result = await runOfflineFirstLiveCheck(
+      { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
+      { readReport: async () => report, createProvider, verify },
+    );
+
+    expect(result).toMatchObject({
+      status: "externally_blocked",
+      stage: "not_started",
+      promptCounts: { intent: 0, repair: 0, total: 0 },
+    });
+    expect(createProvider).not.toHaveBeenCalled();
+    expect(verify).not.toHaveBeenCalled();
+    expect(provider.parseIntent).not.toHaveBeenCalled();
+    expect(provider.repairFormModel).not.toHaveBeenCalled();
+  });
+
   it("runs two grammar misses through routeIntent and caches a validated synthetic repair", async () => {
     const provider = fakeProvider();
     const { result, cacheDirectory, createProvider, verify } = await runFakeProbe(provider, {
@@ -294,6 +319,23 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       "intentSchemaValid", "invalidToolList", "promptCounts", "rejectingRole", "repairCacheReloaded",
       "repairSchemaValid", "recreatedIntentToolCount", "stage", "status", "subsequentPromptsAfterBlock", "toolCount",
     ].sort());
+  });
+
+  it("stops routeIntent's invalid-output retry before a second provider dispatch", async () => {
+    const provider = fakeProvider({ intents: [{ type: "unsupported-intent", private: "invalid-output-sentinel" }] });
+    const { result } = await runFakeProbe(provider);
+
+    expect(result).toMatchObject({
+      status: "failed",
+      stage: "intent_probe_1",
+      promptCounts: { intent: 1, repair: 0, total: 1 },
+      intentAccepted: [false],
+      intentSchemaValid: [false],
+      currentSyntheticIdMatched: [false],
+    });
+    expect(provider.parseIntent).toHaveBeenCalledOnce();
+    expect(provider.repairFormModel).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("invalid-output-sentinel");
   });
 
   it("aborts a pending intent, recreates the role, then runs one current-ID recovery route", async () => {
@@ -436,5 +478,30 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     expect(() => parseLiveCheckArguments(["--live", "--max-seconds", "901"])).toThrow(/900 seconds/);
     expect(parseLiveCheckArguments(["--live", "--max-seconds", "900"])).toEqual({ live: true, maxSeconds: 900 });
     expect(Intent.safeParse({ type: "unknown" }).success).toBe(true);
+  });
+
+  it("counts prompts immediately before dispatch and enforces the four-plus-one caps", async () => {
+    const provider = fakeProvider();
+    const createProvider = vi.fn(async () => provider);
+    const verify = vi.fn(async (guarded: LiveCheckProvider) => {
+      for (let index = 0; index < LIVE_CHECK_PROMPT_LIMITS.intent; index += 1) {
+        await guarded.parseIntent(`synthetic intent ${index}`);
+      }
+      await expect(guarded.parseIntent("must not dispatch over the intent cap")).rejects.toThrow(/prompt cap/);
+      await guarded.repairFormModel("one synthetic repair");
+      await expect(guarded.repairFormModel("must not dispatch over the repair cap")).rejects.toThrow(/prompt cap/);
+    });
+    const result = await runOfflineFirstLiveCheck(
+      { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
+      { readReport: async () => APPROVED_REPORT, createProvider, verify },
+    );
+
+    expect(result).toMatchObject({
+      status: "completed",
+      promptCounts: { intent: 4, repair: 1, total: 5 },
+      subsequentPromptsAfterBlock: 0,
+    });
+    expect(provider.parseIntent).toHaveBeenCalledTimes(4);
+    expect(provider.repairFormModel).toHaveBeenCalledOnce();
   });
 });
