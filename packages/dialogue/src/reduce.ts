@@ -2,6 +2,7 @@ import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
+import { handleOptionPick, handleReadUtterance } from "./read-fill";
 import { handleSubmitFlow } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
@@ -49,6 +50,7 @@ export function reduce(
 
   if (event.type !== "utterance") return handleSubmitFlow(state, event, ctx);
   const raw = event.utterance.text;
+  if (raw.length > 200) return { state, effects: [{ kind: "parseIntent", text: raw }] };
   const norm = normalizeCommand(raw);
   if (norm === "") return { state, effects: [] };
 
@@ -56,5 +58,12 @@ export function reduce(
     const text = ctx.form === null ? "I can't see a page yet." : describe(ctx.form);
     return answer(state, text);
   }
+
+  const readResult = handleReadUtterance(state, norm, raw, ctx);
+  if (readResult !== null) return readResult;
+
+  const optionResult = handleOptionPick(state, raw, ctx);
+  if (optionResult !== null) return optionResult;
+
   return { state, effects: [{ kind: "parseIntent", text: raw }] };
 }
