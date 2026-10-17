@@ -149,7 +149,7 @@ Plans:
 - [x] 04-03-PLAN.md — Build the sanitized, value-free prompt projection with an approximate 8k-token bound
 - [x] 04-04-PLAN.md — Share pure sensitive-shape checks and gate secret-bearing utterances
 - [ ] 04-05-PLAN.md — Separate deterministic label candidates from model-sourced resolved labels
-- [ ] 04-06-PLAN.md — Route grammar misses through schema-checked intents and a recovering watchdog
+- [x] 04-06-PLAN.md — Route grammar misses through schema-checked intents and a recovering watchdog
 - [ ] 04-07-PLAN.md — Repair labels asynchronously and cache validated value-free patches
 **UI hint**: no
 
@@ -182,7 +182,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
-| 4. Claude Brain and Label Repair | 4/7 | In Progress |  |
+| 4. Claude Brain and Label Repair | 5/7 | In Progress |  |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
