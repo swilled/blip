@@ -166,13 +166,23 @@ Plans:
 **Shared milestones**: I3 (~h20), Freeze (~h30)
 **Success Criteria** (what must be TRUE):
   1. On the seeded injection page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button), with real Claude in the loop, no gated action ever executes, and each attempt shows as blocked in the audit log.
-  2. When a page contains text addressed to Blip or AI agents, the form model carries a flag and the voice side speaks a warning before continuing (with voice's DLG-14).
+  2. When a page contains text addressed to Blip or AI agents, accepted page state carries only an optional warning boolean and the voice side speaks a warning before continuing (with voice's DLG-14); the signal and page text never enter `FormModel` or model input.
   3. I3 (~h20): in one run with real Claude, a real public form (e.g. a team-owned Google Form) is completed by voice end to end through the gated submit, the broken demo form's labels are repaired by Claude, and the injection page is blocked.
   4. One command on either developer's machine launches the server, the dedicated Chrome profile with the extension (which connects on its own), and the voice window.
   5. Freeze (~h30): `main` is tagged `demo-safe`, demo-form repairs are pre-warmed in the cache, and the full demo script also runs with `--brain=fake` as plan B.
 
 **Research**: Spike needed: real-site widgets (Google Forms ARIA radios and listboxes, React fills on the live form); one-command Chrome launch now that branded Chrome 137 removed `--load-extension` (load unpacked once into a dedicated `--user-data-dir` profile).
-**Plans**: TBD
+**Plans**: 9 plans
+Plans:
+- [ ] 05-01-PLAN.md — Add the synthetic hostile-page fixture and deterministic refusal assertions
+- [ ] 05-02-PLAN.md — Implement the bounded local warning detector
+- [ ] 05-03-PLAN.md — Exercise hostile actions in an isolated real browser
+- [ ] 05-04-PLAN.md — Prepare the warning-field proposal and obtain voice-owner sign-off
+- [ ] 05-05-PLAN.md — Add approved warning fields to the shared protocol
+- [ ] 05-06-PLAN.md — Carry the accepted warning boolean through extension, server, and REPL
+- [ ] 05-07-PLAN.md — Verify hostile-page refusal and warning flow end to end
+- [ ] 05-08-PLAN.md — Build and smoke-test the isolated one-command local demo
+- [ ] 05-09-PLAN.md — Record evidence and apply the local freeze tag only when eligible
 **UI hint**: no
 
 ## Progress
@@ -186,7 +196,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. Claude Brain and Label Repair | 10/10 | In Progress |  |
-| 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
+| 5. Hostile Pages, Real Web and Freeze | 0/9 | Not started | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 
