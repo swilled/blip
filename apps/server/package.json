@@ -5,7 +5,9 @@
   "type": "module",
   "dependencies": {
     "@blip/protocol": "*",
+    "koffi": "3.3.3",
     "sirv": "3.0.2",
+    "uiohook-napi": "1.5.5",
     "ws": "8.22.0"
   },
   "scripts": {

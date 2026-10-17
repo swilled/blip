@@ -7,3 +7,7 @@ dist/
 
 # GSD: per-machine workstream pointer (each dev sets GSD_WORKSTREAM instead)
 .planning/active-workstream
+
+# Voice workstream
+.chrome-profile
+tools/nvda-client

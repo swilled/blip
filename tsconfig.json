@@ -6,6 +6,9 @@
     "apps/server/**/*.ts",
     "tools/**/*.ts",
     "scripts/**/*.ts",
+    "apps/voice/**/*.ts",
+    "packages/dialogue/**/*.ts",
+    "dev/**/*.ts",
     "vitest.config.ts"
   ],
   "exclude": ["**/node_modules", "**/dist"]
