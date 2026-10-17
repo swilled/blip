@@ -1,6 +1,8 @@
 import { dialogueStateName, initialState, reduce } from "@blip/dialogue";
 import {
   newId,
+  type ActionTarget,
+  type Field,
   type ActRequest,
   type FormModel,
 } from "@blip/protocol";
@@ -8,6 +10,7 @@ import { type HandlerContext, type Handlers, type Hub } from "../hub/hub";
 import type { Session } from "../session/session";
 import type { DialogueEvent, DialogueState, Effect, SpeakEffect } from "@blip/dialogue";
 import type { GatePort } from "./gate-port";
+import profileTemplate from "../../../../fixtures/demo/profile.template.json" with { type: "json" };
 
 type RunnerOptions = {
   gate: GatePort;
@@ -15,7 +18,17 @@ type RunnerOptions = {
   snapshotTimeoutMs?: number;
   actTimeoutMs?: number;
   onActRequest?: (request: ActRequest) => void;
-  parseIntent?: (text: string, ctx: HandlerContext) => Promise<void>;
+  parseIntent?: (input: ParseIntentInput, ctx: HandlerContext) => Promise<void>;
+};
+
+type ParseIntentInput = {
+  utterance: string;
+  form: {
+    title: string;
+    step?: string;
+    fields: Array<Pick<Field, "id" | "type" | "label" | "required" | "autocomplete" | "hasValue" | "sensitive" | "disabled" | "order">>;
+    actions: Array<Pick<ActionTarget, "id" | "label" | "kind" | "primary">>;
+  } | null;
 };
 
 type ActEffect = Extract<Effect, { kind: "fill" | "select" | "focus" }>;
@@ -91,7 +104,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
   ): Promise<void> {
     const session = context?.session ?? activeSession!;
     const form = formOverride !== undefined ? formOverride : currentForm(session);
-    const result = reduce(state, event, { form, now: now() });
+    const result = reduce(state, event, { form, now: now(), profile: profileTemplate });
     state = result.state;
     const hub = context?.hub ?? sessionHub;
 
@@ -203,7 +216,18 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         return;
       case "parseIntent":
         if (options.parseIntent && context) {
-          await options.parseIntent(effect.text, context);
+          const observed = currentForm(session);
+          await options.parseIntent({
+            utterance: effect.text,
+            form: observed === null ? null : {
+              title: observed.title,
+              ...(observed.step === undefined ? {} : { step: observed.step }),
+              fields: observed.fields.map(({ id, type, label, required, autocomplete, hasValue, sensitive, disabled, order }) => ({
+                id, type, label, required, ...(autocomplete === undefined ? {} : { autocomplete }), hasValue, sensitive, disabled, order,
+              })),
+              actions: observed.actions.map(({ id, label, kind, primary }) => ({ id, label, kind, primary })),
+            },
+          }, context);
         } else {
           await dispatch({ type: "intent.reply", text: "I didn't understand that." });
         }

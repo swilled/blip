@@ -302,6 +302,23 @@ export function handleFillUtterance(
   return fillField(state, field, raw, ctx.form);
 }
 
+/** Handle the first profile tracer locally; profile values never enter intent parsing. */
+export function handleProfileFillUtterance(
+  state: DialogueState,
+  norm: string,
+  ctx: DialogueContext,
+): DialogueResult | null {
+  if (norm !== "fill from my profile") return null;
+  if (ctx.form === null) return answer(state, "I can't see a page yet.");
+  const profile = ctx.profile;
+  if (!profile) return answer(state, "I can't access the local profile yet.");
+  const field = fillableFields(ctx.form).find((candidate) => candidate.autocomplete === "email");
+  if (!field) return answer(state, "I couldn't find an email field to fill from your profile.");
+  if (field.sensitive !== "none") return handoffSensitive(state, field, ctx.form);
+  if (field.hasValue) return answer(state, `${spokenLabel(field, fieldNumber(ctx.form, field))} already has a value, so I left it unchanged.`);
+  return issueValueEffect(state, field, profile.email, "fill");
+}
+
 /** Use the page's observed value as the sole source for a fill/select echo. */
 export function handleActResult(
   state: DialogueState,

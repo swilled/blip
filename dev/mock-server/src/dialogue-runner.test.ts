@@ -312,6 +312,43 @@ describe("real voice dialogue runner", () => {
     expect(sent.some((frame) => frame.type === "speak" && (frame.payload as { text: string }).text.includes("entered, hidden"))).toBe(true);
   });
 
+  it("fills the exact email profile match locally and echoes the page observation", async () => {
+    let clock = 2_000;
+    const requests: ActRequest[] = [];
+    const real = await startReal({ port: 0, fakeDelayMs: 0, now: () => clock, onActRequest: (request) => requests.push(request) });
+    closers.push(() => real.close());
+    const ws = new WebSocket(`ws://127.0.0.1:${real.server.port}/ws`, {
+      origin: `http://127.0.0.1:${real.server.port}`,
+    });
+    closers.push(() => ws.terminate());
+    const frames: Message[] = [];
+    ws.on("message", (data) => {
+      const parsed = parseFrame(data.toString());
+      if (parsed.ok) frames.push(parsed.message);
+    });
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", resolve);
+      ws.once("error", reject);
+    });
+    send(ws, "hello", { role: "voice", clientVersion: "test", protocolVersion: 1 });
+    const before = frames.filter((frame) => frame.type === "state").length;
+    send(ws, "utterance", { utteranceId: "profile-fill", text: "fill from my profile", source: "typed" });
+    const speak = await nextSpeak(frames, 0);
+    await waitFor(() => frames.filter((frame) => frame.type === "state").length >= before + 2 ? true : undefined, "profile fill completion");
+
+    const email = form.fields.find((field) => field.autocomplete === "email");
+    expect(email).toBeDefined();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.action).toEqual({ op: "fill", targetId: email!.id, value: "rowan@example.com" });
+    const observed = real.extension!.sent()
+      .filter((frame) => frame.type === "act.result")
+      .map((frame) => frame.payload as { actId?: string; observedValue?: string | null })
+      .find((result) => result.actId === requests[0]!.actId)?.observedValue;
+    expect(typeof observed).toBe("string");
+    expect(speak.payload.text).toBe(echoText(email!, observed!, false));
+    expect(frames.some((frame) => frame.type === "transcript" && frame.payload.routedTo === "grammar")).toBe(true);
+  });
+
   it("turns a rejecting GatePort redeem into a spoken refusal instead of staying executing", async () => {
     let clock = 5_000;
     const { hub, sent } = recordingHub();

@@ -18,4 +18,6 @@ export type Effect =
   | { kind: "clearConfirm"; grantId: string; reason: ConfirmClearedPayload["reason"] }
   | { kind: "redeem"; grantId: string };
 
-export type DialogueContext = { form: FormModel | null; now: number };
+export type LocalProfile = Readonly<{ name: string; email: string; tel: string }>;
+
+export type DialogueContext = { form: FormModel | null; now: number; profile?: LocalProfile };

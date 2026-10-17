@@ -2,7 +2,7 @@ import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
-import { handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleReadUtterance, handleSpellUtterance } from "./read-fill";
+import { handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance } from "./read-fill";
 import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
@@ -103,6 +103,9 @@ export function reduce(
 
   const spellResult = handleSpellUtterance(state, norm, ctx);
   if (spellResult !== null) return spellResult;
+
+  const profileResult = handleProfileFillUtterance(state, norm, ctx);
+  if (profileResult !== null) return profileResult;
 
   const readResult = handleReadUtterance(state, norm, raw, ctx);
   if (readResult !== null) return readResult;
