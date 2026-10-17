@@ -25,6 +25,7 @@ const child = spawn(
   { stdio: "ignore", detached: false },
 );
 
+let decoy: ReturnType<typeof spawn> | null = null;
 const readExStyle = (hwnd: string): number => {
   const ps = `Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern long GetWindowLongPtrW(System.IntPtr h, int i);' -Name W -Namespace B; [B.W]::GetWindowLongPtrW([System.IntPtr]${hwnd}, -20)`;
   return Number(execFileSync("powershell", ["-NoProfile", "-Command", ps], { encoding: "utf8" }).trim());
@@ -32,22 +33,36 @@ const readExStyle = (hwnd: string): number => {
 
 let code = 1;
 try {
+  // Wait for the app window, then open a decoy normal window whose title also contains "BlipSpikeE" (the old substring match would pin it).
+  await new Promise((r) => setTimeout(r, 2500));
+  decoy = spawn(chrome, [`--user-data-dir=${profile}`, "data:text/html,<title>decoy BlipSpikeE decoy</title>decoy"], { stdio: "ignore" });
+  await new Promise((r) => setTimeout(r, 2500));
   const before = await pinTopmost("BlipSpikeE", { timeoutMs: 15000 });
   console.log("pinTopmost ->", JSON.stringify(before));
   if (before.ok && before.hwnd) {
     const ex = readExStyle(before.hwnd);
     const topmost = (ex & 0x8) !== 0;
     console.log(`WS_EX_TOPMOST set: ${topmost} (exstyle=0x${ex.toString(16)})`);
-    console.log(topmost ? "RESULT E: PASS (pin works on a real Chrome --app window)" : "RESULT E: FAIL (flag not set)");
-    code = topmost ? 0 : 1;
+    // click away: activate the decoy window, then re-read the flag on the app window
+    execFileSync("powershell", ["-NoProfile", "-Command", "(New-Object -ComObject WScript.Shell).AppActivate('decoy BlipSpikeE decoy') | Out-Null"], { stdio: "ignore" });
+    await new Promise((r) => setTimeout(r, 800));
+    const stillTopmost = (readExStyle(before.hwnd) & 0x8) !== 0;
+    const exactTitle = before.title === "BlipSpikeE";
+    console.log(`pinned the exact app window: ${exactTitle}; still topmost after activating the decoy window: ${stillTopmost}`);
+    const pass = topmost && stillTopmost && exactTitle;
+    console.log(pass ? "RESULT E: PASS (pins only the exact app window and it stays topmost after clicking away)" : "RESULT E: FAIL");
+    code = pass ? 0 : 1;
   } else {
     console.log("RESULT E: FAIL (could not find or pin the window)");
   }
 } finally {
-  try {
-    execFileSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
-  } catch {
-    /* already closed */
+  for (const c of [child, decoy]) {
+    if (!c) continue;
+    try {
+      execFileSync("taskkill", ["/PID", String(c.pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {
+      /* already closed */
+    }
   }
   await new Promise((r) => setTimeout(r, 800));
   rmSync(profile, { recursive: true, force: true });

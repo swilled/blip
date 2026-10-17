@@ -3,7 +3,7 @@
 // Starts the spike log server, opens the Blip window (pinned on top), shows live Right Ctrl + Space events,
 // and prints the checklist. Results are written to .planning/workstreams/voice/phases/01-spikes-and-push-to-talk-loop/spikes/*.log
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { uIOhook } from "uiohook-napi";
@@ -66,7 +66,9 @@ procs.push(
 
 // 3) pin on top (Spike E)
 const pin = await pinTopmost("Blip", { timeoutMs: 15000 });
-const pinNote = pin.ok ? "pinned on top" : `could not pin (${pin.error ?? "unknown"})`;
+const pinNote = pin.ok ? `pinned on top: window "${pin.title}"` : `could not pin (${pin.error ?? "unknown"})`;
+appendFileSync(join(root, ".planning/workstreams/voice/phases/01-spikes-and-push-to-talk-loop/spikes/E.log"), `${new Date().toISOString()} pinTopmost("Blip") exact -> ${JSON.stringify(pin)}
+`);
 
 // 4) live push-to-talk hook (Spike D)
 const WATCHED = new Set<number>([29, 57, 3613]);

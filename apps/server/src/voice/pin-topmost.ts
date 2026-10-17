@@ -48,13 +48,16 @@ function readW(fn: (h: unknown, b: Buffer, n: number) => number, hwnd: unknown):
   return buf.toString("utf16le", 0, Math.max(0, n) * 2);
 }
 
-function findOnce(u: User32, needle: string): { hwnd: unknown; title: string } | null {
+// Chrome --app windows are titled exactly with the page <title>. Normal browser windows are titled
+// "<page> - Google Chrome", so a substring match can pin the wrong window (e.g. a GitHub tab named "...blip").
+// Default is an exact match; pass { loose: true } for a substring match.
+function findOnce(u: User32, needle: string, loose: boolean): { hwnd: unknown; title: string } | null {
   let found: { hwnd: unknown; title: string } | null = null;
   const cb = koffi.register((hwnd: unknown) => {
     if (found || !u.IsWindowVisible(hwnd)) return true;
     if (readW(u.GetClassNameW, hwnd) !== CHROME_CLASS) return true;
     const title = readW(u.GetWindowTextW, hwnd);
-    if (title.includes(needle)) found = { hwnd, title };
+    if (loose ? title.includes(needle) : title === needle) found = { hwnd, title };
     return true;
   }, koffi.pointer(u.proto as never));
   try {
@@ -65,13 +68,15 @@ function findOnce(u: User32, needle: string): { hwnd: unknown; title: string } |
   return found;
 }
 
-export async function pinTopmost(titleSubstring: string, opts?: { timeoutMs?: number }): Promise<PinResult> {
+export async function pinTopmost(title: string, opts?: { timeoutMs?: number; loose?: boolean }): Promise<PinResult> {
+  const titleSubstring = title;
+  const loose = opts?.loose ?? false;
   const timeoutMs = opts?.timeoutMs ?? 5000;
   try {
     const u = load();
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const hit = findOnce(u, titleSubstring);
+      const hit = findOnce(u, titleSubstring, loose);
       if (hit) {
         const ok = u.SetWindowPos(
           hit.hwnd,
