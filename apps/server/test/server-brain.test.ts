@@ -76,8 +76,13 @@ describe("server brain mode", () => {
     const events: string[] = [];
     const f = adapterWithInit({ events, toolsFor: (config) => config.role === "repair" ? ["mcp__unexpected__tool"] : [] });
 
-    await expect(startServer({ port: 0, dev: true, brain: "claude", claudeAdapter: f.adapter }))
-      .rejects.toThrow(/expected no tools.*mcp__unexpected__tool/);
+    const outcome = await startServer({ port: 0, dev: true, brain: "claude", claudeAdapter: f.adapter }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(outcome).toMatchObject({ name: "UnexpectedClaudeToolsError", role: "repair", toolCount: 1 });
+    expect((outcome as Error).message).toBe("Claude SDK startup refused for repair: expected no tools, received 1.");
+    expect((outcome as Error).message).not.toContain("mcp__unexpected__tool");
     expect(events).toEqual([
       "create:intent", "init:intent", "create:repair", "init:repair", "close:repair", "close:intent",
     ]);
