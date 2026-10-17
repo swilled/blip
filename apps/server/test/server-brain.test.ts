@@ -13,12 +13,19 @@ function adapterWithInit(options: {
   const adapter: ClaudeSdkAdapter = {
     createSession(config): ClaudeRoleSession {
       options.events.push(`create:${config.role}`);
+      let callNumber = 0;
       return {
         async start() {
           options.events.push(`init:${config.role}`);
           return { tools: options.toolsFor?.(config) ?? [] };
         },
         async call(prompt) {
+          callNumber += 1;
+          if (callNumber === 1) {
+            return config.role === "intent"
+              ? '{"type":"describe"}'
+              : '{"fields":[{"id":"bootstrap-field","label":"Synthetic field","confidence":0.5}]}';
+          }
           calls.push({ role: config.role, prompt });
           return '{"type":"describe"}';
         },

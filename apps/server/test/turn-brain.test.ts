@@ -65,10 +65,17 @@ function firstCallHangAdapter() {
   const adapter: ClaudeSdkAdapter = {
     createSession(config: ClaudeRoleConfig): ClaudeRoleSession {
       const sessionNumber = config.role === "intent" ? intentSessions++ : 0;
+      let callNumber = 0;
       created.push(`${config.role}:${sessionNumber}`);
       return {
         async start() { return { tools: [] }; },
         call(prompt) {
+          callNumber += 1;
+          if (callNumber === 1) {
+            return Promise.resolve(config.role === "intent"
+              ? '{"type":"describe"}'
+              : '{"fields":[{"id":"bootstrap-field","label":"Synthetic field","confidence":0.5}]}');
+          }
           calls.push({ role: config.role, prompt, sessionNumber });
           if (config.role !== "intent") return Promise.resolve('{"fields":[]}');
           if (sessionNumber === 0) {
@@ -124,9 +131,17 @@ describe("Claude turn routing and watchdog recovery", () => {
     const calls: string[] = [];
     const adapter: ClaudeSdkAdapter = {
       createSession(config) {
+        let callNumber = 0;
         return {
           async start() { return { tools: [] }; },
-          async call(prompt) { calls.push(`${config.role}:${prompt}`); return '{"type":"describe"}'; },
+          async call(prompt) {
+            callNumber += 1;
+            if (callNumber === 1) return config.role === "intent"
+              ? '{"type":"describe"}'
+              : '{"fields":[{"id":"bootstrap-field","label":"Synthetic field","confidence":0.5}]}';
+            calls.push(`${config.role}:${prompt}`);
+            return '{"type":"describe"}';
+          },
           abort() {},
           async close() {},
         };
@@ -154,9 +169,17 @@ describe("Claude turn routing and watchdog recovery", () => {
     const calls: string[] = [];
     const adapter: ClaudeSdkAdapter = {
       createSession(config) {
+        let callNumber = 0;
         return {
           async start() { return { tools: [] }; },
-          async call(prompt) { calls.push(`${config.role}:${prompt}`); return '{"type":"describe"}'; },
+          async call(prompt) {
+            callNumber += 1;
+            if (callNumber === 1) return config.role === "intent"
+              ? '{"type":"describe"}'
+              : '{"fields":[{"id":"bootstrap-field","label":"Synthetic field","confidence":0.5}]}';
+            calls.push(`${config.role}:${prompt}`);
+            return '{"type":"describe"}';
+          },
           abort() {},
           async close() {},
         };
@@ -187,9 +210,14 @@ describe("Claude turn routing and watchdog recovery", () => {
     let intentCalls = 0;
     const adapter: ClaudeSdkAdapter = {
       createSession(config) {
+        let callNumber = 0;
         return {
           async start() { return { tools: [] }; },
           async call(prompt) {
+            callNumber += 1;
+            if (callNumber === 1) return config.role === "intent"
+              ? '{"type":"describe"}'
+              : '{"fields":[{"id":"bootstrap-field","label":"Synthetic field","confidence":0.5}]}';
             if (config.role !== "intent") return '{"fields":[]}';
             intentCalls += 1;
             return answer(prompt);
