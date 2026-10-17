@@ -25,16 +25,16 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 03 — Continue with Plan 2 of 4
+**Current focus:** Phase 03 — Plan 3 complete; awaiting Plan 4 I3 prerequisites
 
 ## Current Position
 
-Phase: 3 (Full Command Set with Real Claude) — READY TO EXECUTE
+Phase: 3 (Full Command Set with Real Claude) — IN PROGRESS
 Plan: 4 of 4
-Status: Plan 1 of 4 complete; Plan 2 is ready
-Last activity: 2026-10-17 — Completed 03-01: spell, change, and sensitive handoff behavior
+Status: Plans 1–3 complete; Plan 4 waits for Phase 2 I2, HO-8, core BRAIN/PAGE/GATE integration, and the public form
+Last activity: 2026-10-17 — Completed 03-03: current-page guidance and warning-first handling of the approved GATE-07 signal
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███████░░░] 75%
 
 ## Shared Milestones
 

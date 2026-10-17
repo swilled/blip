@@ -99,6 +99,16 @@ status: complete
 - Disclosed uncertain labels from approved field provenance and explicit evidence, with re-disclosure after snapshot changes.
 - Wired the approved GATE-07 boolean through the existing snapshot-to-page projection and made a fixed warning precede responses on flagged pages. The warning contains no page text and cannot arm or redeem the confirmation gate.
 
+## Task Commits
+
+Each task was committed atomically:
+
+1. **Task 1: Tracer: answer orientation and required fields from the current snapshot** - `34652d7` (feat)
+2. **Task 2: Disclose guessed labels from provenance and explicit evidence** - `997fad4` (feat)
+3. **Task 3: Preempt page responses with the core injection warning** - `1bb419f` (feat)
+
+**Plan metadata:** `22d9541` (docs: complete plan)
+
 ## Files Created/Modified
 - `packages/dialogue/src/read-fill.ts` - required-field pacing and snapshot-safe reads.
 - `packages/dialogue/src/reduce.ts` - orientation, label disclosure, and warning-first reducer behavior.
@@ -111,10 +121,15 @@ status: complete
 - `PROTOCOL.md` - warning-only contract documentation.
 - Dialogue, protocol, and mock-server tests - coverage for snapshot freshness, evidence, projection, ordering, and gate isolation.
 
-## Decisions and Deviations
+## Decisions Made
 
 - The shared core contract supplied for this run uses `Snapshot.untrustedInstructionDetected?: boolean` and `StatePayload.page.untrustedInstructionDetected?: boolean`. This checkout predated those fields and the older plan text named a different `FormModel` location. Updated the plan and synchronized only those exact optional fields plus the existing projection; no detector, policy, Executor, or gate behavior was added.
 - Kept the warning static and warning-only. Page content remains data and never enters the confirmation path.
+
+## Deviations from Plan
+
+- Corrected the stale plan precondition and allowed the exact approved optional protocol fields and projection to be synchronized locally. The approved contract shape supersedes the old `FormModel` location; no core-owned detection or gate behavior was implemented.
+- **Impact:** Required to integrate against the uploaded contract; the warning remains informational and action authority remains with core.
 
 ## Verification
 
