@@ -6,6 +6,7 @@ import { fingerprintOf } from "./fingerprint.js";
 import { actionFactsOf, resolveElementId, walkDocument } from "./walk.js";
 import { isSsn, luhnValid, safeValueOf, type SafeValue, type Sensitivity } from "./sensitive.js";
 import { isDisabled } from "./visibility.js";
+import { withSubmitEventsBlocked } from "./submit-guard.js";
 
 const snapshotFingerprints = new WeakMap<Document, Map<string, string>>();
 
@@ -212,11 +213,11 @@ async function executeResolved(
   }
 }
 
-/** Execute one live-checked page action. The submit-event barrier wraps this in Task 2. */
+/** Run every page action behind the same scoped submit-event barrier. */
 export function executeAct(request: ActRequest, options: ExecuteActOptions = {}): Promise<ActResult> {
   const document = options.document ?? globalThis.document;
   const frameId = options.frameId ?? 0;
-  return executeResolved(request, document, frameId).catch(() =>
+  return withSubmitEventsBlocked(document, () => executeResolved(request, document, frameId)).catch(() =>
     failure(request.actId, "exception", { detail: "act failed" }),
   );
 }
