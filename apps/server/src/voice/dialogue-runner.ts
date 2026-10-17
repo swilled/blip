@@ -18,7 +18,7 @@ type RunnerOptions = {
   snapshotTimeoutMs?: number;
   actTimeoutMs?: number;
   onActRequest?: (request: ActRequest) => void;
-  parseIntent?: (input: ParseIntentInput, ctx: HandlerContext) => Promise<void>;
+  parseIntent?: (input: ParseIntentInput) => Promise<void>;
 };
 
 type ParseIntentInput = {
@@ -227,7 +227,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
               })),
               actions: observed.actions.map(({ id, label, kind, primary }) => ({ id, label, kind, primary })),
             },
-          }, context);
+          });
         } else {
           await dispatch({ type: "intent.reply", text: "I didn't understand that." });
         }

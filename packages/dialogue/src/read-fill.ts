@@ -1,10 +1,10 @@
 import type { Field, FormModel } from "@blip/protocol";
 import type { DialogueContext, Effect } from "./effects";
-import type { DialogueState } from "./state";
+import type { DialogueState, UndoEntry } from "./state";
 import { cancelEffect, speakEffect } from "./state";
 import { fillableFields, matchOption, optionLabelFor, optionList, profileFieldMatches, resolveField, spokenLabel } from "./fields";
 import { cleanValue, normalizeCommand, normalizeEmail, normalizeNumberish } from "./normalize";
-import { changeText, echoText, readBatchText, requiredEmptyText, spellValueText } from "./templates";
+import { changeText, echoText, profileBatchText, readBatchText, requiredEmptyText, spellValueText, undoSummaryText } from "./templates";
 import type { DialogueEvent } from "./events";
 
 type DialogueResult = { state: DialogueState; effects: Effect[] };
@@ -173,7 +173,11 @@ function issueValueEffect(state: DialogueState, field: Field, value: string, kin
     readCursor: null,
     currentFieldId: field.id,
     pendingOptions: null,
-    pendingFill: { fieldId: field.id, replaced: field.hasValue },
+    pendingFill: {
+      fieldId: field.id,
+      replaced: field.hasValue,
+      ...(field.sensitive === "none" ? { undoPreviousValue: field.hasValue ? field.value : null } : {}),
+    },
     previousValues: storeOldValue(state, field),
   };
   return {
@@ -324,12 +328,11 @@ export function handleProfileFillUtterance(
     entries.push({ fieldId: field.id, key: match.key, value: profile[match.key], label });
   }
   if (entries.length === 0) {
-    const detail = skipped.length > 0 ? ` I left ${skipped.join(", ")} for you to fill.` : "";
-    return answer(state, `I didn't find any clear empty profile fields to fill.${detail}`);
+    return answer(state, profileBatchText([], skipped, ctx.form));
   }
   const batchState: DialogueState = {
     ...state,
-    profileBatch: { entries, cursor: 0, filled: [], skipped, reported: false },
+    profileBatch: { entries, cursor: 0, filled: [], skipped },
   };
   return startProfileEntry(batchState, ctx.form);
 }
@@ -358,20 +361,74 @@ function startProfileEntry(state: DialogueState, form: FormModel): DialogueResul
     };
     return { state: nextState, effects: [{ kind: "fill", fieldId: field.id, value: entry.value }] };
   }
-  if (batch.reported) return { state: { ...state, profileBatch: { ...batch, cursor, skipped } }, effects: [] };
-  const filledText = batch.filled.length > 0 ? `Filled ${batch.filled.map((item) => item.label).join(", ")}.` : "No profile fields were filled.";
-  const skippedText = skipped.length > 0 ? ` Skipped ${skipped.join(", ")}; you can dictate those fields.` : "";
-  const spoken = speakEffect(state, `${filledText}${skippedText}`, "answer", { interruptible: true });
+  const spoken = speakEffect(state, profileBatchText(batch.filled.map((item) => item.label), skipped, form), "answer", { interruptible: true });
   return {
-    state: { ...spoken.state, profileBatch: { ...batch, cursor, skipped, reported: true } },
+    state: {
+      ...spoken.state,
+      profileBatch: null,
+      ...(batch.filled.length > 0 ? { undoRecord: batch.filled } : {}),
+    },
     effects: [spoken.effect],
   };
 }
 
 export function continueProfileBatch(state: DialogueState, form: FormModel | null): DialogueResult {
   if (state.profileBatch === null) return { state, effects: [] };
-  if (form === null) return answer({ ...state, profileBatch: null }, "The page changed, so I stopped the profile fill. Please try again.");
+  if (form === null) {
+    const batch = state.profileBatch;
+    const base = { ...state, profileBatch: null, ...(batch.filled.length > 0 ? { undoRecord: batch.filled } : {}) };
+    return answer(base, "The page changed, so I stopped the profile fill. The page's current values can't be confirmed yet.");
+  }
   return startProfileEntry(state, form);
+}
+
+export function continueUndo(state: DialogueState, form: FormModel | null): DialogueResult {
+  const pending = state.pendingUndo;
+  if (pending === null) return { state, effects: [] };
+  if (form === null) {
+    return answer({ ...state, pendingUndo: null }, "I couldn't check the current page values, so I left them unchanged.");
+  }
+  const fields = new Map(form.fields.map((field) => [field.id, field]));
+  let cursor = pending.cursor;
+  const restored = [...pending.restored];
+  const skipped = [...pending.skipped];
+  while (cursor < pending.entries.length) {
+    const entry = pending.entries[cursor]!;
+    const field = fields.get(entry.fieldId);
+    if (!field || field.sensitive !== "none" || field.value !== entry.writtenValue) {
+      skipped.push(entry.label);
+      cursor += 1;
+      continue;
+    }
+    return {
+      state: {
+        ...state,
+        mode: "awaiting-value",
+        currentFieldId: field.id,
+        pendingFill: { fieldId: field.id, replaced: true, undoEntry: entry },
+        pendingUndo: { ...pending, cursor, restored, skipped },
+      },
+      effects: [entry.op === "select"
+        ? { kind: "select", fieldId: field.id, optionValue: entry.previousValue ?? "" }
+        : { kind: "fill", fieldId: field.id, value: entry.previousValue ?? "" }],
+    };
+  }
+  const spoken = speakEffect({ ...state, pendingUndo: null }, undoSummaryText(restored, skipped, pending.failed), "answer", { interruptible: true });
+  return { state: spoken.state, effects: [spoken.effect] };
+}
+
+export function handleUndoUtterance(state: DialogueState, norm: string): DialogueResult | null {
+  if (norm !== "undo") return null;
+  if (state.undoRecord === null || state.undoRecord.length === 0) return answer(state, "There's nothing left to undo.");
+  return {
+    state: {
+      ...state,
+      mode: "ready",
+      undoRecord: null,
+      pendingUndo: { entries: state.undoRecord, cursor: 0, restored: [], skipped: [], failed: [] },
+    },
+    effects: [{ kind: "refreshForm" }],
+  };
 }
 
 /** Use the page's observed value as the sole source for a fill/select echo. */
@@ -397,6 +454,25 @@ export function handleActResult(
     pendingOptions: null,
   };
   const observed = event.observedValue;
+  if (pending.undoEntry !== undefined && state.pendingUndo !== null) {
+    const undo = state.pendingUndo;
+    const entry = pending.undoEntry;
+    const target = entry.previousValue ?? "";
+    const success = event.ok && (observed ?? "") === target;
+    return {
+      state: {
+        ...base,
+        pendingUndo: {
+          ...undo,
+          cursor: undo.cursor + 1,
+          restored: success ? [...undo.restored, entry.label] : undo.restored,
+          skipped: undo.skipped,
+          failed: success ? undo.failed : [...undo.failed, entry.label],
+        },
+      },
+      effects: [{ kind: "refreshForm" }],
+    };
+  }
   if (pending.profileBatch && state.profileBatch !== null) {
     const batch = state.profileBatch;
     const entry = batch.entries[batch.cursor];
@@ -405,7 +481,7 @@ export function handleActResult(
       ...batch,
       cursor: nextCursor,
       filled: event.ok && observed !== null && observed !== undefined && observed !== "" && entry
-        ? [...batch.filled, { fieldId: entry.fieldId, label: entry.label }]
+        ? [...batch.filled, { fieldId: entry.fieldId, label: entry.label, op: "fill" as const, previousValue: null, writtenValue: observed }]
         : batch.filled,
       skipped: event.ok && observed !== null && observed !== undefined && observed !== ""
         ? batch.skipped
@@ -441,14 +517,23 @@ export function handleActResult(
     display = label;
   }
 
+  const undoEntry: UndoEntry = {
+    fieldId: field.id,
+    label: spokenLabel(field, fieldNumber(ctx.form, field)),
+    op: event.op === "select" ? "select" : "fill",
+    previousValue: pending.undoPreviousValue ?? pending.previousValue ?? null,
+    writtenValue: observed,
+  };
+  const withUndo = { ...base, undoRecord: [undoEntry] };
+
   if (Object.hasOwn(pending, "previousValue")) {
     const text = changeText(field, pending.previousValue ?? null, display);
-    const spoken = speakEffect(base, text, "answer", { interruptible: true });
+    const spoken = speakEffect(withUndo, text, "answer", { interruptible: true });
     return { state: spoken.state, effects: [spoken.effect, { kind: "refreshForm" }] };
   }
 
   const text = echoText(field, display, pending.replaced);
-  const spoken = speakEffect(base, text, "answer", { interruptible: true });
+  const spoken = speakEffect(withUndo, text, "answer", { interruptible: true });
   return { state: spoken.state, effects: [spoken.effect, { kind: "refreshForm" }] };
 }
 

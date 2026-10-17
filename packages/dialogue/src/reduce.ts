@@ -2,7 +2,7 @@ import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
-import { continueProfileBatch, handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance } from "./read-fill";
+import { continueProfileBatch, continueUndo, handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance, handleUndoUtterance } from "./read-fill";
 import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
@@ -39,6 +39,9 @@ export function reduce(
   ctx: DialogueContext,
 ): { state: DialogueState; effects: Effect[] } {
   if (event.type !== "utterance") {
+    if (event.type === "form.changed" && state.pendingUndo !== null) {
+      return continueUndo(state, ctx.form);
+    }
     if (event.type === "form.changed" && state.profileBatch !== null) {
       return continueProfileBatch(state, ctx.form);
     }
@@ -92,6 +95,9 @@ export function reduce(
   }
   const norm = normalizeCommand(raw);
   if (norm === "") return { state, effects: [] };
+
+  const undoResult = handleUndoUtterance(state, norm);
+  if (undoResult !== null) return undoResult;
 
   const submitResult = handleSubmitUtterance(state, norm, raw, event, ctx);
   if (submitResult !== null) return submitResult;

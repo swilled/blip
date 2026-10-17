@@ -2,6 +2,8 @@ import type { PayloadOf } from "@blip/protocol";
 
 export type Mode = "ready" | "reading" | "awaiting-value" | "reading-back" | "awaiting-confirm" | "executing";
 
+export type UndoEntry = { fieldId: string; label: string; op: "fill" | "select"; previousValue: string | null; writtenValue: string };
+
 export type DialogueState = {
   lastSpoken: string | null;
   mode: Mode;
@@ -9,14 +11,15 @@ export type DialogueState = {
   readCursor: number | null;
   currentFieldId: string | null;
   pendingOptions: { fieldId: string } | null;
-  pendingFill: { fieldId: string; replaced: boolean; previousValue?: string | null; profileBatch?: boolean } | null;
+  pendingFill: { fieldId: string; replaced: boolean; previousValue?: string | null; undoPreviousValue?: string | null; profileBatch?: boolean; undoEntry?: UndoEntry } | null;
   profileBatch: {
     entries: Array<{ fieldId: string; key: "name" | "email" | "tel"; value: string; label: string }>;
     cursor: number;
-    filled: Array<{ fieldId: string; label: string }>;
+    filled: UndoEntry[];
     skipped: string[];
-    reported: boolean;
   } | null;
+  undoRecord: UndoEntry[] | null;
+  pendingUndo: { entries: UndoEntry[]; cursor: number; restored: string[]; skipped: string[]; failed: string[] } | null;
   outstanding: string[];
   lastDoneAt: number | null;
   readBack: { speakId: string; actionId: string; digest: string } | null;
@@ -44,6 +47,8 @@ export function initialState(): DialogueState {
     pendingOptions: null,
     pendingFill: null,
     profileBatch: null,
+    undoRecord: null,
+    pendingUndo: null,
     outstanding: [],
     lastDoneAt: null,
     readBack: null,

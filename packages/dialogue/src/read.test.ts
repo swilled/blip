@@ -69,7 +69,9 @@ describe("dialogue read and option picks", () => {
     }, { form: profileForm, now: 1, profile });
     expect(first.effects[0]).toMatchObject({ kind: "speak", text: expect.stringContaining("Rowan") });
     expect(first.effects.at(-1)).toEqual({ kind: "refreshForm" });
-    expect(first.state.profileBatch?.filled).toEqual([{ fieldId: "e1", label: "probably Your name" }]);
+    expect(first.state.profileBatch?.filled).toEqual([{
+      fieldId: "e1", label: "probably Your name", op: "fill", previousValue: null, writtenValue: "Rowan",
+    }]);
 
     const refreshed = FormModel.parse({
       ...profileForm,
@@ -105,6 +107,83 @@ describe("dialogue read and option picks", () => {
     expect(text).toContain("How did you hear about us");
   });
 
+  it("undoes a profile batch only when each observed page value still matches Blip's write", () => {
+    const profileForm = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e1"
+        ? { ...field, autocomplete: "name" }
+        : field.id === "e2"
+          ? { ...field, autocomplete: "email" }
+          : field.id === "e3"
+            ? { ...field, autocomplete: "" }
+          : field),
+    });
+    const profile = { name: "Rowan Example", email: "rowan@example.com", tel: "202-555-0142" };
+    const first = reduce(initialState(), say("fill from my profile"), { form: profileForm, now: 0, profile });
+    const firstResult = reduce(first.state, {
+      type: "act.result", op: "fill", fieldId: "e1", ok: true, observedValue: "Rowan observed",
+    }, { form: profileForm, now: 1, profile });
+    const afterFirstPage = FormModel.parse({
+      ...profileForm,
+      fields: profileForm.fields.map((field) => field.id === "e1" ? { ...field, hasValue: true, value: "Rowan observed" } : field),
+    });
+    const second = reduce(firstResult.state, { type: "form.changed" }, { form: afterFirstPage, now: 2, profile });
+    const secondResult = reduce(second.state, {
+      type: "act.result", op: "fill", fieldId: "e2", ok: true, observedValue: "rowan@example.co",
+    }, { form: afterFirstPage, now: 3, profile });
+    const afterProfile = FormModel.parse({
+      ...afterFirstPage,
+      fields: afterFirstPage.fields.map((field) => field.id === "e2" ? { ...field, hasValue: true, value: "rowan@example.co" } : field),
+    });
+    const summary = reduce(secondResult.state, { type: "form.changed" }, { form: afterProfile, now: 4, profile });
+    expect((summary.effects[0] as { text: string }).text).toContain("Filled probably Your name and probably Email.");
+    expect((summary.effects[0] as { text: string }).text).toContain("How did you hear about us");
+    expect(summary.state.undoRecord).toHaveLength(2);
+
+    const undo = reduce(summary.state, say("undo"), { form: afterProfile, now: 5, profile });
+    expect(undo.effects).toEqual([{ kind: "refreshForm" }]);
+    expect(undo.state.undoRecord).toBeNull();
+    const undoFirst = reduce(undo.state, { type: "form.changed" }, { form: afterProfile, now: 6, profile });
+    expect(undoFirst.effects).toEqual([{ kind: "fill", fieldId: "e1", value: "" }]);
+    const undoFirstResult = reduce(undoFirst.state, {
+      type: "act.result", op: "fill", fieldId: "e1", ok: true, observedValue: "",
+    }, { form: afterProfile, now: 7, profile });
+    const afterUndoFirst = FormModel.parse({
+      ...afterProfile,
+      fields: afterProfile.fields.map((field) => field.id === "e1" ? { ...field, hasValue: false, value: "" } : field),
+    });
+    const undoSecond = reduce(undoFirstResult.state, { type: "form.changed" }, { form: afterUndoFirst, now: 8, profile });
+    expect(undoSecond.effects).toEqual([{ kind: "fill", fieldId: "e2", value: "" }]);
+    const undoSecondResult = reduce(undoSecond.state, {
+      type: "act.result", op: "fill", fieldId: "e2", ok: true, observedValue: "",
+    }, { form: afterUndoFirst, now: 9, profile });
+    const afterUndoSecond = FormModel.parse({
+      ...afterUndoFirst,
+      fields: afterUndoFirst.fields.map((field) => field.id === "e2" ? { ...field, hasValue: false, value: "" } : field),
+    });
+    const undone = reduce(undoSecondResult.state, { type: "form.changed" }, { form: afterUndoSecond, now: 10, profile });
+    expect((undone.effects[0] as { text: string }).text).toContain("Undid changes to");
+    expect(undone.state.pendingUndo).toBeNull();
+    expect((reduce(undone.state, say("undo"), { form: afterUndoSecond, now: 11, profile }).effects[0] as { text: string }).text)
+      .toBe("There's nothing left to undo.");
+  });
+
+  it("leaves a changed page value untouched during undo and explains the skip", () => {
+    const command = reduce(initialState(), say("email is new@example.com"), ctx(survey));
+    const written = reduce(command.state, {
+      type: "act.result", op: "fill", fieldId: "e2", ok: true, observedValue: "new@example.com",
+    }, ctx(survey));
+    const external = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e2" ? { ...field, hasValue: true, value: "external@example.com" } : field),
+    });
+    const undo = reduce(written.state, say("undo"), ctx(external));
+    const checked = reduce(undo.state, { type: "form.changed" }, ctx(external));
+    expect(checked.effects.some((effect) => effect.kind === "fill")).toBe(false);
+    expect((checked.effects[0] as { text: string }).text).toContain("changed after my fill");
+    expect(checked.state.pendingUndo).toBeNull();
+  });
+
   it("changes a named field and confirms its prior and page-observed values", () => {
     const filled = FormModel.parse({
       ...survey,
@@ -114,7 +193,9 @@ describe("dialogue read and option picks", () => {
     });
     const command = reduce(initialState(), say("change email to new@example.com"), ctx(filled));
     expect(command.effects).toEqual([{ kind: "fill", fieldId: "e2", value: "new@example.com" }]);
-    expect(command.state.pendingFill).toEqual({ fieldId: "e2", replaced: true, previousValue: "old@example.com" });
+    expect(command.state.pendingFill).toEqual({
+      fieldId: "e2", replaced: true, previousValue: "old@example.com", undoPreviousValue: "old@example.com",
+    });
     const result = reduce(command.state, {
       type: "act.result", op: "fill", fieldId: "e2", ok: true, observedValue: "new@example.co",
     }, ctx(filled));

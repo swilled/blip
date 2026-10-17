@@ -8,7 +8,9 @@ import {
   type Message,
   type MessageType,
   type PayloadOf,
+  type Snapshot,
 } from "@blip/protocol";
+import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 import { createStubGate } from "../../../apps/server/src/voice/gate-port";
 import { createDialogueHandlers, sendSpeakEffect } from "../../../apps/server/src/voice/dialogue-runner";
 import type { SpeakEffect } from "@blip/dialogue";
@@ -347,6 +349,109 @@ describe("real voice dialogue runner", () => {
     expect(typeof observed).toBe("string");
     expect(speak.payload.text).toBe(echoText(email!, observed!, false));
     expect(frames.some((frame) => frame.type === "transcript" && frame.payload.routedTo === "grammar")).toBe(true);
+    await waitFor(() => speaks(frames).find((frame) => frame.payload.text.startsWith("Filled ")), "profile summary");
+
+    const undoStart = speaks(frames).length;
+    const undoStates = frames.filter((frame) => frame.type === "state").length;
+    send(ws, "utterance", { utteranceId: "profile-undo", text: "undo", source: "typed" });
+    const undone = await waitFor(
+      () => speaks(frames).slice(undoStart).find((frame) => frame.payload.text.startsWith("Undid changes to ")),
+      "profile undo summary",
+    );
+    await waitFor(() => frames.filter((frame) => frame.type === "state").length > undoStates ? true : undefined, "undo completion state");
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.action).toEqual({ op: "fill", targetId: email!.id, value: "" });
+    expect(real.extension!.elements().find((element) => element.id === email!.id)?.value).toBe("");
+
+    const secondUndoStart = speaks(frames).length;
+    send(ws, "utterance", { utteranceId: "profile-undo-again", text: "undo", source: "typed" });
+    const noUndo = await nextSpeak(frames, secondUndoStart);
+    expect(noUndo.payload.text).toBe("There's nothing left to undo.");
+    expect(requests).toHaveLength(2);
+  }, 15_000);
+
+  it("leaves a profile value edited on the page untouched during undo", async () => {
+    let clock = 3_000;
+    let snapshot: Snapshot = loadSnapshot("broken");
+    const acts: ActRequest[] = [];
+    const sent: Sent[] = [];
+    const session = new Session("fake");
+    session.extensionConnected = true;
+    const hub = {
+      send(role: string, type: string, payload: unknown) { sent.push({ role, type, payload }); return true; },
+      async request(_role: string, type: string, payload: unknown) {
+        if (type === "snapshot.request") return { payload: { ok: true, snapshot: structuredClone(snapshot) } };
+        if (type === "act.request") {
+          const request = payload as ActRequest;
+          acts.push(request);
+          const element = snapshot.elements.find((item) => item.id === request.action.targetId);
+          if (request.action.op === "fill" && element) {
+            element.value = request.action.value;
+            element.hasValue = request.action.value !== "";
+            snapshot = { ...snapshot, version: snapshot.version + 1 };
+            return { payload: { actId: request.actId, ok: true, observedValue: element.value } };
+          }
+        }
+        throw new Error(`unexpected request: ${type}`);
+      },
+      pushState() { return true; },
+      close() {},
+    } as unknown as Hub;
+    const handlers = createDialogueHandlers({ gate: createStubGate(() => clock), now: () => clock });
+    const utter = (id: string, text: string) => handlers.utterance?.(voiceContext(hub, session, message("utterance", {
+      utteranceId: id, text, source: "typed",
+    })));
+    await utter("profile-fill-edit", "fill from my profile");
+    expect(sent.some((frame) => frame.type === "speak" && (frame.payload as { text: string }).text.startsWith("Filled "))).toBe(true);
+    expect(acts).toHaveLength(1);
+    const emailTarget = acts[0]!.action.targetId;
+    const element = snapshot.elements.find((item) => item.id === emailTarget);
+    expect(element).toBeDefined();
+
+    element!.value = "edited-by-user@example.test";
+    element!.hasValue = true;
+    snapshot = { ...snapshot, version: snapshot.version + 1 };
+    const pageChange = voiceContext(hub, session, message("page.changed", {
+      tabId: snapshot.tabId, url: snapshot.url, reason: "mutation", structuralHash: snapshot.structuralHash,
+    }));
+    pageChange.role = "extension";
+    await handlers["page.changed"]?.(pageChange);
+
+    await utter("profile-undo-edit", "undo");
+    const summary = sent.filter((frame) => frame.type === "speak")
+      .map((frame) => (frame.payload as { text: string }).text)
+      .find((text) => text.includes("unchanged because the page values changed"));
+    expect(summary).toContain("couldn't undo any fields");
+    expect(acts).toHaveLength(1);
+    expect(element!.value).toBe("edited-by-user@example.test");
+  }, 15_000);
+
+  it("passes only value-free form metadata to the intent parser", async () => {
+    let clock = 0;
+    const { hub, sent } = recordingHub();
+    const sentinel = "private-page-value-sentinel";
+    const session = new Session("fake");
+    session.extensionConnected = true;
+    session.model = FormModel.parse({
+      ...fixtureJson,
+      fields: FormModel.parse(fixtureJson).fields.map((field) => field.id === "e2"
+        ? { ...field, hasValue: true, value: sentinel }
+        : field),
+    });
+    session.stale = false;
+    let intentInput: unknown;
+    const handlers = createDialogueHandlers({
+      gate: createStubGate(() => clock),
+      now: () => clock,
+      parseIntent: async (input) => { intentInput = input; },
+    });
+    const ctx = voiceContext(hub, session, message("utterance", {
+      utteranceId: "intent-projection", text: "an unmatched request", source: "typed",
+    }));
+    await handlers.utterance?.(ctx);
+    expect(JSON.stringify(intentInput)).not.toContain(sentinel);
+    expect(JSON.stringify(intentInput)).toContain('"hasValue":true');
+    expect(JSON.stringify(sent)).not.toContain(sentinel);
   });
 
   it("turns a rejecting GatePort redeem into a spoken refusal instead of staying executing", async () => {

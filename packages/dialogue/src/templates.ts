@@ -162,6 +162,29 @@ export function requiredEmptyText(form: FormModel): string {
   return `I can't submit yet. ${joinAnd(labels)} ${missing.length === 1 ? "is" : "are"} required and empty.`;
 }
 
+/** Summarize a completed local profile batch from the refreshed page model. */
+export function profileBatchText(filled: string[], skipped: string[], form: FormModel): string {
+  const filledText = filled.length > 0 ? `Filled ${joinAnd(filled)}.` : "No profile fields were filled.";
+  const skippedText = skipped.length > 0 ? ` Skipped ${joinAnd(skipped)}; you can dictate those fields.` : "";
+  const missing = requiredEmpty(form);
+  const fields = fillableFields(form);
+  const requiredText = missing.length === 0
+    ? " No required fields are empty."
+    : ` Still empty and required: ${joinAnd(missing.map((field) => spokenLabel(field, fields.indexOf(field) + 1)))}.`;
+  return `${filledText}${skippedText}${requiredText}`;
+}
+
+/** Describe a conditional undo using labels only, never stored field values. */
+export function undoSummaryText(restored: string[], skipped: string[], failed: string[] = []): string {
+  if (restored.length === 0 && skipped.length === 0 && failed.length === 0) return "There's nothing left to undo.";
+  const restoredText = restored.length > 0 ? `Undid changes to ${joinAnd(restored)}.` : "I couldn't undo any fields.";
+  const skippedText = skipped.length > 0
+    ? ` I left ${joinAnd(skipped)} unchanged because the page values changed after my fill.`
+    : "";
+  const failedText = failed.length > 0 ? ` The page didn't accept the saved values for ${joinAnd(failed)}.` : "";
+  return `${restoredText}${skippedText}${failedText}`;
+}
+
 export function confirmPromptText(phrase: string): string {
   return `To submit, say '${phrase}'.`;
 }

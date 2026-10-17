@@ -53,7 +53,7 @@ describe("dialogue field fills and page-sourced echoes", () => {
     expect(result.effects[0]?.kind).toBe("fill");
     expect(result.effects).toEqual([{ kind: "fill", fieldId: "e2", value: "jane@example.com" }]);
     expect(result.state.currentFieldId).toBe("e2");
-    expect(result.state.pendingFill).toEqual({ fieldId: "e2", replaced: false });
+    expect(result.state.pendingFill).toEqual({ fieldId: "e2", replaced: false, undoPreviousValue: null });
     expect(result.state.mode).toBe("awaiting-value");
   });
 
@@ -188,7 +188,7 @@ describe("dialogue field fills and page-sourced echoes", () => {
       } : field),
     });
     const result = reduce(initialState(), say("email is jane at example dot com"), ctx(replacedForm));
-    expect(result.state.pendingFill).toEqual({ fieldId: "e2", replaced: true });
+    expect(result.state.pendingFill).toEqual({ fieldId: "e2", replaced: true, undoPreviousValue: "old@example.com" });
     expect(result.state.previousValues).toEqual({ e2: "old@example.com" });
 
     const secretForm = withPassword(survey);
