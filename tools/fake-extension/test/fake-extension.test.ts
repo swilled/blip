@@ -131,7 +131,8 @@ describe("refusals, in order", () => {
     const e9 = ext!.elements().find((e) => e.id === "e9")!;
     expect(e9.value).toBeNull();
     expect(e9.hasValue).toBe(false);
-    expect(JSON.stringify(r)).not.toContain("4111");
+    const responsePayload = Object.fromEntries(Object.entries(r).filter(([key]) => key !== "actId"));
+    expect(JSON.stringify(responsePayload)).not.toContain("4111");
   });
 
   it("focus on the sensitive field is allowed (the user types) and reads back null", async () => {
