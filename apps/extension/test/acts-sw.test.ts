@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { dispatchActRequest, type ActDispatchDependencies, type ActFrameAdapter } from "../src/background/acts.js";
 
 const CARD_NUMBER = "4111111111111111";
+const SUBMIT_GUARD_SENTINEL = "blip-submit-method-guard-v1";
+let executeScript: ReturnType<typeof vi.fn>;
 
 function field(id: string, frameId: number, overrides: Partial<RawElement> = {}): RawElement {
   return {
@@ -45,13 +47,14 @@ function snapshot(version: number, elements: RawElement[] = [field("f7e1", 7)]):
   };
 }
 
-function request(snapshotVersion = 1) {
+function request(snapshotVersion = 1, overrides: Partial<ActRequest> = {}) {
   return buildFrame("act.request", {
     actId: "act-1",
     tabId: 41,
     snapshotVersion,
     action: { op: "fill", targetId: "f7e1", value: "Ada" },
     expectedKind: "fill",
+    ...overrides,
   }, { id: "request-1" });
 }
 
@@ -86,6 +89,8 @@ async function dispatchAndRead(sent: string[], socket: { readyState: number; sen
 describe("service-worker act routing", () => {
   beforeEach(() => {
     vi.stubGlobal("WebSocket", { OPEN: 1 });
+    executeScript = vi.fn(async () => [{ result: SUBMIT_GUARD_SENTINEL }]);
+    vi.stubGlobal("chrome", { scripting: { executeScript } });
   });
 
   it("routes frame-qualified ids to their owning frame and returns the refreshed version", async () => {
@@ -103,6 +108,86 @@ describe("service-worker act routing", () => {
     expect(reply).toMatchObject({ type: "act.result", replyTo: "request-1", payload: {
       actId: "act-1", ok: true, observedValue: "Ada", newSnapshotVersion: 2,
     } });
+    expect(executeScript).toHaveBeenCalledWith(expect.objectContaining({
+      target: { tabId: 41, frameIds: [7] },
+      world: "MAIN",
+      func: expect.any(Function),
+    }));
+  });
+
+  it.each([
+    ["missing gate", {}],
+    ["empty grant id", { gate: { grantId: "", kind: "submit" as const } }],
+    ["mismatched grant kind", { gate: { grantId: "grant-1", kind: "pay" as const } }],
+  ])("refuses a gated click with %s before dispatch", async (_name, gate) => {
+    const submitButton = field("f7e1", 7, {
+      category: "button", tag: "button", inputType: null, role: "button", kind: "submit",
+    });
+    const setupState = setup([snapshot(1, [submitButton])], { t: "act.result", result: { actId: "act-1", ok: true } });
+    const message = request(1, {
+      action: { op: "click", targetId: "f7e1" },
+      expectedKind: "submit",
+      ...gate,
+    });
+
+    const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies, message);
+
+    expect(setupState.sendAct).not.toHaveBeenCalled();
+    expect(setupState.capture).toHaveBeenCalledTimes(1);
+    expect(reply.payload).toMatchObject({ actId: "act-1", ok: false, error: "gate-required" });
+  });
+
+  it("refuses a gate attached to an ungated click", async () => {
+    const setupState = setup([snapshot(1)], { t: "act.result", result: { actId: "act-1", ok: true } });
+    const message = request(1, {
+      action: { op: "click", targetId: "f7e1" },
+      gate: { grantId: "grant-1", kind: "fill" },
+    });
+
+    const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies, message);
+
+    expect(setupState.sendAct).not.toHaveBeenCalled();
+    expect(reply.payload).toMatchObject({ actId: "act-1", ok: false, error: "gate-required" });
+  });
+
+  it.each([
+    ["missing result", async () => []],
+    ["ambiguous results", async () => [
+      { result: SUBMIT_GUARD_SENTINEL }, { result: SUBMIT_GUARD_SENTINEL },
+    ]],
+    ["wrong sentinel", async () => [{ result: "unverified" }]],
+    ["thrown verification", async () => { throw new Error("verification failed"); }],
+  ])("refuses an act when the target-frame method guard has %s", async (_name, result) => {
+    executeScript.mockImplementationOnce(result);
+    const setupState = setup([snapshot(1)], { t: "act.result", result: { actId: "act-1", ok: true } });
+
+    const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies);
+
+    expect(setupState.sendAct).not.toHaveBeenCalled();
+    expect(setupState.capture).toHaveBeenCalledTimes(1);
+    expect(reply.payload).toMatchObject({ actId: "act-1", ok: false, error: "exception" });
+  });
+
+  it("routes a gated click only after its frame guard is verified", async () => {
+    const submitButton = field("f7e1", 7, {
+      category: "button", tag: "button", inputType: null, role: "button", kind: "submit",
+    });
+    const setupState = setup(
+      [snapshot(1, [submitButton]), snapshot(2, [submitButton])],
+      { t: "act.result", result: { actId: "act-1", ok: true } },
+    );
+    const message = request(1, {
+      action: { op: "click", targetId: "f7e1" },
+      expectedKind: "submit",
+      gate: { grantId: "grant-1", kind: "submit" },
+    });
+
+    const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies, message);
+
+    expect(setupState.sendAct).toHaveBeenCalledWith(7, expect.objectContaining({
+      expectedKind: "submit", gate: { grantId: "grant-1", kind: "submit" },
+    }), 1);
+    expect(reply.payload).toMatchObject({ actId: "act-1", ok: true, newSnapshotVersion: 2 });
   });
 
   it("rejects a stale version before acting and reports the freshly captured version", async () => {
