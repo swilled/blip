@@ -1,0 +1,10 @@
+{
+  "command": "npm run --silent test -- apps/server/src/voice/gate-port.test.ts --reporter=tap-flat",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - src/voice/gate-port.test.ts > createStubGate exposes the fail-closed gate factory # time=5.52ms\n    ---\n    error:\n        name: \"AssertionError\"\n        message: \"expected 'undefined' to be 'function' // Object.is equality\"\n    at: \"C:/Users/befit/Documents/formvoice/apps/server/src/voice/gate-port.test.ts:10:42\"\n    actual: \"undefined\"\n    expected: \"function\"\n    ...\n",
+  "targetTest": "src/voice/gate-port.test.ts > createStubGate exposes the fail-closed gate factory",
+  "targetFile": "gate-port.test.ts",
+  "expected": "createStubGate is an exported function",
+  "actual": "The module is absent, so its export is undefined.",
+  "semanticAssessment": "The target Vitest test ran and failed on its assertion that the planned factory export exists; TAP shows one failing assertion and no loader or collection failure."
+}
