@@ -58,7 +58,7 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 ```
 
 - **Extension (thin):** `getSnapshot()` (accessibility tree via `chrome.debugger`/CDP + DOM heuristics), `act({type, target, value})` (focus, type, select, check, click), page-change events, field highlight. No AI logic, no credentials.
-- **Agent server (TypeScript, Node):** runs Claude via the Claude Agent SDK / headless Claude Code (`stream-json`, long-lived process) on the user's Claude subscription login. Only custom MCP tools are exposed (`get_snapshot`, `fill_field`, `click`, `ask_user`, `speak`); all built-in tools (Bash, Edit, Write, Read, WebFetch, etc.) disabled; runs from an empty working directory. The **policy gate** lives in the MCP `click`/navigation tool: action `kind` (submit/pay/delete/send/cross-domain) is classified by rules, not the model, and blocked until the voice app reports the confirm phrase.
+- **Agent server (TypeScript, Node):** runs Claude via the Claude Agent SDK on the user's Claude subscription login, as pre-warmed, tool-less structured-output calls (`repairFormModel`, `parseIntent`) — **intent-as-data** (decided after research; supersedes the earlier MCP-tools plan). All built-in tools, settings, claude.ai connectors and auto-memory disabled; empty working directory. A deterministic dialogue reducer + single **Executor** carry out every action; the **policy gate** lives in the Executor (and is re-checked in the extension): action `kind` (submit/pay/delete/send/cross-domain) is classified by rules, not the model, and blocked until the voice socket delivers the exact confirm phrase.
 - **Voice app:** localhost web UI served by the agent server (Chrome page → Web Speech API for STT, mic permission just works on localhost). Output: Blip's own TTS and/or a screen-reader path for NVDA (ARIA live region; Windows NVDA Controller Client is a candidate — research to confirm).
 - **Deterministic work in code, not the model:** read-back loop, confirm flow, fill execution, profile lookups. Model is called for (1) page → form schema (once per page, background) and (2) utterance → intent/field values.
 
@@ -88,9 +88,12 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
 | Local app + thin extension over localhost WebSocket (not extension-only) | Cleaner two-person split; avoids Chrome side-panel mic permission issues; keeps Claude process and logic out of MV3 | — Pending |
-| Headless Claude Code / Agent SDK on subscription (not Messages API) | Team has subscriptions only | — Pending |
-| Only custom MCP tools; all built-in Claude Code tools disabled; empty working dir | Pages are untrusted; prompt injection must not reach Bash/files | — Pending |
-| Policy gate in deterministic MCP server code, action kind classified by rules | Core value: model cannot bypass the submit gate | — Pending |
+| Headless Claude via Agent SDK on subscription (not Messages API) | Team has subscriptions only; verified live: `apiKeySource: none`, Haiku turns 0.7–1.8 s | ✓ Good |
+| Intent-as-data: Claude gets only tool-less structured-output calls (`repairFormModel`, `parseIntent`); deterministic Executor runs every action (supersedes "MCP tools") | One round trip per utterance; nothing for prompt injection to click; fully testable with a fake brain. MCP-tools agent mode deferred to v2 (AGENT-01), routed through the Executor if built | — Pending |
+| All built-in tools, settings, connectors and auto-memory disabled; empty cwd; init tool-list assertion | Pages are untrusted; research found the default SDK config leaks claude.ai connectors and memory | — Pending |
+| Policy gate in the Executor + extension (default-deny, kind from fail-closed rules, grant bound to target/kind/URL/values hash, 30 s TTL) | Core value: model cannot bypass the submit gate; Enter-to-submit and div buttons bypass a click-only gate | — Pending |
+| Grammar first, model last | ~70–80% of commands (incl. confirm phrase) are code templates; keeps latency and quota down | — Pending |
+| Vertical MVP phase structure in each workstream | Always-demoable state; integration milestones at ~h6–8, ~h12, ~h20 | — Pending |
 | Distinct confirm phrase ("submit booking"), never bare "yes" | Irreversible actions need deliberate intent (from source plan) | — Pending |
 | TypeScript for everything | One toolchain shared by both developers | — Pending |
 | Web Speech API + push-to-talk first; on-device models out of scope | Fastest path to working voice in timebox | — Pending |
