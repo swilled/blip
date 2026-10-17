@@ -1,5 +1,5 @@
 ---
-status: testing
+status: partial
 phase: 01-contract-and-walking-skeleton
 source: 01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md, 01-04-SUMMARY.md, 01-05-SUMMARY.md
 started: 2026-10-17T00:23:32Z
@@ -9,12 +9,7 @@ updated: 2026-10-17T00:23:32Z
 ## Current Test
 <!-- OVERWRITE each test - shows where we are -->
 
-number: 1
-name: Cold Start Smoke Test
-expected: |
-  Stop anything on port 7777. From the repo root run `npm run dev -- --brain=fake`.
-  Server boots with no errors and prints that it is listening on 127.0.0.1:7777; a REPL prompt appears.
-awaiting: user response
+[testing paused - 2 items outstanding: voice UI attach, M0 sign-off]
 
 ## Tests
 
@@ -36,20 +31,23 @@ result: [pending]
 
 ### 5. Voice UI attaches to the server
 expected: With `npm run dev -- --brain=fake --no-repl` running, the voice UI pointed at ws://127.0.0.1:7777/ws receives welcome then state, and speaks a reply to "what's here".
-result: [pending]
+result: skipped
+reason: needs the voice UI, which is not in this repo yet; scripted voice client got welcome+state
 
 ### 6. Voice developer M0 sign-off
 expected: Voice developer has approved the M0 PR in writing; PROTOCOL.md and 01-03-SUMMARY read `M0 approval: received (<location>)`.
-result: [pending]
+result: blocked
+blocked_by: prior-phase
+reason: waiting on voice developer written approval of M0 PR
 
 ## Summary
 
 total: 6
-passed: 0
+passed: 4
 issues: 0
-pending: 6
-skipped: 0
-blocked: 0
+pending: 0
+skipped: 1
+blocked: 1
 
 ## Gaps
 
