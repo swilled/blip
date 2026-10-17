@@ -8,15 +8,15 @@ The owner delegated the exact version choice by repeatedly asking GSD to choose 
 
 ## Live-use gate
 
-ownerLiveUse: pending explicit owner confirmation
+ownerLiveUse: not confirmed
 
-No subscription credentials were inspected and no Claude request was made. The live spike remains closed until the owner explicitly confirms their own subscription availability and permitted local use, then this report is manually updated to contain the exact line `ownerLiveUse: confirmed`.
+The user's latest response was: “do what u think is best if this is a discuss phase, on the core track.” This does not confirm an active eligible local subscription or authorize its usage allocation, so the live-use gate remains closed. No subscription credentials were inspected and no Claude request was made. The live spike leg was not run; no live result is claimed.
 
 ## Offline setup and spike
 
 - Installed the exact server dependency `@anthropic-ai/claude-agent-sdk@0.3.302`, including npm's Windows x64 optional runtime.
 - Added `npm run claude:spike --workspace @blip/server -- --max-seconds 1800`. Its default path returns before dynamically importing the SDK and makes no provider request; `--live` requires both exact approval lines above.
-- Offline verification: `npm run claude:spike --workspace @blip/server -- --max-seconds 1800` passed. It exited through the offline branch without importing the SDK or making a provider request.
+- Offline verification: `npm run claude:spike --workspace @blip/server -- --max-seconds 1800` passed on 2026-10-17. It exited through the offline branch without importing the SDK or making a provider request.
 
 ## Lifecycle decision
 
