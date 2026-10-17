@@ -100,7 +100,7 @@ describe("demo reset", () => {
     const runner = fake.spawnCalls[0]!;
     expect(runner.command).toBe("node");
     expect(Array.isArray(runner.args)).toBe(true);
-    expect(runner.args).toEqual(["--import", "tsx", "dev/mock-server/src/run-real.ts"]);
+    expect(runner.args).toEqual(["--import", "tsx", "dev/mock-server/src/run-real.ts", "--browser-extension"]);
     expect(runner.options).toMatchObject({ cwd: fake.repoRoot, detached: true, stdio: "ignore" });
     expect(runner.options.shell).toBeUndefined();
 
@@ -108,7 +108,8 @@ describe("demo reset", () => {
     expect(chrome.command).toBe(fake.deps.chrome);
     expect(Array.isArray(chrome.args)).toBe(true);
     expect(chrome.args).toEqual([
-      `--user-data-dir=${join(fake.repoRoot, ".chrome-profile")}`,
+      `--user-data-dir=${join(fake.repoRoot, ".chrome-profile-demo")}`,
+      `--load-extension=${join(fake.repoRoot, "dev", "mock-server", "extension")}`,
       "http://127.0.0.1:7777/fixtures/forms/broken.html",
     ]);
     expect(chrome.options).toMatchObject({ cwd: fake.repoRoot, detached: true, stdio: "ignore" });

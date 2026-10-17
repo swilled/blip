@@ -1,6 +1,6 @@
-// Core's real server in-process (dev true, fake brain, fake extension) serving apps/voice/dist, plus the PTT
-// hook and the voice window. Imports core modules read-only. Used until scripts/dev.ts serves the voice build (HO-7).
-//   node --import tsx dev/mock-server/src/run-real.ts [--fixture=booking|broken] [--port=7777] [--fake-delay=1500]
+// Core's real server in-process (dev true, fake brain) serving apps/voice/dist, plus the PTT hook and voice window.
+// Imports core modules read-only. The fake extension is the default; --browser-extension loads the local DOM bridge.
+//   node --import tsx dev/mock-server/src/run-real.ts [--fixture=booking|broken] [--port=7777] [--fake-delay=1500] [--browser-extension]
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,9 @@ import type { FakeExtension } from "../../../tools/fake-extension/src/fake-exten
 import { launchVoiceWindow } from "./launch-window";
 import { startPttWire } from "./ptt-wire";
 
+/** Stable id derived from the public key in dev/mock-server/extension/manifest.json. */
+export const DEMO_EXTENSION_ID = "biplgmlbldfekkjdjanlgmhjabdgaknc";
+
 export interface RealOptions {
   port?: number;
   fixture?: FixtureName;
@@ -24,11 +27,13 @@ export interface RealOptions {
   gate?: GatePort;
   now?: () => number;
   onActRequest?: (request: ActRequest) => void;
+  /** Use the local Chrome bridge instead of the in-memory extension fixture. */
+  browserExtension?: boolean;
 }
 
 export async function startReal(opts: RealOptions = {}): Promise<{
   server: RunningServer;
-  extension: FakeExtension;
+  extension: FakeExtension | undefined;
   close(): Promise<void>;
 }> {
   const staticDir = opts.staticDir ?? fileURLToPath(new URL("../../../apps/voice/dist", import.meta.url));
@@ -40,8 +45,9 @@ export async function startReal(opts: RealOptions = {}): Promise<{
   ];
   const server = await startServer({
     port: opts.port ?? DEFAULT_PORT,
-    dev: true, // the fake extension connects without an Origin, exactly as scripts/dev.ts does
+    dev: true, // the default fake extension has no Origin; browser mode is pinned by its extension id
     brain: "fake",
+    ...(opts.browserExtension ? { extensionId: DEMO_EXTENSION_ID } : {}),
     fakeDelayMs: opts.fakeDelayMs ?? 1500,
     staticRoots,
     handlers: createDialogueHandlers({
@@ -50,9 +56,11 @@ export async function startReal(opts: RealOptions = {}): Promise<{
       ...(opts.onActRequest !== undefined ? { onActRequest: opts.onActRequest } : {}),
     }),
   });
-  const extension = startFakeExtension({ url: server.url, fixture: opts.fixture ?? "broken" });
+  const extension = opts.browserExtension
+    ? undefined
+    : startFakeExtension({ url: server.url, fixture: opts.fixture ?? "broken" });
   try {
-    await extension.connected;
+    await extension?.connected;
   } catch (err) {
     await server.close();
     throw err;
@@ -61,7 +69,7 @@ export async function startReal(opts: RealOptions = {}): Promise<{
     server,
     extension,
     async close() {
-      extension.close();
+      extension?.close();
       await server.close();
     },
   };
@@ -71,7 +79,12 @@ const entry = process.argv[1]?.replace(/\\/g, "/");
 if (entry?.endsWith("/run-real.ts")) {
   const { values } = parseArgs({
     args: process.argv.slice(2),
-    options: { fixture: { type: "string", default: "broken" }, port: { type: "string" }, "fake-delay": { type: "string" } },
+    options: {
+      fixture: { type: "string", default: "broken" },
+      port: { type: "string" },
+      "fake-delay": { type: "string" },
+      "browser-extension": { type: "boolean", default: false },
+    },
     strict: true,
   });
   if (!(FIXTURE_NAMES as readonly string[]).includes(values.fixture)) {
@@ -82,10 +95,11 @@ if (entry?.endsWith("/run-real.ts")) {
     fixture: values.fixture as FixtureName,
     ...(values.port !== undefined ? { port: Number(values.port) } : {}),
     ...(values["fake-delay"] !== undefined ? { fakeDelayMs: Number(values["fake-delay"]) } : {}),
+    ...(values["browser-extension"] ? { browserExtension: true } : {}),
   });
-  console.log(`blip real server (fake brain, ${values.fixture}): http://127.0.0.1:${real.server.port}/`);
+  console.log(`blip real server (fake brain, ${values.fixture}${values["browser-extension"] ? ", live Chrome form bridge" : ""}): http://127.0.0.1:${real.server.port}/`);
   const stopPtt = await startPttWire(real.server.port);
-  await launchVoiceWindow({ port: real.server.port });
+  await launchVoiceWindow({ port: real.server.port, demoExtension: Boolean(values["browser-extension"]) });
   const pidFile = join(fileURLToPath(new URL("../../../", import.meta.url)), ".demo-pid");
   writeFileSync(pidFile, String(process.pid), "utf8");
   console.log("ready. Press Ctrl+C to stop");

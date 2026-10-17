@@ -17,6 +17,12 @@ describe("buildChromeArgs", () => {
     expect(args).toContain("--app=http://127.0.0.1:9999/");
     expect(args.join(" ")).not.toContain("localhost");
   });
+
+  it("loads the local form bridge in a separate demo Chrome profile", () => {
+    const args = buildChromeArgs({ demoExtension: true });
+    expect(args.some((a) => /^--user-data-dir=.*\.chrome-profile-demo$/.test(a))).toBe(true);
+    expect(args.some((a) => a.startsWith("--load-extension=") && /dev[\\/]mock-server[\\/]extension$/.test(a))).toBe(true);
+  });
 });
 
 describe("resolveChromePath", () => {

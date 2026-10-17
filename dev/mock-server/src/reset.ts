@@ -79,7 +79,7 @@ export async function resetDemo(deps: ResetDependencies): Promise<void> {
 
   const runner = deps.spawn(
     "node",
-    ["--import", "tsx", "dev/mock-server/src/run-real.ts"],
+    ["--import", "tsx", "dev/mock-server/src/run-real.ts", "--browser-extension"],
     { cwd: deps.repoRoot, detached: true, stdio: "ignore" },
   );
   runner.unref();
@@ -89,7 +89,11 @@ export async function resetDemo(deps: ResetDependencies): Promise<void> {
 
   const chrome = deps.spawn(
     deps.chrome,
-    [`--user-data-dir=${join(deps.repoRoot, ".chrome-profile")}`, FORM_URL],
+    [
+      `--user-data-dir=${join(deps.repoRoot, ".chrome-profile-demo")}`,
+      `--load-extension=${join(deps.repoRoot, "dev", "mock-server", "extension")}`,
+      FORM_URL,
+    ],
     { cwd: deps.repoRoot, detached: true, stdio: "ignore" },
   );
   chrome.unref();
