@@ -1,0 +1,46 @@
+{
+  "snapshotId": "result-ok-1",
+  "version": 2,
+  "tabId": 1,
+  "url": "http://127.0.0.1:7777/fixtures/forms/booking-done.html",
+  "origin": "http://127.0.0.1:7777",
+  "title": "Booking confirmed",
+  "headings": [
+    {
+      "level": 1,
+      "text": "Booking confirmed"
+    }
+  ],
+  "alerts": [
+    "Booking confirmed. Confirmation number BK-48213."
+  ],
+  "elements": [
+    {
+      "frameId": 0,
+      "category": "action",
+      "labelCandidates": [],
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "id": "e1",
+      "tag": "a",
+      "role": "link",
+      "text": "Back to home",
+      "href": "http://127.0.0.1:7777/",
+      "order": 1,
+      "kind": "click-safe",
+      "kindReasons": [
+        "link to the same domain"
+      ]
+    }
+  ],
+  "truncated": false,
+  "structuralHash": "result-ok-structure-v1",
+  "capturedAt": 1760000060000
+}

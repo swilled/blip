@@ -1,0 +1,248 @@
+{
+  "protocolVersion": 1,
+  "frozenAt": "2026-10-17",
+  "messages": {
+    "act.request": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "extension"
+      ]
+    },
+    "act.result": {
+      "senders": [
+        "extension"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "announce": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "extension"
+      ]
+    },
+    "confirm.armed": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "voice"
+      ]
+    },
+    "confirm.cleared": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "voice"
+      ]
+    },
+    "control": {
+      "senders": [
+        "voice"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "earcon": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "voice"
+      ]
+    },
+    "error": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "extension",
+        "voice"
+      ]
+    },
+    "hello": {
+      "senders": [
+        "extension",
+        "voice"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "highlight": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "extension"
+      ]
+    },
+    "page.changed": {
+      "senders": [
+        "extension"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "ping": {
+      "senders": [
+        "extension"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "pong": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "extension"
+      ]
+    },
+    "ptt": {
+      "senders": [
+        "voice"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "ptt.hotkey": {
+      "senders": [
+        "extension"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "settings": {
+      "senders": [
+        "voice"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "snapshot.request": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "extension"
+      ]
+    },
+    "snapshot.result": {
+      "senders": [
+        "extension"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "speak": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "voice"
+      ]
+    },
+    "speak.done": {
+      "senders": [
+        "voice"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "state": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "voice"
+      ]
+    },
+    "transcript": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "voice"
+      ]
+    },
+    "utterance": {
+      "senders": [
+        "voice"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
+    "welcome": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "extension",
+        "voice"
+      ]
+    }
+  },
+  "intents": [
+    "answer",
+    "clarify",
+    "click_safe",
+    "describe",
+    "fill_profile",
+    "go_to_field",
+    "read_back",
+    "read_form",
+    "request_action",
+    "set_fields",
+    "spell",
+    "stop",
+    "undo",
+    "unknown",
+    "what_went_wrong",
+    "whats_required"
+  ],
+  "actionKinds": [
+    "check",
+    "click-safe",
+    "delete",
+    "fill",
+    "navigate-cross-domain",
+    "pay",
+    "select",
+    "send",
+    "submit"
+  ],
+  "dialogueStates": [
+    "awaiting-confirm",
+    "awaiting-result",
+    "awaiting-value",
+    "describing",
+    "executing",
+    "no-page",
+    "reading-back",
+    "reading-result",
+    "ready"
+  ],
+  "fixtures": [
+    "booking.snapshot.json",
+    "broken.snapshot.json",
+    "result-ok.snapshot.json",
+    "result-errors.snapshot.json",
+    "booking.formmodel.json"
+  ]
+}

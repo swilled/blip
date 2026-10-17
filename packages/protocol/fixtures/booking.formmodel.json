@@ -1,0 +1,244 @@
+{
+  "snapshotVersion": 1,
+  "structuralHash": "booking-structure-v1",
+  "url": "http://127.0.0.1:7777/fixtures/forms/booking.html",
+  "title": "Hotel booking",
+  "fields": [
+    {
+      "id": "e1",
+      "role": "textbox",
+      "type": "text",
+      "label": "Full name",
+      "labelSource": "label",
+      "confidence": 0.95,
+      "required": true,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 1,
+      "autocomplete": "name",
+      "group": "Guest details"
+    },
+    {
+      "id": "e2",
+      "role": "textbox",
+      "type": "email",
+      "label": "Email address",
+      "labelSource": "label",
+      "confidence": 0.95,
+      "required": true,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 2,
+      "autocomplete": "email",
+      "group": "Guest details"
+    },
+    {
+      "id": "e3",
+      "role": "textbox",
+      "type": "tel",
+      "label": "Phone number",
+      "labelSource": "aria",
+      "confidence": 0.95,
+      "required": false,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 3,
+      "hint": "Include country code",
+      "autocomplete": "tel",
+      "group": "Guest details"
+    },
+    {
+      "id": "e4",
+      "role": "textbox",
+      "type": "date",
+      "label": "Check-in date",
+      "labelSource": "label",
+      "confidence": 0.95,
+      "required": true,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 4,
+      "hint": "Format MM/DD/YYYY",
+      "group": "Stay"
+    },
+    {
+      "id": "e5",
+      "role": "combobox",
+      "type": "select",
+      "label": "Room type",
+      "labelSource": "label",
+      "confidence": 0.95,
+      "required": true,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 5,
+      "options": [
+        {
+          "value": "",
+          "label": "Choose a room"
+        },
+        {
+          "value": "standard",
+          "label": "Standard"
+        },
+        {
+          "value": "deluxe",
+          "label": "Deluxe"
+        },
+        {
+          "value": "suite",
+          "label": "Suite"
+        }
+      ],
+      "group": "Stay"
+    },
+    {
+      "id": "e6",
+      "role": "radiogroup",
+      "type": "radio-group",
+      "label": "Bed preference",
+      "labelSource": "aria",
+      "confidence": 0.95,
+      "required": true,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 6,
+      "options": [
+        {
+          "value": "king",
+          "label": "King"
+        },
+        {
+          "value": "twin",
+          "label": "Twin"
+        }
+      ],
+      "group": "Stay"
+    },
+    {
+      "id": "e7",
+      "role": "checkbox",
+      "type": "checkbox",
+      "label": "Breakfast included",
+      "labelSource": "label",
+      "confidence": 0.95,
+      "required": false,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 7,
+      "group": "Stay"
+    },
+    {
+      "id": "e8",
+      "role": "textbox",
+      "type": "textarea",
+      "label": "Special requests",
+      "labelSource": "label",
+      "confidence": 0.95,
+      "required": false,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 8,
+      "group": "Stay"
+    },
+    {
+      "id": "e9",
+      "role": "textbox",
+      "type": "text",
+      "label": "Card number",
+      "labelSource": "label",
+      "confidence": 0.95,
+      "required": true,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "card-number",
+      "error": null,
+      "disabled": false,
+      "order": 9,
+      "autocomplete": "cc-number",
+      "group": "Payment"
+    }
+  ],
+  "actions": [
+    {
+      "id": "e10",
+      "label": "Book room",
+      "kind": "submit",
+      "kindReasons": [
+        "button type=submit inside form"
+      ],
+      "primary": true
+    },
+    {
+      "id": "e11",
+      "label": "Add another guest",
+      "kind": "click-safe",
+      "kindReasons": [
+        "type=button with text on the click-safe allowlist"
+      ],
+      "primary": false
+    },
+    {
+      "id": "e12",
+      "label": "Privacy policy",
+      "kind": "navigate-cross-domain",
+      "kindReasons": [
+        "link to a different registrable domain"
+      ],
+      "href": "https://example.com/privacy",
+      "primary": false
+    }
+  ],
+  "groups": [
+    {
+      "name": "Guest details",
+      "fieldIds": [
+        "e1",
+        "e2",
+        "e3"
+      ]
+    },
+    {
+      "name": "Stay",
+      "fieldIds": [
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8"
+      ]
+    },
+    {
+      "name": "Payment",
+      "fieldIds": [
+        "e9"
+      ]
+    }
+  ],
+  "pageErrors": [],
+  "repairStatus": "baseline"
+}
