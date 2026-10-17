@@ -291,7 +291,7 @@ No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skill
 
 ## Team, Workstreams & Ownership
 
-Two developers on separate Windows machines share this repo. GSD planning is split into two workstreams so neither machine edits the other's STATE/ROADMAP/phases:
+Two developers on separate Windows machines share this repo. **Pranav is working on the `core` workstream.** GSD planning is split into two workstreams so neither machine edits the other's STATE/ROADMAP/phases:
 
 | Workstream | Owner | Owns (code) | Planning dir |
 |------------|-------|-------------|--------------|
