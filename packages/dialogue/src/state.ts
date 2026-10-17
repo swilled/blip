@@ -1,4 +1,5 @@
-import type { PayloadOf } from "@blip/protocol";
+import { isLowConfidenceLabel, type FormModel, type PayloadOf } from "@blip/protocol";
+import { fillableFields, spokenLabel } from "./fields";
 
 export type Mode = "ready" | "reading" | "awaiting-value" | "reading-back" | "awaiting-confirm" | "executing";
 
@@ -10,6 +11,7 @@ export type DialogueState = {
   seq: number;
   readCursor: number | null;
   requiredCursor: number | null;
+  labelDisclosures: Record<string, number>;
   currentFieldId: string | null;
   pendingOptions: { fieldId: string } | null;
   pendingFill: { fieldId: string; replaced: boolean; previousValue?: string | null; undoPreviousValue?: string | null; profileBatch?: boolean; undoEntry?: UndoEntry } | null;
@@ -45,6 +47,7 @@ export function initialState(): DialogueState {
     seq: 1,
     readCursor: null,
     requiredCursor: null,
+    labelDisclosures: {},
     currentFieldId: null,
     pendingOptions: null,
     pendingFill: null,
@@ -56,6 +59,26 @@ export function initialState(): DialogueState {
     readBack: null,
     confirm: null,
     previousValues: {},
+  };
+}
+
+/** Return the one-time disclosure for a guessed field label in this snapshot. */
+export function discloseFieldLabel(
+  state: DialogueState,
+  form: FormModel,
+  fieldId: string,
+): { state: DialogueState; text: string } {
+  const field = fillableFields(form).find((item) => item.id === fieldId);
+  if (!field || !isLowConfidenceLabel(field) || state.labelDisclosures[field.id] === form.snapshotVersion) {
+    return { state, text: "" };
+  }
+  const label = spokenLabel(field, fillableFields(form).indexOf(field) + 1);
+  const text = field.labelSource === "inferred"
+    ? `I guessed ${label}. The form model marks this label as inferred.`
+    : `I guessed ${label}. The form model marks this label as low confidence.`;
+  return {
+    state: { ...state, labelDisclosures: { ...state.labelDisclosures, [field.id]: form.snapshotVersion } },
+    text,
   };
 }
 

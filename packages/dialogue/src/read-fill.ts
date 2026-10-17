@@ -1,8 +1,8 @@
 import type { Field, FormModel } from "@blip/protocol";
 import type { DialogueContext, Effect } from "./effects";
 import type { DialogueState, UndoEntry } from "./state";
-import { cancelEffect, speakEffect } from "./state";
-import { fillableFields, matchOption, optionLabelFor, optionList, profileFieldMatches, resolveField, spokenLabel } from "./fields";
+import { cancelEffect, discloseFieldLabel, speakEffect } from "./state";
+import { fillableFields, matchOption, optionLabelFor, optionList, profileFieldMatches, requiredEmpty, resolveField, spokenLabel } from "./fields";
 import { cleanValue, normalizeCommand, normalizeEmail, normalizeNumberish } from "./normalize";
 import { changeText, echoText, profileBatchText, readBatchText, requiredEmptyText, requiredFieldsBatchText, spellValueText, undoSummaryText } from "./templates";
 import type { DialogueEvent } from "./events";
@@ -45,9 +45,28 @@ function errorAnswer(state: DialogueState, text: string): DialogueResult {
   return { state: spoken.state, effects: [spoken.effect] };
 }
 
+/** Disclose a guessed label once per field and snapshot, using only model metadata. */
+function discloseFields(state: DialogueState, form: FormModel, fields: Field[]): { state: DialogueState; text: string } {
+  const disclosures: string[] = [];
+  let nextState = state;
+  for (const field of fields) {
+    const result = discloseFieldLabel(nextState, form, field.id);
+    nextState = result.state;
+    if (result.text) disclosures.push(result.text);
+  }
+  return { state: nextState, text: disclosures.join(" ") };
+}
+
+function withFieldDisclosure(state: DialogueState, form: FormModel, field: Field, text: string): DialogueResult {
+  const disclosure = discloseFields(state, form, [field]);
+  const spoken = speakEffect(disclosure.state, [disclosure.text, text].filter(Boolean).join(" "), "answer", { interruptible: true });
+  return { state: spoken.state, effects: [spoken.effect] };
+}
+
 function read(state: DialogueState, form: FormModel, start: number): DialogueResult {
   const batch = readBatchText(form, start, 3);
-  const spoken = speakEffect(state, batch.text, "answer", { interruptible: true });
+  const disclosure = discloseFields(state, form, fillableFields(form).slice(start, start + 3));
+  const spoken = speakEffect(disclosure.state, [disclosure.text, batch.text].filter(Boolean).join(" "), "answer", { interruptible: true });
   return {
     state: {
       ...spoken.state,
@@ -104,9 +123,9 @@ export function handleSpellUtterance(
   if (match.kind === "none") return answer(state, "I couldn't find that field. Which field should I spell?");
   if (match.field.sensitive !== "none") return handoffSensitive(state, match.field, ctx.form);
   if (!match.field.hasValue || match.field.value === null || match.field.value === "") {
-    return answer(state, `${spokenLabel(match.field, fieldNumber(ctx.form, match.field))} is empty, so there is nothing to spell.`);
+    return withFieldDisclosure(state, ctx.form, match.field, `${spokenLabel(match.field, fieldNumber(ctx.form, match.field))} is empty, so there is nothing to spell.`);
   }
-  return answer(state, spellValueText(match.field.value));
+  return withFieldDisclosure(state, ctx.form, match.field, spellValueText(match.field.value));
 }
 
 /** Handle "change {field} to {value}" without asking the model to route a known command. */
@@ -150,7 +169,10 @@ function handoffSensitive(state: DialogueState, field: Field, form: FormModel): 
     pendingFill: null,
     currentFieldId: field.id,
   };
-  const spoken = speakEffect(base, `${label} is sensitive. I can't fill it. I moved to the field so you can type it.`, "answer", { interruptible: true });
+  const disclosure = discloseFields(base, form, [field]);
+  const text = [disclosure.text, `${label} is sensitive. I can't fill it. I moved to the field so you can type it.`]
+    .filter(Boolean).join(" ");
+  const spoken = speakEffect(disclosure.state, text, "answer", { interruptible: true });
   return { state: spoken.state, effects: [{ kind: "focus", fieldId: field.id }, spoken.effect] };
 }
 
@@ -159,9 +181,13 @@ function storeOldValue(state: DialogueState, field: Field): Record<string, strin
   return { ...state.previousValues, [field.id]: field.value };
 }
 
-function issueValueEffect(state: DialogueState, field: Field, value: string, kind: "fill" | "select", optionValue?: string): DialogueResult {
+function issueValueEffect(state: DialogueState, field: Field, value: string, kind: "fill" | "select", form: FormModel, optionValue?: string): DialogueResult {
+  const disclosure = discloseFields(state, form, [field]);
+  const beforeAction = disclosure.text
+    ? speakEffect(disclosure.state, disclosure.text, "answer", { interruptible: true })
+    : null;
   const next: DialogueState = {
-    ...state,
+    ...(beforeAction?.state ?? disclosure.state),
     mode: "awaiting-value",
     readCursor: null,
     currentFieldId: field.id,
@@ -175,9 +201,12 @@ function issueValueEffect(state: DialogueState, field: Field, value: string, kin
   };
   return {
     state: next,
-    effects: [kind === "fill"
-      ? { kind: "fill", fieldId: field.id, value }
-      : { kind: "select", fieldId: field.id, optionValue: optionValue ?? value }],
+    effects: [
+      ...(beforeAction ? [beforeAction.effect] : []),
+      kind === "fill"
+        ? { kind: "fill", fieldId: field.id, value }
+        : { kind: "select", fieldId: field.id, optionValue: optionValue ?? value },
+    ],
   };
 }
 
@@ -200,12 +229,12 @@ function fillField(state: DialogueState, field: Field, value: string, form: Form
   }
   if (field.type === "select" || field.type === "radio-group") {
     const match = matchOption(field, normalized);
-    if (match.kind === "match") return issueValueEffect(state, field, match.option.value, "select", match.option.value);
+    if (match.kind === "match") return issueValueEffect(state, field, match.option.value, "select", form, match.option.value);
     if (match.kind === "many") return answer(state, `Which one? ${sayOr(speakableLabels(match.labels))}?`);
     return null;
   }
   if (!isTextLike(field)) return null;
-  return issueValueEffect(state, field, normalized, "fill");
+  return issueValueEffect(state, field, normalized, "fill", form);
 }
 
 function stripLeadingFillPrefix(raw: string, norm: string): { raw: string; prefix: string | null } {
@@ -251,7 +280,7 @@ function controlOrLongValue(norm: string, tokenCount: number): boolean {
 
 function optionValue(state: DialogueState, field: Field, text: string, form: FormModel): DialogueResult | null {
   const matched = matchOption(field, text);
-  if (matched.kind === "match") return issueValueEffect(state, field, matched.option.value, "select", matched.option.value);
+  if (matched.kind === "match") return issueValueEffect(state, field, matched.option.value, "select", form, matched.option.value);
   if (matched.kind === "many") return answer(state, `Which one? ${numberedOptions(form, field.id) ?? ""}`);
   return null;
 }
@@ -545,7 +574,11 @@ export function handleReadUtterance(
   if (CONTINUE.has(norm)) {
     if (state.requiredCursor !== null && ctx.form !== null) {
       const batch = requiredFieldsBatchText(ctx.form, state.requiredCursor);
-      const spoken = speakEffect(state, batch.text, "answer", { interruptible: true });
+      const disclosure = discloseFields(state, ctx.form, requiredEmpty(ctx.form).slice(state.requiredCursor, state.requiredCursor + 3));
+      const text = batch.opening
+        ? [batch.opening, disclosure.text, batch.labelText].filter(Boolean).join(" ")
+        : batch.text;
+      const spoken = speakEffect(disclosure.state, text, "answer", { interruptible: true });
       return { state: { ...spoken.state, requiredCursor: batch.nextCursor }, effects: [spoken.effect] };
     }
     if (state.readCursor === null) return answer(state, "Say read the form to start.");
@@ -561,13 +594,21 @@ export function handleReadUtterance(
   if (REPEAT.has(norm)) return answer(state, state.lastSpoken ?? "There's nothing to repeat.");
 
   if (MISSING.has(norm)) {
-    return answer(state, ctx.form === null ? "I can't read the page yet. Please reconnect or try again." : requiredEmptyText(ctx.form));
+    if (ctx.form === null) return answer(state, "I can't read the page yet. Please reconnect or try again.");
+    const missing = requiredEmpty(ctx.form);
+    const disclosure = discloseFields(state, ctx.form, missing);
+    const spoken = speakEffect(disclosure.state, [disclosure.text, requiredEmptyText(ctx.form)].filter(Boolean).join(" "), "answer", { interruptible: true });
+    return { state: spoken.state, effects: [spoken.effect] };
   }
 
   if (REQUIRED.has(norm)) {
     if (ctx.form === null) return answer(state, "I can't read the page yet. Please reconnect or try again.");
     const batch = requiredFieldsBatchText(ctx.form);
-    const spoken = speakEffect(state, batch.text, "answer", { interruptible: true });
+    const disclosure = discloseFields(state, ctx.form, requiredEmpty(ctx.form).slice(0, 3));
+    const text = batch.opening
+      ? [batch.opening, disclosure.text, batch.labelText].filter(Boolean).join(" ")
+      : batch.text;
+    const spoken = speakEffect(disclosure.state, text, "answer", { interruptible: true });
     return { state: { ...spoken.state, requiredCursor: batch.nextCursor }, effects: [spoken.effect] };
   }
 
@@ -587,7 +628,7 @@ export function handleOptionPick(
 
   const matched = matchOption(field, raw);
   if (matched.kind === "match") {
-    return issueValueEffect(state, field, matched.option.value, "select", matched.option.value);
+    return issueValueEffect(state, field, matched.option.value, "select", ctx.form, matched.option.value);
   }
 
   const norm = normalizeCommand(raw);

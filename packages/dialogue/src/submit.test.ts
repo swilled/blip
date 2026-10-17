@@ -441,6 +441,7 @@ describe("submit and read-back flow", () => {
       expect(result.effects).toEqual([
         { kind: "clearConfirm", grantId: "g1", reason: "value-changed" },
         { kind: "speak", speakId: "b3", text: "The form changed, so I'm not submitting. Say submit when you're ready.", category: "error", interruptible: true },
+        { kind: "speak", speakId: "b4", text: "I guessed probably Your name. The form model marks this label as low confidence.", category: "answer", interruptible: true },
         { kind: "fill", fieldId: "e1", value: "Ada Lovelace" },
       ]);
       expect(result.state.mode).toBe("awaiting-value");

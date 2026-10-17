@@ -192,7 +192,10 @@ describe("dialogue read and option picks", () => {
         : field),
     });
     const command = reduce(initialState(), say("change email to new@example.com"), ctx(filled));
-    expect(command.effects).toEqual([{ kind: "fill", fieldId: "e2", value: "new@example.com" }]);
+    expect(command.effects).toEqual([
+      speak("I guessed probably Email. The form model marks this label as low confidence."),
+      { kind: "fill", fieldId: "e2", value: "new@example.com" },
+    ]);
     expect(command.state.pendingFill).toEqual({
       fieldId: "e2", replaced: true, previousValue: "old@example.com", undoPreviousValue: "old@example.com",
     });
@@ -262,7 +265,7 @@ describe("dialogue read and option picks", () => {
         : field),
     });
     const result = reduce(initialState(), say("spell email"), ctx(emailForm));
-    expect(result.effects).toEqual([speak("j, a, n, e, at, e, x, a, m, p, l, e, dot, c, o, m")]);
+    expect(result.effects).toEqual([speak("I guessed probably Email. The form model marks this label as low confidence. j, a, n, e, at, e, x, a, m, p, l, e, dot, c, o, m")]);
   });
 
   it("clarifies a missing or ambiguous spell target without model parsing", () => {
@@ -284,7 +287,7 @@ describe("dialogue read and option picks", () => {
     const result = readSurvey();
     expect(result.effects[0]?.kind).toBe("speak");
     expect(result.effects).toEqual([speak(
-      "Field 1: probably Your name, optional. Field 2: probably Email, required. Field 3: unlabeled field 3, required. Say continue for more.",
+      "I guessed probably Your name. The form model marks this label as low confidence. I guessed probably Email. The form model marks this label as low confidence. I guessed unlabeled field 3. The form model marks this label as inferred. Field 1: probably Your name, optional. Field 2: probably Email, required. Field 3: unlabeled field 3, required. Say continue for more.",
     )]);
     expect(result.state.mode).toBe("reading");
     expect(result.state.readCursor).toBe(3);
@@ -295,7 +298,7 @@ describe("dialogue read and option picks", () => {
   it("reads the final survey batch and offers non-placeholder options", () => {
     const result = readSecondSurveyBatch();
     expect(result.effects).toEqual([speak(
-      "Field 4: probably How did you hear about us, required. Options: one, Friend. Two, Web search. Three, Other. Field 5: probably Satisfaction, optional. Options: one, Low. Two, Medium. Three, High. Field 6: probably Age, optional. That is all 6 fields.",
+      "I guessed probably How did you hear about us. The form model marks this label as low confidence. I guessed probably Satisfaction. The form model marks this label as low confidence. I guessed probably Age. The form model marks this label as low confidence. Field 4: probably How did you hear about us, required. Options: one, Friend. Two, Web search. Three, Other. Field 5: probably Satisfaction, optional. Options: one, Low. Two, Medium. Three, High. Field 6: probably Age, optional. That is all 6 fields.",
       "b2",
     )]);
     expect(result.state.readCursor).toBeNull();
@@ -333,7 +336,7 @@ describe("dialogue read and option picks", () => {
   it("answers required-field grammar with the established spoken labels", () => {
     const result = reduce(initialState(), say("what's required"), ctx(survey));
     expect(result.effects).toEqual([speak(
-      "3 required fields are empty: probably Email, unlabeled field 3, probably How did you hear about us.",
+      "3 required fields are empty: I guessed probably Email. The form model marks this label as low confidence. I guessed unlabeled field 3. The form model marks this label as inferred. I guessed probably How did you hear about us. The form model marks this label as low confidence. probably Email, unlabeled field 3, probably How did you hear about us.",
     )]);
     const optional = FormModel.parse({
       ...survey,
@@ -351,12 +354,12 @@ describe("dialogue read and option picks", () => {
     });
     const first = reduce(initialState(), say("what's required"), ctx(manyRequired));
     expect(first.effects).toEqual([speak(
-      "6 required fields are empty: probably Your name, probably Email, unlabeled field 3. Say continue for more.",
+      "6 required fields are empty: I guessed probably Your name. The form model marks this label as low confidence. I guessed probably Email. The form model marks this label as low confidence. I guessed unlabeled field 3. The form model marks this label as inferred. probably Your name, probably Email, unlabeled field 3. Say continue for more.",
     )]);
     expect(first.state.requiredCursor).toBe(3);
     const next = reduce(first.state, say("continue"), ctx(manyRequired));
     expect(next.effects).toEqual([speak(
-      "Still empty and required: probably How did you hear about us, probably Satisfaction, probably Age.",
+      "Still empty and required: I guessed probably How did you hear about us. The form model marks this label as low confidence. I guessed probably Satisfaction. The form model marks this label as low confidence. I guessed probably Age. The form model marks this label as low confidence. probably How did you hear about us, probably Satisfaction, probably Age.",
       "b2",
     )]);
     expect(next.state.requiredCursor).toBeNull();
@@ -373,16 +376,42 @@ describe("dialogue read and option picks", () => {
         : field),
     });
     expect(reduce({ ...initialState(), currentFieldId: "e2" }, say("where am I"), ctx(sensitive)).effects)
-      .toEqual([speak("Customer survey. Current field: probably Email, filled, hidden.")]);
+      .toEqual([speak("I guessed probably Email. The form model marks this label as low confidence. Customer survey. Current field: probably Email, filled, hidden.")]);
     expect(reduce({ ...afterRead.state, lastSpoken: "stale title and field" }, say("where am I"), ctx(null)).effects)
       .toEqual([speak("I can't read the page yet. Please reconnect or try again.", "b2")]);
+  });
+
+  it("discloses guessed labels once per snapshot and cites only explicit model evidence", () => {
+    const inferred = FormModel.parse({
+      ...survey,
+      snapshotVersion: 8,
+      fields: survey.fields.map((field) => field.id === "e1"
+        ? { ...field, labelSource: "inferred" as const, confidence: 0.4 }
+        : field.id === "e2"
+          ? { ...field, labelSource: "nearby-text" as const, confidence: 0.6 }
+          : field),
+    });
+    const first = reduce(initialState(), say("read the form"), ctx(inferred));
+    const firstText = (first.effects[0] as { text: string }).text;
+    expect(firstText).toContain("I guessed probably Your name. The form model marks this label as inferred.");
+    expect(firstText).toContain("I guessed probably Email. The form model marks this label as low confidence.");
+    expect(firstText).not.toContain("because of its placeholder");
+
+    const repeated = reduce(first.state, say("read the form"), ctx(inferred));
+    expect((repeated.effects[0] as { text: string }).text).not.toContain("I guessed probably Your name");
+    expect(repeated.state.labelDisclosures.e1).toBe(8);
+
+    const changed = FormModel.parse({ ...inferred, snapshotVersion: 9 });
+    const afterChange = reduce(repeated.state, say("read the form"), ctx(changed));
+    expect((afterChange.effects[0] as { text: string }).text).toContain("I guessed probably Your name. The form model marks this label as inferred.");
+    expect(afterChange.state.labelDisclosures.e1).toBe(9);
   });
 
   it.each(["what's missing", "what do I still need", "what do I need to fill"])(
     "names currently empty required fields when asked %s",
     (command) => {
       expect(reduce(initialState(), say(command), ctx(survey)).effects).toEqual([
-        speak(requiredEmptyText(survey)),
+        speak(`I guessed probably Email. The form model marks this label as low confidence. I guessed unlabeled field 3. The form model marks this label as inferred. I guessed probably How did you hear about us. The form model marks this label as low confidence. ${requiredEmptyText(survey)}`),
       ]);
     },
   );

@@ -50,8 +50,11 @@ function withPassword(form: FormModel): FormModel {
 describe("dialogue field fills and page-sourced echoes", () => {
   it("normalizes a named email edit and waits for the page result", () => {
     const result = reduce(initialState(), say("email is jane at example dot com"), ctx(survey));
-    expect(result.effects[0]?.kind).toBe("fill");
-    expect(result.effects).toEqual([{ kind: "fill", fieldId: "e2", value: "jane@example.com" }]);
+    expect(result.effects[0]?.kind).toBe("speak");
+    expect(result.effects).toEqual([
+      speak("I guessed probably Email. The form model marks this label as low confidence."),
+      { kind: "fill", fieldId: "e2", value: "jane@example.com" },
+    ]);
     expect(result.state.currentFieldId).toBe("e2");
     expect(result.state.pendingFill).toEqual({ fieldId: "e2", replaced: false, undoPreviousValue: null });
     expect(result.state.mode).toBe("awaiting-value");
@@ -64,7 +67,13 @@ describe("dialogue field fills and page-sourced echoes", () => {
   ])("fills the addressed field for %s", (utterance, value) => {
     const result = reduce(initialState(), say(utterance), ctx(survey));
     const fieldId = utterance.startsWith("field 3") ? "e3" : "e6";
-    expect(result.effects).toEqual([{ kind: "fill", fieldId, value }]);
+    const field = survey.fields.find((item) => item.id === fieldId)!;
+    const label = field.labelSource === "inferred" ? "unlabeled field 3" : `probably ${field.label}`;
+    const reason = field.labelSource === "inferred" ? "inferred" : "low confidence";
+    expect(result.effects).toEqual([
+      speak(`I guessed ${label}. The form model marks this label as ${reason}.`),
+      { kind: "fill", fieldId, value },
+    ]);
   });
 
   it("rejects malformed email and ambiguous field labels without a fill", () => {
@@ -88,7 +97,10 @@ describe("dialogue field fills and page-sourced echoes", () => {
   it("fills a bare value only for a guarded current text field", () => {
     const state = { ...initialState(), currentFieldId: "e1" };
     const result = reduce(state, say("jane doe"), ctx(survey));
-    expect(result.effects).toEqual([{ kind: "fill", fieldId: "e1", value: "jane doe" }]);
+    expect(result.effects).toEqual([
+      speak("I guessed probably Your name. The form model marks this label as low confidence."),
+      { kind: "fill", fieldId: "e1", value: "jane doe" },
+    ]);
 
     const uncertain = reduce(state, say("jane doe", 0.4), ctx(survey));
     expect(uncertain.effects).toEqual([speak("I'm not sure I heard that. Say it again.", "b1", "error")]);
@@ -127,7 +139,10 @@ describe("dialogue field fills and page-sourced echoes", () => {
 
   it("routes bare select values through option values and does not fill them", () => {
     const result = reduce({ ...initialState(), currentFieldId: "e4" }, say("Web search"), ctx(survey));
-    expect(result.effects).toEqual([{ kind: "select", fieldId: "e4", optionValue: "web" }]);
+    expect(result.effects).toEqual([
+      speak("I guessed probably How did you hear about us. The form model marks this label as low confidence."),
+      { kind: "select", fieldId: "e4", optionValue: "web" },
+    ]);
     expect(result.effects.some((effect) => effect.kind === "fill")).toBe(false);
   });
 

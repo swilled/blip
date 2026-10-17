@@ -163,9 +163,14 @@ export function requiredEmptyText(form: FormModel): string {
 }
 
 /** Answer "what's required" from the current snapshot, pausing after three labels. */
-export function requiredFieldsBatchText(form: FormModel, start = 0): { text: string; nextCursor: number | null } {
+export function requiredFieldsBatchText(form: FormModel, start = 0): {
+  text: string;
+  opening: string;
+  labelText: string;
+  nextCursor: number | null;
+} {
   const missing = requiredEmpty(form);
-  if (missing.length === 0) return { text: "No required fields are empty.", nextCursor: null };
+  if (missing.length === 0) return { text: "No required fields are empty.", opening: "", labelText: "", nextCursor: null };
   const fields = fillableFields(form);
   const labels = missing.slice(start, start + 3)
     .map((field) => spokenLabel(field, fields.indexOf(field) + 1));
@@ -173,8 +178,11 @@ export function requiredFieldsBatchText(form: FormModel, start = 0): { text: str
   const opening = start === 0
     ? `${missing.length} required ${missing.length === 1 ? "field is" : "fields are"} empty:`
     : "Still empty and required:";
+  const labelText = `${labels.join(", ")}.${more ? " Say continue for more." : ""}`;
   return {
-    text: `${opening} ${labels.join(", ")}.${more ? " Say continue for more." : ""}`,
+    text: `${opening} ${labelText}`,
+    opening,
+    labelText,
     nextCursor: more ? start + labels.length : null,
   };
 }

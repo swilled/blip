@@ -1,8 +1,9 @@
 import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
-import { cancelEffect, speakEffect } from "./state";
+import { cancelEffect, discloseFieldLabel, speakEffect } from "./state";
 import { orientationText } from "./templates";
+import { fillableFields } from "./fields";
 import { continueProfileBatch, continueUndo, handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance, handleUndoUtterance } from "./read-fill";
 import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
 
@@ -101,9 +102,12 @@ export function reduce(
   if (norm === "") return { state, effects: [] };
 
   if (norm === "where am i" || norm === "where am i on this page" || norm === "where am i in the form") {
-    return answer(state, ctx.form === null
-      ? "I can't read the page yet. Please reconnect or try again."
-      : orientationText(ctx.form, state.currentFieldId));
+    if (ctx.form === null) return answer(state, "I can't read the page yet. Please reconnect or try again.");
+    const field = state.currentFieldId === null
+      ? undefined
+      : fillableFields(ctx.form).find((item) => item.id === state.currentFieldId);
+    const disclosure = field ? discloseFieldLabel(state, ctx.form, field.id) : { state, text: "" };
+    return answer(disclosure.state, [disclosure.text, orientationText(ctx.form, state.currentFieldId)].filter(Boolean).join(" "));
   }
 
   const undoResult = handleUndoUtterance(state, norm);

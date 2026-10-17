@@ -33,6 +33,7 @@ describe("reduce: what's here", () => {
       seq: 1,
       readCursor: null,
       requiredCursor: null,
+      labelDisclosures: {},
       currentFieldId: null,
       pendingOptions: null,
       pendingFill: null,
