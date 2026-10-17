@@ -1,11 +1,41 @@
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Intent, type FormModel } from "@blip/protocol";
 import { serializeProjectionForPrompt, type PagePromptProjection } from "./projection";
-import { parseRepairPatch, validateRepairPatch } from "./repair-schema";
 
 export type ClaudeRole = "intent" | "repair";
+
+export type ClaudeSdkEventCategory =
+  | "system_init"
+  | "system_status"
+  | "system_api_retry"
+  | "system_other"
+  | "result"
+  | "assistant"
+  | "user"
+  | "stream_event"
+  | "tool_progress"
+  | "auth_status"
+  | "other";
+
+export type ClaudeStartupFailureCategory =
+  | "sdk_import_error"
+  | "sdk_query_error"
+  | "sdk_stream_error"
+  | "sdk_stream_ended"
+  | "init_tool_list_invalid"
+  | "init_tools_present"
+  | "startup_aborted"
+  | "startup_error";
+
+export type ClaudeStartupDiagnostic =
+  | { kind: "sdk_event"; role: ClaudeRole; event: ClaudeSdkEventCategory }
+  | {
+      kind: "milestone";
+      role: ClaudeRole;
+      milestone: "init_received" | "empty_tools_accepted" | "bootstrap_completed";
+    }
+  | { kind: "failure"; role: ClaudeRole; category: ClaudeStartupFailureCategory };
 
 export type ClaudeRoleConfig = {
   role: ClaudeRole;
@@ -23,7 +53,7 @@ export type ClaudeRoleConfig = {
 
 export type ClaudeRoleSession = {
   /** Starts the SDK process and resolves with the untrusted `system/init` tool list. */
-  start(): Promise<{ tools: unknown }>;
+  start(onSdkEvent?: (event: ClaudeSdkEventCategory) => void): Promise<{ tools: unknown }>;
   /** Sends one JSON-only user prompt on the role's persistent streaming session. */
   call(prompt: string, signal?: AbortSignal): Promise<string>;
   /** Aborts the active turn and its subprocess/session. */
