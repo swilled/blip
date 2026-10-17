@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyAction } from "../src/classify";
+import { classifyAction } from "@blip/policy/classify";
 
 const button = (text: string, overrides: Record<string, unknown> = {}) => ({
   tag: "button",
