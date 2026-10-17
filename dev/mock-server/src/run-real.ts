@@ -1,7 +1,8 @@
 // Core's real server in-process (dev true, fake brain, fake extension) serving apps/voice/dist, plus the PTT
 // hook and the voice window. Imports core modules read-only. Used until scripts/dev.ts serves the voice build (HO-7).
 //   node --import tsx dev/mock-server/src/run-real.ts [--fixture=booking|broken] [--port=7777] [--fake-delay=1500]
-import { existsSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { DEFAULT_PORT, type ActRequest } from "@blip/protocol";
@@ -85,8 +86,13 @@ if (entry?.endsWith("/run-real.ts")) {
   console.log(`blip real server (fake brain, ${values.fixture}): http://127.0.0.1:${real.server.port}/`);
   const stopPtt = await startPttWire(real.server.port);
   await launchVoiceWindow({ port: real.server.port });
+  const pidFile = join(fileURLToPath(new URL("../../../", import.meta.url)), ".demo-pid");
+  writeFileSync(pidFile, String(process.pid), "utf8");
   console.log("ready. Press Ctrl+C to stop");
-  const shutdown = (): void => void stopPtt().then(() => real.close()).then(() => process.exit(0));
+  const shutdown = (): void => void stopPtt().then(() => real.close()).finally(() => {
+    rmSync(pidFile, { force: true });
+    process.exit(0);
+  });
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
 }

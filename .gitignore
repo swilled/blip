@@ -11,3 +11,5 @@ dist/
 # Voice workstream
 .chrome-profile
 tools/nvda-client
+fixtures/demo/profile.json
+.demo-pid

@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { resetDemo } from "./reset";
 
 type ResetFs = {
   copyFile(source: string, destination: string): Promise<void>;
@@ -19,20 +20,6 @@ type ResetDeps = {
   repoRoot: string;
   log(line: string): void;
 };
-
-type ResetModule = {
-  resetDemo?: (deps: ResetDeps) => Promise<void>;
-};
-
-const resetPath = fileURLToPath(new URL("./reset.ts", import.meta.url));
-const loadReset = new Function("url", "return import(url)") as (url: string) => Promise<ResetModule>;
-const resetModule = await loadReset(pathToFileURL(resetPath).href).catch(() => ({}));
-
-function requireResetDemo(): (deps: ResetDeps) => Promise<void> {
-  expect(resetModule.resetDemo, "reset.ts must export resetDemo").toBeTypeOf("function");
-  if (typeof resetModule.resetDemo !== "function") throw new Error("resetDemo export missing");
-  return resetModule.resetDemo;
-}
 
 function fakeDeps(pidContents: string | null, readiness: boolean[] = [true]) {
   const repoRoot = "C:\\blip-demo";
@@ -91,7 +78,6 @@ function fakeDeps(pidContents: string | null, readiness: boolean[] = [true]) {
 
 describe("demo reset", () => {
   it("restores the profile, replaces the previous stack, waits for readiness, then opens Chrome safely", async () => {
-    const resetDemo = requireResetDemo();
     const fake = fakeDeps("31415", [false, true]);
 
     await resetDemo(fake.deps);
@@ -134,7 +120,6 @@ describe("demo reset", () => {
     ["missing", null],
     ["non-numeric", "123abc"],
   ])("ignores a %s pid file while still removing it and starting fresh", async (_label, pidContents) => {
-    const resetDemo = requireResetDemo();
     const fake = fakeDeps(pidContents, [true]);
 
     await resetDemo(fake.deps);
@@ -148,13 +133,13 @@ describe("demo reset", () => {
   });
 
   it("fails clearly when the restarted server never becomes ready", async () => {
-    const resetDemo = requireResetDemo();
     const fake = fakeDeps(null, [false]);
     vi.useFakeTimers();
     try {
       const pending = resetDemo(fake.deps);
+      const rejection = expect(pending).rejects.toThrow(/server .*ready.*20 seconds/i);
       await vi.advanceTimersByTimeAsync(20_000);
-      await expect(pending).rejects.toThrow(/server .*ready.*20 seconds/i);
+      await rejection;
       expect(fake.spawnCalls.map((call) => call.command)).toEqual(["node"]);
     } finally {
       vi.useRealTimers();
