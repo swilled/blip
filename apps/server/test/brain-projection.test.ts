@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FormModel } from "@blip/protocol";
 import { makeElement, makeSnapshot } from "../../../packages/protocol/test/helpers";
 import { buildBaselineFormModel } from "../src/baseline";
-import { projectPageForPrompt } from "../src/brain/claude/projection";
+import { estimateProjectionTokens, projectPageForPrompt } from "../src/brain/claude/projection";
 
 describe("projectPageForPrompt", () => {
   it("retains all field/action ids and safe routing metadata", () => {
@@ -22,12 +22,12 @@ describe("projectPageForPrompt", () => {
 
     const projection = projectPageForPrompt(snapshot, model);
 
-    expect(projection.page.title).toBe("Guest details");
-    expect(projection.page.headings).toEqual(["Guest details", "Payment"]);
-    expect(projection.fields.map((field) => field.id)).toEqual(["guest-name", "room"]);
-    expect(projection.fields[0]).toMatchObject({ type: "text", label: "Full name", required: false });
-    expect(projection.fields[1]?.options).toEqual(["Standard", "Suite"]);
-    expect(projection.actions).toEqual([{ id: "submit", label: "Book now", kind: "submit" }]);
+    expect(projection.p.t).toBe("Guest details");
+    expect(projection.p.h).toEqual(["Guest details", "Payment"]);
+    expect(projection.f.map((field) => field.i)).toEqual(["guest-name", "room"]);
+    expect(projection.f[0]).toMatchObject({ t: "text", l: "Full name", q: false });
+    expect(projection.f[1]?.o).toEqual(["Standard", "Suite"]);
+    expect(projection.a).toEqual([{ i: "submit", l: "Book now", k: "submit", p: true }]);
     expect(JSON.stringify(projection)).not.toContain("raw-standard");
     expect(JSON.stringify(projection)).not.toContain("raw-suite");
   });
@@ -41,7 +41,7 @@ describe("projectPageForPrompt", () => {
           value: "CURRENT_VALUE_SENTINEL",
           hasValue: true,
           errorText: "FIELD_ERROR_SENTINEL",
-          describedBy: "safe format description",
+          describedBy: "DESCRIPTION_SENTINEL",
         }),
         makeElement({ id: "card", order: 2, sensitive: "card-number", value: null, hasValue: true }),
       ],
@@ -60,6 +60,7 @@ describe("projectPageForPrompt", () => {
       "CARD_VALUE_SENTINEL",
       "FIELD_ERROR_SENTINEL",
       "PAGE_ERROR_SENTINEL",
+      "DESCRIPTION_SENTINEL",
     ]) expect(serialized).not.toContain(sentinel);
     expect(serialized).not.toContain("hasValue");
     expect(serialized).not.toContain("transcript");
@@ -67,10 +68,22 @@ describe("projectPageForPrompt", () => {
     expect(malformed).toEqual(modelBefore);
   });
 
+  it("rejects a model from a different accepted snapshot", () => {
+    const snapshot = makeSnapshot();
+    const model = buildBaselineFormModel(snapshot);
+
+    expect(() => projectPageForPrompt(snapshot, { ...model, snapshotVersion: model.snapshotVersion + 1 })).toThrow(
+      "Prompt projection requires a FormModel for the accepted snapshot",
+    );
+  });
+
   it("trims a large projection under the estimate while preserving every id and type", () => {
     const elements = Array.from({ length: 250 }, (_, index) => makeElement({
       id: `field-${index}`,
       order: index,
+      tag: "select",
+      inputType: "select",
+      role: "combobox",
       labelCandidates: [{ text: `Long descriptive field label ${index} ${"label ".repeat(12)}`, source: "label", confidence: 0.9 }],
       describedBy: `Long format description ${"description ".repeat(10)}`,
       group: `Section ${index} ${"group ".repeat(8)}`,
@@ -88,11 +101,11 @@ describe("projectPageForPrompt", () => {
 
     const projection = projectPageForPrompt(snapshot, model);
 
-    expect(projection.estimatedTokens).toBeLessThanOrEqual(8000);
-    expect(projection.fields.map((field) => field.id)).toEqual(elements.map((element) => element.id));
-    expect(projection.fields.every((field) => field.type === "text")).toBe(true);
-    expect(projection.snapshotVersion).toBe(snapshot.version);
-    expect(projection.structuralHash).toBe(snapshot.structuralHash);
+    expect(estimateProjectionTokens(projection)).toBeLessThanOrEqual(8000);
+    expect(projection.f.map((field) => field.i)).toEqual(elements.map((element) => element.id));
+    expect(projection.f.every((field) => field.t === "select")).toBe(true);
+    expect(projection.v).toBe(snapshot.version);
+    expect(projection.h).toBe(snapshot.structuralHash);
     expect(JSON.stringify(projection)).not.toContain("private-value-");
   });
 });
