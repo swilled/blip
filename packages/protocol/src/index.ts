@@ -8,3 +8,6 @@ export * from "./snapshot";
 export * from "./form-model";
 export * from "./intent";
 export * from "./act";
+export * from "./payloads-extension";
+export * from "./payloads-voice";
+export * from "./extension-id";

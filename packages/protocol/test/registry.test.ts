@@ -11,7 +11,9 @@ import {
   type MessageType,
 } from "../src/index";
 
-const SENTINEL = "SENTINEL-hunter2-do-not-echo";
+import { EXAMPLES } from "./message-examples";
+
+const SENTINEL ="SENTINEL-hunter2-do-not-echo";
 
 describe("parseFrame failure codes", () => {
   it("returns bad-json for non-JSON text", () => {
@@ -144,15 +146,8 @@ describe("registry and Message union parity", () => {
   });
 
   it("builds and re-parses a valid frame for every registered sample", () => {
-    const samples: { [T in MessageType]?: unknown } = {
-      hello: { role: "voice", clientVersion: "0.0.0", protocolVersion: 1 },
-      welcome: { sessionId: "s1", serverVersion: "0.0.0", brain: "fake" },
-      error: { code: "bad-json", message: "x", fatal: false },
-      utterance: { utteranceId: "u1", text: "what's here", source: "typed" },
-      speak: { speakId: "k1", text: "hi", category: "answer", interrupt: false },
-    };
     for (const type of Object.keys(MESSAGES) as MessageType[]) {
-      const payload = samples[type];
+      const payload = EXAMPLES[type];
       expect(payload, `sample for ${type}`).toBeDefined();
       const frame = buildFrame(type, payload as never);
       const r = parseFrame(JSON.stringify(frame));
