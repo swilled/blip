@@ -123,7 +123,7 @@ Plans:
   5. I2 (~h12): on the local broken demo form with the fake brain, a user goes describe -> fill -> read back -> says the phrase -> submitted, then hears the confirmation (with any confirmation number) or each error tied to its field label; "what went wrong" repeats the errors, and Blip never claims a success the page doesn't show.
 
 **Research**: No research; needs adversarial tests in `packages/policy/test` ("yes", injected labels, typeless buttons, Enter, value change after read-back, phrase from the wrong socket).
-**Plans**: TBD
+**Plans**: 1/6 plans executed
 **UI hint**: no
 
 ### Phase 4: Claude Brain and Label Repair
@@ -172,7 +172,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
-| 3. Gated Submit and Result Reading | 0/TBD | Not started | - |
+| 3. Gated Submit and Result Reading | 1/6 | In Progress | - |
 | 4. Claude Brain and Label Repair | 0/TBD | Not started | - |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
 
