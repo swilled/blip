@@ -1,0 +1,10 @@
+{
+  "command": "npm.cmd run --silent test -- dev/mock-server/src/dialogue-runner.test.ts --reporter=tap-flat",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - src/dialogue-runner.test.ts > real voice dialogue runner > reads the broken form through a voice socket # time=51.94ms\n    ---\n    error:\n        name: \"AssertionError\"\n        message: \"expected 'Customer survey. 5 fields. 1: probabl…' to match /^Field 1:/\"\n    at: \"C:/Users/befit/Documents/formvoice/dev/mock-server/src/dialogue-runner.test.ts:37:33\"\n    actual: \"Customer survey. 5 fields. 1: probably Your name. 2: probably q2 email, required. 3: unlabeled field. 4: probably How did you hear about us, required. 5: Age.\"\n    expected: \"/^Field 1:/\"\n    ...\n",
+  "targetTest": "src/dialogue-runner.test.ts > real voice dialogue runner > reads the broken form through a voice socket",
+  "targetFile": "dialogue-runner.test.ts",
+  "expected": "Reading the form begins with the first field, such as Field 1:",
+  "actual": "The default server handler describes the whole form and does not enter the reducer-backed field-by-field reading flow.",
+  "semanticAssessment": "The target Vitest test ran and failed on its assertion against the received speak text; TAP shows one failing assertion and no loader or collection failure."
+}
