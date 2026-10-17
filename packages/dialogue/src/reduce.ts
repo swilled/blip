@@ -2,7 +2,7 @@ import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
-import { handleOptionPick, handleReadUtterance } from "./read-fill";
+import { handleActResult, handleFillUtterance, handleOptionPick, handleReadUtterance } from "./read-fill";
 import { handleSubmitFlow } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
@@ -48,6 +48,7 @@ export function reduce(
     return answer(state, state.lastSpoken ?? "There's nothing to repeat.");
   }
 
+  if (event.type === "act.result") return handleActResult(state, event, ctx);
   if (event.type !== "utterance") return handleSubmitFlow(state, event, ctx);
   const raw = event.utterance.text;
   if (raw.length > 200) return { state, effects: [{ kind: "parseIntent", text: raw }] };
@@ -61,6 +62,9 @@ export function reduce(
 
   const readResult = handleReadUtterance(state, norm, raw, ctx);
   if (readResult !== null) return readResult;
+
+  const fillResult = handleFillUtterance(state, norm, raw, ctx, event.utterance.sttConfidence);
+  if (fillResult !== null) return fillResult;
 
   const optionResult = handleOptionPick(state, raw, ctx);
   if (optionResult !== null) return optionResult;
