@@ -21,8 +21,8 @@ export const GUARD_MS = 1000;
  */
 export const GATE_08_PRESENT = false;
 
-/** M0-SIGNOFF.md: A (ptt.hold) requested, B (sidecar) is the fallback. Pending Pranav. */
-export const PTT_DELIVERY: "A" | "B" = "A";
+/** M0-SIGNOFF.md: B (loopback sidecar on 7778); no answer from Pranav on A (ptt.hold). */
+export const PTT_DELIVERY: "A" | "B" = "B";
 
 /** True only once optional heardDuringSpeech is merged into the protocol (request R2). */
 export const SEND_HEARD_DURING_SPEECH = false;

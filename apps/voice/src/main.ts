@@ -1,9 +1,13 @@
 // Voice window wiring: start gate, typed input, log, earcons, socket, tts.
 // The window never matches a confirm phrase; that lives in server code.
+import { STT_ENABLED_WHEN_UNFOCUSED } from "./config";
 import { createEarcons } from "./earcons";
+import { createHoldClient } from "./hold-client";
 import { createSocket, type VoiceSocket } from "./socket";
 import { createSpeakBridge } from "./speak-bridge";
 import { createVoiceState } from "./state";
+import { createStt, type RecognitionLike } from "./stt";
+import { createTalkController } from "./talk-controller";
 import { createTts, type Synth } from "./tts";
 import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log";
 
@@ -44,6 +48,7 @@ let pendingUser = "";
 let outstanding = 0;
 let replyParts: string[] = [];
 let replyInterrupted = false;
+let pendingSource: "speech" | "typed" = "typed";
 let captionTimer: ReturnType<typeof setTimeout> | null = null;
 
 const state = createVoiceState((s) => {
@@ -65,7 +70,7 @@ function commitExchange(): void {
   appendExchange({
     you: pendingUser,
     blip: replyParts.join(" "),
-    source: "typed",
+    source: pendingSource,
     interrupted: replyInterrupted,
   });
   pendingUser = "";
@@ -87,7 +92,8 @@ const tts = createTts({
     outstanding = Math.max(0, outstanding - 1);
     if (outstanding === 0) {
       commitExchange();
-      state.speechDone();
+      if (state.get() === "speaking") state.speechDone(); // a new hold may already own the state
+      talk.onSpeechEnd();
     }
   },
 });
@@ -128,6 +134,7 @@ socket = createSocket({
         replyParts.push(m.payload.text);
         state.replyReceived();
         bridge.onSpeak(m.payload);
+        talk.onSpeechStart();
         break;
       }
       case "earcon":
@@ -146,6 +153,56 @@ socket = createSocket({
   },
 });
 
+type RecognitionCtor = new () => RecognitionLike;
+const RecognitionImpl = ((window as unknown as { SpeechRecognition?: RecognitionCtor }).SpeechRecognition ??
+  (window as unknown as { webkitSpeechRecognition?: RecognitionCtor }).webkitSpeechRecognition) as
+  | RecognitionCtor
+  | undefined;
+
+const talk = createTalkController({
+  socket: {
+    sendPtt: (s) => socket?.sendPtt(s),
+    sendUtterance: (u) => socket?.sendUtterance(u) ?? null,
+  },
+  makeStt: (h) =>
+    createStt({
+      makeRecognition: () => {
+        if (!RecognitionImpl) throw new Error("speech recognition unavailable");
+        return new RecognitionImpl();
+      },
+      onInterim: h.onInterim,
+      onFinal: h.onFinal,
+      onError: h.onError,
+      canListen: () => STT_ENABLED_WHEN_UNFOCUSED || document.hasFocus(),
+    }),
+  tts,
+  state,
+  earcons,
+  caption: { render: renderCaption, clear: clearCaption },
+  log: {
+    markInterrupted: () => {
+      replyInterrupted = true;
+    },
+    showMessage: (text) => {
+      el("status-hint").textContent = text;
+    },
+    userSaid: (text) => {
+      pendingUser = text;
+      pendingSource = "speech";
+      replyParts = [];
+      replyInterrupted = false;
+    },
+  },
+  spokenText: () => replyParts.join(" "),
+});
+
+// Global hold (PTT_DELIVERY B): loopback sidecar next to the hub connection.
+createHoldClient({
+  makeWebSocket: (url) => new WebSocket(url) as never,
+  onHold: (h) => talk.onHold(h),
+  setTimer: (fn, ms) => setTimeout(fn, ms),
+});
+
 // Typed input.
 const input = el<HTMLInputElement>("typed-input");
 const form = el<HTMLFormElement>("typed");
@@ -160,13 +217,14 @@ form.addEventListener("submit", (ev) => {
   input.value = "";
   if (!text) return;
   if (normalize(text) === "stop") {
-    tts.cancel(); // reports interrupted speak.done per outstanding speak; never sent to the server
+    talk.onStopTyped(); // reports interrupted speak.done per outstanding speak; never sent to the server
     return;
   }
   const id = socket?.sendUtterance({ source: "typed", text });
   if (id === null || id === undefined) return;
   tts.markSent();
   pendingUser = text;
+  pendingSource = "typed";
   replyParts = [];
   replyInterrupted = false;
   state.messageSent();
@@ -183,6 +241,7 @@ let activated = false;
 function activate(): void {
   if (activated) return;
   activated = true;
+  talk.activate();
   document.getElementById("start-gate")?.remove();
   el("app").removeAttribute("inert");
   earcons.init();

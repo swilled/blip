@@ -1,6 +1,8 @@
 # M0 Sign-off (voice side)
 
-PTT_DELIVERY: A (use `ptt.hold`), pending Pranav's answer. Fallback B is recorded below.
+No answer from Pranav, proceeding on the stub (docs/WORK-SPLIT.md 30-minute rule; `ptt.hold` is not in origin/main packages/protocol/src).
+
+PTT_DELIVERY: B (voice-owned loopback sidecar socket on 127.0.0.1:7778, Origin-checked, no protocol change). R1 `ptt.hold` stays on file as an optional later upgrade to A. HO-3 is required under B: core's launcher must call startPttHook + startPttSidecar.
 
 The protocol is frozen on disk (packages/protocol, PROTOCOL.md, protocol.lock.json). This document records exactly what voice uses and the additive requests voice needs. It edits nothing in packages/protocol.
 
@@ -57,7 +59,7 @@ Rely on core GATE-08: "the server ignores a confirm-phrase match while a speak i
 
 - **HO-1**: the form-tab content script suppresses Space while Ctrl is held (capture phase, keydown and keyup, all frames). Otherwise Right Ctrl + Space types a space into the focused field.
 - **HO-2**: apps/server/package.json and package-lock.json gain uiohook-napi and koffi (core-owned files, Pranav approves; Plan 02 already made the edit, commit 940d424).
-- **HO-3**: the real server starts the PTT hook from apps/server/src/voice/ptt-hook.ts and calls `hub.send("voice","ptt.hold",{state})` (PTT_DELIVERY A) or nothing (B).
+- **HO-3**: the real server starts the PTT hook from apps/server/src/voice/ptt-hook.ts and calls `hub.send("voice","ptt.hold",{state})` (PTT_DELIVERY A), or under B (chosen) starts startPttHook + startPttSidecar from core's launcher (required under B).
 - **HO-4**: "what's here" wording. Core's describeReply (apps/server/src/reply.ts) answers "<title>. N fields, R required, A actions." and voice's reduce emits the identical wording, so the swap is optional and I1 passes either way.
 - **HO-5**: if PTT_ROUTE ends up chrome.commands-toggle (spike D), the server maps the extension's `ptt.hotkey` toggle to ptt.hold.
 - **HO-6**: GATE-08 present in core Phase 3 (see R3).
@@ -83,5 +85,5 @@ Rely on core GATE-08: "the server ignores a confirm-phrase match while a speak i
 | HO-5 | pending | Pranav |
 | HO-6 | pending | Pranav |
 | HO-7 | pending | Pranav |
-| PTT_DELIVERY | pending (A requested, B fallback) | Pranav |
+| PTT_DELIVERY | B (stub applied, no answer from Pranav) | Voice; tell Pranav |
 | VOX-05 wording in .planning/REQUIREMENTS.md | pending | Pranav |

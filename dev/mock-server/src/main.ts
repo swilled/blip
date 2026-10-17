@@ -19,3 +19,20 @@ const server = createMockServer({
 
 const port = await server.listen();
 console.log(`blip mock server: ws://${LOOPBACK_HOST}:${port}${WS_PATH}`);
+
+// PTT_DELIVERY B: global Right Ctrl + Space hold -> loopback sidecar -> voice window.
+// If uiohook cannot load, typed input still works.
+try {
+  const { startPttHook, stopPttHook } = await import("../../../apps/server/src/voice/ptt-hook");
+  const { startPttSidecar } = await import("../../../apps/server/src/voice/ptt-sidecar");
+  const sidecar = startPttSidecar({ allowedOrigin: `http://${LOOPBACK_HOST}:${port}` });
+  startPttHook((state) => sidecar.broadcast(state));
+  const shutdown = (): void => {
+    stopPttHook();
+    void sidecar.close().then(() => process.exit(0));
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+} catch {
+  console.log("blip mock server: push-to-talk hook unavailable, typed input only");
+}
