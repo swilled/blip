@@ -60,7 +60,7 @@ Anthropic's current TypeScript SDK documents JSON Schema structured output throu
 
 | Library / tool | Version | Purpose | Why use it |
 |---|---:|---|---|
-| @anthropic-ai/claude-agent-sdk | **0.3.302** (registry latest checked 2026-10-17; published 2026-10-16) | Agent SDK query, streaming input, startup/prewarm and structured output | Official current TypeScript integration. Pin exactly because it changes frequently. Project docs mention 0.3.301; registry now reports 0.3.302. Not installed or declared yet. |
+| @anthropic-ai/claude-agent-sdk | **0.3.302** (registry latest checked 2026-10-17; published 2026-10-16) | Agent SDK query, streaming input, startup/prewarm and structured output | Official current TypeScript integration. Pin exactly because it changes frequently. Project docs mention 0.3.301; registry now reports 0.3.302. The exact pin is now installed and declared in `apps/server`; production initialization is still unverified. |
 | zod | **4.6.7** | Existing protocol schemas, SDK JSON Schema conversion and output validation | Already used by @blip/protocol; keep one executable contract. |
 | Node.js | **24.14.0** available; repo requires >=24 | Server and SDK child runtime | Installed version meets project constraint; SDK declares >=18. |
 | TypeScript | **6.0.3** | Server adapter, schemas and cache | Existing root toolchain. |
@@ -262,13 +262,11 @@ Remove ANTHROPIC_API_KEY before constructing env. SDK env replaces subprocess en
 |------------|-------------|-----------|----------------|----------|
 | Node.js | Server/SDK runtime | Yes | v24.14.0; repo requires >=24 | — |
 | npm | Workspaces | Yes | v11.9.0 | — |
-| Agent SDK | Intent and repair | Not installed or declared | Registry 0.3.302 on 2026-10-17; Node >=18; Windows optional package published | Add exact pin in implementation; use locked streaming JSON/Zod fallback if spike fails |
-| Claude CLI | Local runtime diagnostic only | Found | Version and auth not probed | SDK package bundles native Windows runtime |
-| Subscription login | Live Claude | Not verified; credentials not inspected | Assumed by project | Required for live SDK; preserve --brain=fake offline |
+| Agent SDK | Intent and repair | Installed and declared in `apps/server` | `@anthropic-ai/claude-agent-sdk@0.3.302`; Node >=18; Windows optional package installed | Keep `--brain=fake` for offline checks |
+| Claude CLI | Local runtime diagnostic only | Found | `2.1.280` from `claude --version`; authentication was not inspected | SDK package bundles native Windows runtime |
+| Subscription login | Live Claude | Owner confirmed eligible subscription for the consumed 04-10 scope; authentication was not inspected | Further live use requires a fresh, precise authorization | Preserve `--brain=fake` offline |
 
-**Missing with no fallback:** A valid developer subscription login is required for live Claude; it was not inspected.
-
-**Missing with fallback:** SDK package is absent until implementation adds it; current fake brain continues to support offline tests.
+**Live-evidence boundary:** A successful production SDK initialization and role result remain unverified. The 04-10 attempt failed during initialization after one synthetic intent bootstrap, without a role result or tool count; its approval is consumed. Offline fake-provider coverage remains available and must not be represented as live proof.
 
 ## Existing Test Infrastructure
 
@@ -293,13 +291,15 @@ Do not require subscription credentials or live Claude in CI. Make spike/live sm
 | One-shot query | Streaming input is documented recommended persistent interactive mode | Use role sessions; independently test prewarm combination. |
 | Snapshot cap equals prompt cap | Phase 2 wire snapshot has 250-element cap; Phase 4 trims prompt context around 8k | Keep separate boundaries and truncated semantics. |
 
-## Open Questions
+## Open Questions and Planning Dispositions
 
-1. **Resolved — the required empty-tool condition failed.** The bounded live runs initialized both roles with `tools: []`; a second attempt also set `disallowedTools: ["*"]`, but both init messages still reported exactly one tool. Both probes stopped before `WarmQuery.query()`, so no model prompt or structured result was sent. Do not select `startup()` + `outputFormat`; use the D-01 streaming/Zod fallback, which retains a deny-all option and still refuses startup if tools are reported.
-2. **Resolved — conservative estimate selected; calibration unavailable.** `estimateProjectionTokens` uses `ceil(UTF-8 bytes / 2)` over the exact serialized prompt guide and projection, with projection-only trimming to an 8,000 estimate. This is explicitly an approximate bound, not a tokenizer-calibrated count; the live probe did not reach a model result with usage data.
-3. **Open — Windows cancellation/recreation lacks live SDK evidence.** The role manager and watchdog have injected-adapter tests, but the live probe stopped before a query. Keep the timeout settling behavior covered by tests and do not claim the pinned SDK's Windows cancellation/recreation behavior is measured.
-4. **Resolved — local owner use confirmed for this spike.** The owner confirmed the eligible subscription and bounded local use. Anthropic's current help article explicitly permits Agent SDK and third-party app use against Claude subscription limits; the project remains owner-run and does not share login or host a service. Do not switch to an API-key path.
-5. **Resolved — exact additive split approved.** The owner confirmed the voice owner explicitly approved keeping raw extension label candidates deterministic while allowing `model` only on resolved FormModel labels. The approval was received in the Phase 4 checkpoint response before protocol edits.
+The implementation choices are resolved below. Remaining live-provider evidence is explicitly separate and is not treated as a research decision.
+
+1. **Resolved — use the streaming/Zod path and retain fail-closed tool checks; production initialization remains unverified.** The earlier `startup()` probes reported one init tool for each role, even with `disallowedTools: ["*"]`, so that route is not acceptable for this contract. The 04-08 streaming run timed out before an init result; the 04-10 run failed during initialization after one fixed synthetic intent bootstrap, without a role result or tool count. Do not relax the empty-tool refusal. The available evidence does not identify the runtime failure's cause.
+2. **Resolved — use the conservative projection estimate without claiming tokenizer calibration.** `estimateProjectionTokens` uses `ceil(UTF-8 bytes / 2)` over the exact serialized prompt guide and projection, with projection-only trimming to an 8,000 estimate. The live probes produced no model usage data, so this remains an approximate bound.
+3. **Planning disposition resolved — keep cancellation/recreation covered offline and mark production Windows behavior unverified.** The role manager and watchdog have injected-adapter tests. Neither live attempt reached a measured cancellation/recreation path; do not claim that the pinned SDK's Windows behavior is proven.
+4. **Resolved for the consumed 04-10 attempt — owner confirmed local subscription use.** Credentials were not inspected. The 04-10 authorization has been consumed; the report and plan require fresh, precise authorization before another production SDK invocation. Do not switch to an API-key path.
+5. **Resolved — use the approved additive label-source split.** The user reported the voice owner approved deterministic raw extension label candidates while allowing `model` only on resolved FormModel labels. This report records that as user-reported approval; it does not claim direct voice-owner authorship.
 
 ## Sources
 
@@ -331,8 +331,8 @@ Do not require subscription credentials or live Claude in CI. Make spike/live sm
 ## Metadata
 
 **Confidence breakdown:**
-- Standard stack: HIGH — installed repository versions and current official docs/registry were checked; SDK pin is not installed.
-- Architecture: HIGH — based on current code and locked context; startup/session composition awaits spike.
+- Standard stack: HIGH — installed repository versions, the pinned SDK package, and current official docs/registry were checked.
+- Architecture: HIGH for offline implementation and isolation tests; production startup and model results remain unverified.
 - Privacy/action boundary: HIGH — locked requirements and existing protocol/server/extension patterns.
 - Token trimming: LOW for exact token count; MEDIUM for conservative calibrated estimate.
 - Subscription policy: HIGH that official docs impose third-party use constraints; MEDIUM applying them to this owner-operated local hackathon case.

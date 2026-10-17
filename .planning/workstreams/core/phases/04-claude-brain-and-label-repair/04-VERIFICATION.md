@@ -1,6 +1,6 @@
 ---
 phase: 04-claude-brain-and-label-repair
-verified: 2026-10-17T16:16:11Z
+verified: 2026-10-17T18:38:48Z
 status: gaps_found
 score: 5/10 must-haves verified
 re_verification:
@@ -52,9 +52,9 @@ gaps:
 
 **Phase Goal:** Real Claude, running locked down on the developer's own subscription, understands free-form requests and repairs a broken form's labels in the background, with no way to act on the page.
 
-**Verified:** 2026-10-17T16:16:11Z
+**Verified:** 2026-10-17T18:38:48Z
 **Status:** gaps_found
-**Re-verification:** Yes — after Plan 04-10's bounded bootstrap check. The sections above preserve the 04-09 evidence; the latest result is appended below.
+**Re-verification:** Yes — after Plan 04-10's bounded bootstrap check and a fresh offline-only recheck. The sections above preserve the 04-09 evidence; the 04-10 result and current offline checks are appended below.
 
 ## Goal Achievement
 
@@ -201,5 +201,17 @@ The latest 04-10 result supersedes the earlier live-attempt status described abo
 | BRAIN-03 | BLOCKED / PENDING | Production cancellation, role recreation, and next-call recovery evidence. |
 | PAGE-04 | BLOCKED / PENDING | A live validated synthetic repair patch and real-model cache reload evidence. |
 
-_Verified: 2026-10-17T16:16:11Z_
+_Plan 04-10 verification timestamp: 2026-10-17T16:16:11Z_
 _Verifier: GSD phase verifier_
+
+## Offline Recheck — 2026-10-17
+
+The local implementation and safety harness still pass without starting the production SDK:
+
+- `npx vitest run --project @blip/server apps/server/test/claude-provider.test.ts apps/server/test/claude-sdk-live-check.test.ts` — 2 files, 25 tests passed.
+- `npm run claude:live-check --workspace @blip/server -- --offline --max-seconds 900` — `status=offline`, `stage=not_started`, zero prompt, bootstrap, or total dispatches.
+- `npm run typecheck` — passed.
+- `npm test` — 79 files passed, 13 skipped; 847 tests passed, 22 skipped.
+- Local runtime check: SDK `@anthropic-ai/claude-agent-sdk@0.3.302` is installed; `claude --version` reports `2.1.280`. Authentication and credentials were not inspected.
+
+No new live invocation was made. The 04-10 approval remains consumed; a future provider invocation requires a new plan-specific run and fresh, precise authorization. This offline recheck does not close BRAIN-01, BRAIN-02, BRAIN-03, or PAGE-04. Phase 4 remains `gaps_found` with production initialization, live Intent/latency, Windows SDK recovery, and live repair/cache evidence unverified.
