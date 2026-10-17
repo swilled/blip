@@ -33,9 +33,11 @@ describe("label source boundary (D-05)", () => {
         labelCandidates: [{ text: "Email", source, confidence: 0.9 }],
       })).success).toBe(true);
     }
-    expect(RawElement.safeParse(makeElement({
+    const rawWithModel: unknown = {
+      ...makeElement(),
       labelCandidates: [{ text: "Email", source: "model", confidence: 0.9 }],
-    })).success).toBe(false);
+    };
+    expect(RawElement.safeParse(rawWithModel).success).toBe(false);
   });
 
   it("accepts resolved model provenance and preserves the source/confidence pair", () => {
