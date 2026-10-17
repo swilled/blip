@@ -24,7 +24,7 @@ describe("MV3 extension build inputs", () => {
 
   it("injects into related frames and excludes Blip's own loopback pages", () => {
     const contentScripts = manifestTemplate["content_scripts"] as Array<Record<string, unknown>>;
-    expect(contentScripts).toHaveLength(2);
+    expect(contentScripts).toHaveLength(3);
     expect(contentScripts[0]).toMatchObject({
       js: ["submit-method-guard.js"],
       all_frames: true,
@@ -34,6 +34,13 @@ describe("MV3 extension build inputs", () => {
       world: "MAIN",
     });
     expect(contentScripts[1]).toMatchObject({
+      js: ["submit-event-guard.js"],
+      all_frames: true,
+      run_at: "document_start",
+      match_about_blank: true,
+      match_origin_as_fallback: true,
+    });
+    expect(contentScripts[2]).toMatchObject({
       js: ["content.js"],
       all_frames: true,
       run_at: "document_idle",

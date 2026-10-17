@@ -1,73 +1,78 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
-import { executeAct } from "../src/content/act.js";
-import { captureFrameSnapshot } from "../src/content/snapshot.js";
-import { withSubmitEventsBlocked } from "../src/content/submit-guard.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  beginOneSubmitAllowance,
+  installPersistentSubmitGuard,
+  isPersistentSubmitGuardInstalled,
+  withSubmitEventsBlocked,
+} from "../src/content/submit-guard.js";
 
-describe("withSubmitEventsBlocked", () => {
-  it("blocks requestSubmit fired by a select change handler and restores submit after cleanup", async () => {
-    document.body.innerHTML = '<form><label for="choice">Plan</label><select id="choice" name="choice"><option value="a">A</option><option value="b">B</option></select></form>';
-    const form = document.querySelector("form")!;
-    const select = document.querySelector("select")!;
-    let submitCount = 0;
-    let documentCaptureCount = 0;
-    document.addEventListener("submit", () => { documentCaptureCount += 1; }, true);
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      submitCount += 1;
-    });
-    select.addEventListener("change", () => form.requestSubmit());
-    const frame = captureFrameSnapshot({ document, topOrigin: "https://forms.example", timeBudgetMs: 1000 });
-    const field = frame.elements[0]!;
+function createDocument(): Document {
+  return document.implementation.createHTMLDocument("submit guard test");
+}
 
-    await expect(executeAct({
-      actId: "select-act",
-      tabId: 1,
-      snapshotVersion: 1,
-      action: { op: "select", targetId: field.id, optionValue: "b" },
-      expectedKind: "select",
-    }, { document })).resolves.toMatchObject({ ok: true, observedValue: "b" });
-    expect(submitCount).toBe(0);
-    expect(documentCaptureCount).toBe(0);
+describe("persistent submit event guard", () => {
+  it("denies submit events by default for the document lifetime", async () => {
+    const page = createDocument();
+    page.body.innerHTML = "<form></form>";
+    const form = page.querySelector("form")!;
+    const pageSubmit = vi.fn((event: Event) => event.preventDefault());
+    form.addEventListener("submit", pageSubmit);
 
+    expect(installPersistentSubmitGuard(page)).toBe(true);
+    expect(installPersistentSubmitGuard(page)).toBe(true);
+    expect(isPersistentSubmitGuardInstalled(page)).toBe(true);
     form.requestSubmit();
-    expect(submitCount).toBe(1);
-    expect(documentCaptureCount).toBe(1);
+    await withSubmitEventsBlocked(page, () => undefined);
+    form.requestSubmit();
+
+    expect(pageSubmit).not.toHaveBeenCalled();
   });
 
-  it("keeps the capture listener until the last overlapping act scope exits", async () => {
-    document.body.innerHTML = "<form></form>";
-    const form = document.querySelector("form")!;
-    let submitCount = 0;
+  it("allows only one submit from the exact form with the exact submitter", () => {
+    const page = createDocument();
+    page.body.innerHTML = '<form><button id="first" type="submit">First</button><button id="second" type="submit">Second</button></form>';
+    const form = page.querySelector("form")!;
+    const first = page.querySelector<HTMLButtonElement>("#first")!;
+    const second = page.querySelector<HTMLButtonElement>("#second")!;
+    const seenSubmitters: Array<HTMLElement | null> = [];
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      submitCount += 1;
+      seenSubmitters.push((event as SubmitEvent).submitter as HTMLElement | null);
     });
+    installPersistentSubmitGuard(page);
+    const cleanup = beginOneSubmitAllowance(first.form!, first);
 
-    let releaseFirst!: () => void;
-    const firstWait = new Promise<void>((resolve) => { releaseFirst = resolve; });
-    const first = withSubmitEventsBlocked(document, async () => firstWait);
-    await withSubmitEventsBlocked(document, () => undefined);
-    form.requestSubmit();
-    expect(submitCount).toBe(0);
+    form.requestSubmit(second);
+    form.requestSubmit(first);
+    form.requestSubmit(first);
+    cleanup();
 
-    releaseFirst();
-    await first;
-    form.requestSubmit();
-    expect(submitCount).toBe(1);
+    expect(seenSubmitters).toEqual([first]);
   });
 
-  it("removes the guard after an act throws", async () => {
-    document.body.innerHTML = "<form></form>";
-    const form = document.querySelector("form")!;
-    let submitCount = 0;
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      submitCount += 1;
-    });
+  it("clears an unused allowance when its dispatch cleanup runs", () => {
+    const page = createDocument();
+    page.body.innerHTML = '<form><button type="submit">Send</button></form>';
+    const form = page.querySelector("form")!;
+    const submitter = page.querySelector<HTMLButtonElement>("button")!;
+    const pageSubmit = vi.fn((event: Event) => event.preventDefault());
+    form.addEventListener("submit", pageSubmit);
+    installPersistentSubmitGuard(page);
+    const cleanup = beginOneSubmitAllowance(form, submitter);
+    cleanup();
 
-    await expect(withSubmitEventsBlocked(document, () => { throw new Error("act failed"); })).rejects.toThrow("act failed");
-    form.requestSubmit();
-    expect(submitCount).toBe(1);
+    form.requestSubmit(submitter);
+
+    expect(pageSubmit).not.toHaveBeenCalled();
+  });
+
+  it("reports an uninstalled isolated guard as absent and fails acts closed", async () => {
+    const page = createDocument();
+    const act = vi.fn();
+
+    expect(isPersistentSubmitGuardInstalled(page)).toBe(false);
+    await expect(withSubmitEventsBlocked(page, act)).rejects.toThrow();
+    expect(act).not.toHaveBeenCalled();
   });
 });
