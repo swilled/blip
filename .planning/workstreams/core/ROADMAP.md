@@ -152,7 +152,7 @@ Plans:
 - [x] 04-06-PLAN.md — Route grammar misses through schema-checked intents and a recovering watchdog
 - [x] 04-07-PLAN.md — Repair labels asynchronously and cache validated value-free patches
 - [x] 04-08-PLAN.md — Close Phase 4 live SDK verification gaps behind a fresh approval gate
-- [ ] 04-09-PLAN.md — Complete the approved-mode synthetic verifier behind the existing approval gate
+- [x] 04-09-PLAN.md — Complete the approved-mode synthetic verifier behind the existing approval gate
 **UI hint**: no
 
 ### Phase 5: Hostile Pages, Real Web and Freeze
