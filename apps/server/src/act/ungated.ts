@@ -1,4 +1,4 @@
-import { newId, type ActOp, type Field, type Intent } from "@blip/protocol";
+import { newId, type ActOp, type ActResult, type Field, type Intent } from "@blip/protocol";
 import { fieldKindForFieldType } from "@blip/policy/classify";
 import type { Hub } from "../hub/hub";
 import { fieldValueReply } from "../reply";
@@ -73,13 +73,13 @@ async function sendAct(
   field: Field,
   action: ActOp,
   write: boolean,
-): Promise<{ ok: true; observedValue: string | null } | { ok: false; privateField?: boolean }> {
+): Promise<{ ok: true; observedValue: string | null } | { ok: false; error?: ActResult["error"]; privateField?: boolean }> {
   const { hub, session } = ctx;
   const model = session.model;
   const tabId = session.tabId;
   if (model === null || tabId === null || !session.extensionConnected) return { ok: false };
 
-  let result: { payload: { ok: boolean; error?: string; observedValue?: string | null } } | undefined;
+  let result: { payload: ActResult } | undefined;
   try {
     result = await hub.request(
       "extension",
@@ -95,13 +95,13 @@ async function sendAct(
     );
   } catch {
     if (write) await refresh(ctx);
-    return { ok: false };
+    return { ok: false, error: "exception" };
   }
 
   // Refresh before constructing any reply, including the sensitive-field handoff.
   if (write) await refresh(ctx);
-  if (result.payload.error === "sensitive-field") return { ok: false, privateField: true };
-  if (!result.payload.ok) return { ok: false };
+  if (result.payload.error === "sensitive-field") return { ok: false, error: "sensitive-field", privateField: true };
+  if (!result.payload.ok) return { ok: false, error: result.payload.error ?? "exception" };
   return { ok: true, observedValue: result.payload.observedValue ?? null };
 }
 
@@ -122,7 +122,7 @@ export async function executeUngated(ctx: UngatedContext, intent: Intent): Promi
 
   if (intent.type !== "set_fields" || intent.fills.length !== 1) return failure();
   const fill = intent.fills[0]!;
-  const field = model.fields.find((candidate) => candidate.id === fill.fieldId);
+  let field = model.fields.find((candidate) => candidate.id === fill.fieldId);
   if (field === undefined || field.disabled) return failure();
 
   if (field.sensitive !== "none") {
@@ -131,9 +131,23 @@ export async function executeUngated(ctx: UngatedContext, intent: Intent): Promi
     return { text: MSG_PRIVATE_FIELD, category: "answer" };
   }
 
-  const operation = expectedValueFor(field, fill.value);
+  let operation = expectedValueFor(field, fill.value);
   if (operation === null) return failure("I couldn't match that value to this field.");
-  const result = await sendAct(ctx, field, operation.action, true);
+  let result = await sendAct(ctx, field, operation.action, true);
+  if (!result.ok && result.error === "stale-snapshot") {
+    // sendAct refreshed after the first request. Resolve the field and its kind again, then retry once.
+    const refreshed = session.model?.fields.find((candidate) => candidate.id === fill.fieldId);
+    if (refreshed === undefined || refreshed.disabled) return failure();
+    if (refreshed.sensitive !== "none") {
+      const focus = await sendAct(ctx, refreshed, { op: "focus", targetId: refreshed.id }, false);
+      return focus.ok ? { text: MSG_PRIVATE_FIELD, category: "answer" } : failure();
+    }
+    const retry = expectedValueFor(refreshed, fill.value);
+    if (retry === null) return failure("I couldn't match that value to this field.");
+    field = refreshed;
+    operation = retry;
+    result = await sendAct(ctx, field, operation.action, true);
+  }
   if (!result.ok) return failure(result.privateField ? MSG_PRIVATE_FIELD : MSG_ACT_FAILED);
   const reply = fieldValueReply(field, result.observedValue, operation.expectedValue);
   return reply === null ? failure() : { text: reply, category: "answer" };

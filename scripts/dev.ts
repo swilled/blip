@@ -19,6 +19,7 @@ const USAGE = `usage: npm run dev -- [options]
   --port <n>                 default ${DEFAULT_PORT}; 0 picks a free port
   --fake-delay <ms>          how long a model-routed turn waits, default 1500
   --fixture=booking|broken   page the fake extension serves, default booking
+  --no-fake-extension        leave the extension slot open for a real browser
   --no-repl                  skip the typed REPL and stay up for the voice UI (Ctrl+C to stop)
   --allow-origin <origin>    extra loopback http origin allowed to act as voice (repeatable)
   --fake-request-action <id> TEST ONLY: the fake brain requests this action; the server still refuses it
@@ -45,6 +46,7 @@ async function main(): Promise<void> {
         port: { type: "string" },
         "fake-delay": { type: "string" },
         fixture: { type: "string", default: "booking" },
+        "no-fake-extension": { type: "boolean", default: false },
         "no-repl": { type: "boolean", default: false },
         "allow-origin": { type: "string", multiple: true },
         "fake-request-action": { type: "string" },
@@ -98,20 +100,24 @@ async function main(): Promise<void> {
   }
   process.stdout.write(`listening on ${server.url} (brain=fake, dev=true)\n`);
 
-  const extension = startFakeExtension({ url: server.url, fixture });
-  try {
-    await extension.connected;
-  } catch (err) {
-    await server.close();
-    die(`fake extension failed to attach: ${(err as Error).message}`, 1);
+  const extension = values["no-fake-extension"] ? undefined : startFakeExtension({ url: server.url, fixture });
+  if (extension !== undefined) {
+    try {
+      await extension.connected;
+    } catch (err) {
+      await server.close();
+      die(`fake extension failed to attach: ${(err as Error).message}`, 1);
+    }
+    process.stdout.write(`fake extension attached (${fixture})\n`);
+  } else {
+    process.stdout.write("fake extension disabled; waiting for the real extension\n");
   }
-  process.stdout.write(`fake extension attached (${fixture})\n`);
 
   let closing = false;
   const shutdown = async (code: number): Promise<never> => {
     if (!closing) {
       closing = true;
-      extension.close();
+      extension?.close();
       await server.close();
     }
     process.exit(code);
@@ -128,7 +134,7 @@ async function main(): Promise<void> {
     url: server.url,
     input: process.stdin,
     output: process.stdout,
-    controls: { setFixture: (name) => extension.setFixture(name as FixtureName) },
+    ...(extension !== undefined ? { controls: { setFixture: (name) => extension.setFixture(name as FixtureName) } } : {}),
   });
   try {
     await repl.ready;

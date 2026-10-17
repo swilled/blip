@@ -5,7 +5,7 @@
 import { newId, type Intent, type Message, type PayloadOf } from "@blip/protocol";
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
-import { matchFieldPhrase, resolveFieldPhrase } from "./brain/phrases";
+import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
 import { executeUngated } from "./act/ungated";
 import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
@@ -133,7 +133,7 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
   const fieldPhrase = matchFieldPhrase(text);
   hub.send("voice", "transcript", {
     utteranceId,
-    heardAs: text,
+    heardAs: fieldPhrase === null ? text : safePhraseForTranscript(fieldPhrase),
     routedTo: command !== null || fieldPhrase !== null ? "grammar" : "model",
   });
 
@@ -143,6 +143,33 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
   try {
     if (command !== null) {
       await runIntent(ctx, command);
+    } else if (fieldPhrase !== null) {
+      if (fieldPhrase.type === "invalid") {
+        return speak(
+          hub,
+          session,
+          fieldPhrase.reason === "too-long" ? MSG_FIELD_PHRASE_TOO_LONG : "Say a field and the value to fill.",
+          "error",
+        );
+      }
+
+      // Keep the fake brain's request_action test hook ahead of deterministic field actions, but
+      // never pass a field value to the brain. The local parser remains usable if that call fails.
+      hub.send("voice", "earcon", { name: "thinking" });
+      speak(hub, session, MSG_FILLER, "filler");
+      let modelIntent: Intent | null = null;
+      try {
+        modelIntent = await ctx.brain.parseIntent(safePhraseForBrain(fieldPhrase));
+      } catch {
+        // The typed field grammar is deterministic and does not depend on the offline brain.
+      }
+      if (modelIntent?.type === "request_action") {
+        await runIntent(ctx, modelIntent);
+        return;
+      }
+      const ready = await ensureSnapshot(ctx, ctx.freshnessMs);
+      if (!ready.ok) return speak(hub, session, ready.reply, "error");
+      await runIntent(ctx, resolveFieldPhrase(session.model!, fieldPhrase));
     } else {
       hub.send("voice", "earcon", { name: "thinking" });
       speak(hub, session, MSG_FILLER, "filler");
@@ -153,14 +180,6 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
         hub.send("voice", "earcon", { name: "error" });
         speak(hub, session, MSG_BRAIN_FAILED, "error");
         return;
-      }
-      if (fieldPhrase !== null && intent.type !== "request_action") {
-        if (fieldPhrase.type === "invalid") {
-          return speak(hub, session, fieldPhrase.reason === "too-long" ? MSG_FIELD_PHRASE_TOO_LONG : "Say a field and the value to fill.", "error");
-        }
-        const ready = await ensureSnapshot(ctx, ctx.freshnessMs);
-        if (!ready.ok) return speak(hub, session, ready.reply, "error");
-        intent = resolveFieldPhrase(session.model!, fieldPhrase);
       }
       await runIntent(ctx, intent);
     }
