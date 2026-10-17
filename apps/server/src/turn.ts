@@ -75,8 +75,10 @@ type SpeakOptions = { interrupt?: boolean; record?: boolean };
 
 function speak(hub: Hub, session: Session, text: string, category: SpeakCategory, opts: SpeakOptions = {}): void {
   // Filler is never repeated, and "repeat"/"stop" must not overwrite what the user wants repeated.
+  const speakId = newId();
+  if (!hub.send("voice", "speak", { speakId, text, category, interrupt: opts.interrupt === true })) return;
+  session.trackSpeech(speakId);
   if (category !== "filler" && opts.record !== false) session.lastSpoken = text;
-  hub.send("voice", "speak", { speakId: newId(), text, category, interrupt: opts.interrupt === true });
 }
 
 /** `stop`: cut off whatever the voice UI is saying. */

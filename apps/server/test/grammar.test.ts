@@ -58,7 +58,7 @@ describe("matchGrammar", () => {
       "delete everything",
       "confirm",
       "yes submit",
-      "submit booking",
+      "submit survey",
       "confirm payment",
       "confirm deletion",
       "confirm sending",

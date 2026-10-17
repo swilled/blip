@@ -15,9 +15,26 @@ export type ArmedGrant = {
   expiresAt: number;
 };
 
+declare const consumedGrantBrand: unique symbol;
+
+/** Opaque proof that a live one-use grant was consumed for this exact dispatch binding. */
+export type ConsumedGrant = Readonly<{
+  grantId: string;
+  targetId: string;
+  kind: ActionKind;
+  tabId: number;
+  snapshotVersion: number;
+  readonly [consumedGrantBrand]: true;
+}>;
+
 export type GrantStore = {
   arm(binding: GrantBinding): ArmedGrant | null;
   consume(grantId: string, liveBinding: GrantBinding): boolean;
+  consumeForDispatch(grantId: string, liveBinding: GrantBinding, tabId: number): ConsumedGrant | null;
+  /** Runtime guard scoped to this store; copied metadata and proofs from another store are refused. */
+  isConsumedGrant(value: unknown): value is ConsumedGrant;
+  /** Atomically claims a valid proof for one dispatch, even across GatePort instances. */
+  claimDispatch(value: unknown): value is ConsumedGrant;
   clear(grantId?: string): void;
 };
 
@@ -55,11 +72,56 @@ function fingerprint(binding: GrantBinding): Buffer {
 /** Create an in-memory, synchronous store for privacy-preserving one-use grants. */
 export function createGrantStore(clock: () => number = Date.now): GrantStore {
   const pending = new Map<string, PendingGrant>();
+  const consumedProofs = new WeakSet<object>();
+  const dispatchedProofs = new WeakSet<object>();
+
+  function isConsumedGrant(value: unknown): value is ConsumedGrant {
+    return typeof value === "object" && value !== null && consumedProofs.has(value);
+  }
+
+  function claimDispatch(value: unknown): value is ConsumedGrant {
+    if (!isConsumedGrant(value) || dispatchedProofs.has(value)) return false;
+    dispatchedProofs.add(value);
+    return true;
+  }
 
   function discardExpired(now: number): void {
     for (const [grantId, grant] of pending) {
       if (grant.expiresAt <= now) pending.delete(grantId);
     }
+  }
+
+  function consume(grantId: string, liveBinding: GrantBinding): boolean {
+    const grant = pending.get(grantId);
+    if (grant === undefined) return false;
+
+    // Delete before expiry or binding checks so every attempt is strictly one-use.
+    pending.delete(grantId);
+
+    let now: number;
+    let liveFingerprint: Buffer;
+    try {
+      now = clock();
+      if (!Number.isFinite(now) || grant.expiresAt <= now) return false;
+      liveFingerprint = fingerprint(liveBinding);
+    } catch {
+      return false;
+    }
+
+    return timingSafeEqual(grant.fingerprint, liveFingerprint);
+  }
+
+  function consumeForDispatch(grantId: string, liveBinding: GrantBinding, tabId: number): ConsumedGrant | null {
+    if (!Number.isSafeInteger(tabId) || !consume(grantId, liveBinding)) return null;
+    const proof = Object.freeze({
+      grantId,
+      targetId: liveBinding.targetId,
+      kind: liveBinding.kind,
+      tabId,
+      snapshotVersion: liveBinding.model.snapshotVersion,
+    }) as ConsumedGrant;
+    consumedProofs.add(proof);
+    return proof;
   }
 
   return {
@@ -86,25 +148,10 @@ export function createGrantStore(clock: () => number = Date.now): GrantStore {
       return { grantId, expiresAt };
     },
 
-    consume(grantId, liveBinding): boolean {
-      const grant = pending.get(grantId);
-      if (grant === undefined) return false;
-
-      // Delete before expiry or binding checks so every attempt is strictly one-use.
-      pending.delete(grantId);
-
-      let now: number;
-      let liveFingerprint: Buffer;
-      try {
-        now = clock();
-        if (!Number.isFinite(now) || grant.expiresAt <= now) return false;
-        liveFingerprint = fingerprint(liveBinding);
-      } catch {
-        return false;
-      }
-
-      return timingSafeEqual(grant.fingerprint, liveFingerprint);
-    },
+    consume,
+    consumeForDispatch,
+    isConsumedGrant,
+    claimDispatch,
 
     clear(grantId): void {
       if (grantId === undefined) pending.clear();

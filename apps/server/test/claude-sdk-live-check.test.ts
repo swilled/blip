@@ -16,7 +16,7 @@ import {
   type LiveCheckProbeEvidence,
   type LiveCheckProvider,
 } from "../scripts/claude-sdk-live-check";
-import { RepairCache } from "../src/brain/claude/repair-cache";
+import { RepairCache, repairCacheIdentity } from "../src/brain/claude/repair-cache";
 import { InvalidClaudeOutputError } from "../src/brain/claude/provider";
 import { UnexpectedClaudeToolsError } from "../src/brain/claude/session";
 import type { ClaudeStartupDiagnostic } from "../src/brain/claude/session";
@@ -455,6 +455,8 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       title: "Repaired synthetic title",
       fields: [{ id: FIELD_ID, label: "Work email address", confidence: 0.9 }],
     });
+    expect(repairCacheIdentity(SYNTHETIC_URL, SYNTHETIC_STRUCTURE))
+      .toBe("70612d344025925053df33efb988dcb682161c4f73aa81d88ac3becd9ea244b6");
 
     const serialized = JSON.stringify(result);
     for (const privateValue of [

@@ -63,3 +63,7 @@
 ## External research applied
 
 - WHATWG HTML Standard, form submission: `HTMLFormElement.submit()` bypasses the submit event; `requestSubmit()` participates in validation and fires a submit event. This is why the Phase 3 plan must test both APIs separately.
+
+## HO-8 amendment (2026-10-17)
+
+Voice/core integration uses **“submit survey”** as the one fixed submit confirmation phrase. The server still accepts only the single exact per-kind phrase after the existing case, whitespace, and terminal-punctuation normalization; it does not add aliases or page-derived confirmation wording.

@@ -225,7 +225,7 @@ describe("gated audit privacy", () => {
       expect(serialized).not.toContain(snapshot.url);
       expect(serialized).not.toContain(buildBaselineFormModel(snapshot).title);
       expect(serialized).not.toContain("Full name");
-      expect(serialized).not.toContain("submit booking");
+      expect(serialized).not.toContain("submit survey");
     } finally {
       setLogSink(previous);
     }

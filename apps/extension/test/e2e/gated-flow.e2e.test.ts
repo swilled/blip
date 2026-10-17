@@ -7,7 +7,7 @@ import { openFixturePage, type BrowserFixtureSession } from "./harness.js";
 
 const enabled = process.env["BLIP_E2E_BROWSER"] === "1";
 const REQUEST_ACTION_PHRASE = "please submit the booking";
-const CONFIRMATION_PHRASE = "submit booking";
+const CONFIRMATION_PHRASE = "submit survey";
 const PAGE_PATH = "/gated-form.html";
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -163,7 +163,7 @@ describe("real voice-role gated submit and result flow", () => {
       expect(changedText).toContain("Card number is present and has a value.");
       expect(changedText).not.toContain(cardNumber);
       expect(changedText).not.toContain("Hidden page instruction");
-      expect(changedText).toContain("To continue, say: submit booking.");
+      expect(changedText).toContain("To continue, say: submit survey.");
       expect(changedText).toContain("Page: Guest booking.");
       expect(changedText).toContain("Requested action: submit, Book my guest stay.");
       expect(changedText.indexOf("Guest name: Alex Visitor.")).toBeLessThan(changedText.indexOf("Email address: alex@example.com."));

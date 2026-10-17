@@ -1,7 +1,7 @@
 import type { ActionKind } from "@blip/protocol";
 
 const CONFIRMATION_PHRASES: Readonly<Partial<Record<ActionKind, string>>> = {
-  submit: "submit booking",
+  submit: "submit survey",
   pay: "confirm payment",
   delete: "confirm deletion",
   send: "confirm sending",

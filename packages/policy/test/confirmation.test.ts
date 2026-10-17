@@ -3,7 +3,7 @@ import type { ActionKind } from "@blip/protocol";
 import { matchesConfirmationPhrase, phraseForKind } from "@blip/policy/confirmation";
 
 const phrases: ReadonlyArray<readonly [ActionKind, string]> = [
-  ["submit", "submit booking"],
+  ["submit", "submit survey"],
   ["pay", "confirm payment"],
   ["delete", "confirm deletion"],
   ["send", "confirm sending"],
@@ -33,6 +33,7 @@ describe("confirmation phrases", () => {
       `please ${phrase}`,
       `confirm ${phrase}`,
       otherPhrase,
+      "submit booking",
       "Place my order",
     ]) {
       expect(matchesConfirmationPhrase(kind, candidate)).toBe(false);

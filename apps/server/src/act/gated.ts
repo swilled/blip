@@ -1,13 +1,13 @@
 import { isGatedKind, newId, type ActResult, type Intent, type SpeakDonePayload } from "@blip/protocol";
 import { matchesConfirmationPhrase, phraseForKind } from "@blip/policy/confirmation";
 import type { Hub } from "../hub/hub";
+import { createGatePort, type GatePort } from "./gate-port";
 import { log } from "../log";
 import type { Refresher } from "../session/refresh";
 import type { PendingGatedAction, Session } from "../session/session";
 import { formatResultSpeech, interpretResult } from "../results/interpret";
 
 const MAX_READBACK_CHARS = 20_000;
-const ACT_TIMEOUT_MS = 5_000;
 const COOLDOWN_MS = 1_000;
 const MSG_NO_EXTENSION = "I can't see the page because the browser extension is not connected.";
 const MSG_READ_FAILED = "I couldn't safely read the current form, so nothing was submitted.";
@@ -24,6 +24,8 @@ const MSG_GRANT_EXPIRED = "The confirmation expired. Nothing was carried out; pl
 
 export type GatedContext = {
   hub: Hub;
+  /** Production supplies the explicit dispatch boundary; tests may derive it from their Hub. */
+  gatePort?: GatePort;
   session: Session;
   refresher: Refresher;
   clock?: () => number;
@@ -45,10 +47,10 @@ function audit(outcome: "allowed" | "refused", reason: string, kind?: string, ta
 }
 
 function speak(ctx: GatedContext, text: string, category: "answer" | "error" | "confirm-prompt", speakId = newId()): string | null {
+  if (!ctx.hub.send("voice", "speak", { speakId, text, category, interrupt: category === "confirm-prompt" })) return null;
+  ctx.session.trackSpeech(speakId);
   ctx.session.lastSpoken = text;
-  return ctx.hub.send("voice", "speak", { speakId, text, category, interrupt: category === "confirm-prompt" })
-    ? speakId
-    : null;
+  return speakId;
 }
 
 function spokenText(value: string): string {
@@ -298,6 +300,7 @@ export function handleGatedSpeakDone(
   payload: SpeakDonePayload,
 ): boolean {
   const { session } = ctx;
+  if (!session.completeSpeech(payload.speakId)) return false;
   const pending = session.pendingGatedAction;
   if (pending === null || pending.speakId !== payload.speakId || pending.speechCompletedAt !== null) return false;
   if (payload.interrupted) {
@@ -361,6 +364,9 @@ async function acceptConfirmation(ctx: GatedContext, text: string): Promise<void
   }
 
   const refreshed = await ctx.refresher.request("refresh");
+  // Multiple voice frames can pass the initial check while this refresh is in flight.
+  // Only the first continuation may claim the grant and dispatch.
+  if (pending.dispatching) return;
   if (!refreshed.ok || ctx.session.pendingGatedAction !== pending || ctx.session.model === null || ctx.session.stale || ctx.session.tabId === null) {
     return finishPending(ctx, pending, refreshed.ok ? "page-changed" : refreshed.kind, {
       wireReason: "page-changed",
@@ -385,27 +391,21 @@ async function acceptConfirmation(ctx: GatedContext, text: string): Promise<void
   }
 
   const grantId = pending.grantId;
-  if (!ctx.session.grants.consume(grantId, safeBinding(ctx.session, pending.targetId, target.kind))) {
+  const authorization = ctx.session.grants.consumeForDispatch(
+    grantId,
+    safeBinding(ctx.session, pending.targetId, target.kind),
+    ctx.session.tabId,
+  );
+  if (authorization === null) {
     return finishPending(ctx, pending, "value-changed", { wireReason: "value-changed", reply: MSG_VALUE_CHANGED });
   }
 
   // Consume is synchronous and precedes the only extension dispatch. A duplicate voice frame sees
   // dispatching=true and cannot pass through this point while the request is outstanding.
   pending.dispatching = true;
-  const request = {
-    actId: newId(),
-    tabId: ctx.session.tabId,
-    snapshotVersion: model.snapshotVersion,
-    action: { op: "click" as const, targetId: pending.targetId },
-    expectedKind: pending.kind,
-    gate: { grantId, kind: pending.kind },
-  };
   let result: { payload: ActResult };
   try {
-    result = await ctx.hub.request("extension", "act.request", request, {
-      expect: "act.result",
-      timeoutMs: ACT_TIMEOUT_MS,
-    });
+    result = await (ctx.gatePort ?? createGatePort(ctx.hub, ctx.session.grants)).dispatchClick(authorization);
   } catch {
     return finishPending(ctx, pending, "dispatch-unverified", { wireReason: "cancelled", reply: MSG_DISPATCH_UNKNOWN });
   }

@@ -78,6 +78,37 @@ describe("createGrantStore", () => {
     expect(store.consume(armed!.grantId, binding)).toBe(false);
   });
 
+  it("returns an opaque dispatch proof only after consuming the exact live grant", () => {
+    const store = createGrantStore(() => 100);
+    const binding = makeBinding();
+    const grantId = armedId(store, binding);
+    const proof = store.consumeForDispatch(grantId, binding, 9);
+
+    expect(proof).toMatchObject({
+      grantId,
+      targetId: binding.targetId,
+      kind: binding.kind,
+      tabId: 9,
+      snapshotVersion: binding.model.snapshotVersion,
+    });
+    expect(store.isConsumedGrant(proof)).toBe(true);
+    expect(store.consumeForDispatch(grantId, binding, 9)).toBeNull();
+
+    const copiedMetadata = { ...proof! };
+    expect(store.isConsumedGrant(copiedMetadata)).toBe(false);
+    expect(createGrantStore(() => 100).isConsumedGrant(proof)).toBe(false);
+  });
+
+  it("does not produce a dispatch proof for a changed live binding", () => {
+    const store = createGrantStore(() => 100);
+    const binding = makeBinding();
+    const grantId = armedId(store, binding);
+    const changed = makeBinding({ targetId: "other-submit" });
+
+    expect(store.consumeForDispatch(grantId, changed, 9)).toBeNull();
+    expect(store.consumeForDispatch(grantId, binding, 9)).toBeNull();
+  });
+
   it.each([
     [29_999, true],
     [30_000, false],

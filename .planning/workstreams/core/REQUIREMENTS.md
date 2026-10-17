@@ -60,7 +60,7 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 |-------------------|------------------------|------------------------------|-----------|
 | VOX-03 typed input + voice UI ws client | Phase 1 criterion 5, Phase 2 I1 round trip | `tools/repl` | I1 |
 | VOX-04 TTS queue + `speak.done` | Read-back -> arm-confirm sequencing (GATE-05) | REPL auto-sends `speak.done` | I1 / I2 |
-| VOX-05 barge-in with confirm guard | Blip's own "say 'submit booking'" can't confirm itself; enforced server-side by GATE-08 | n/a (typed REPL) | I2 |
+| VOX-05 barge-in with confirm guard | Blip's own "say 'submit survey'" can't confirm itself; enforced server-side by GATE-08 | n/a (typed REPL) | I2 |
 | DLG-08 read back, DLG-09 confirm phrase states | Phase 3 I2 gated submit | core stub dialogue reducer | I2 |
 | DLG-05 profile fill, DLG-12 sensitive handoff | Exercise ACT-01/ACT-04 fills and the `focus`-only path for sensitive fields | REPL `set_fields` | I2 |
 | DEMO-01 broken demo form | Phase 3 I2, Phase 4 label repair | core's own extension test pages | I2 |

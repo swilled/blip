@@ -299,6 +299,25 @@ describe("gated Executor read-back preparation", () => {
     expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(1);
   });
 
+  it("keeps concurrent confirmation frames to one dispatch", async () => {
+    const rig = preparationRig();
+    const ctx = { hub: rig.hub, session: rig.session, refresher: rig.refresher, clock: rig.clock, schedule: rig.schedule };
+    await executeGatedAction(ctx, { type: "request_action", actionId: rig.action.id });
+    const speakId = rig.session.pendingGatedAction!.speakId;
+    expect(handleGatedSpeakDone(ctx, { speakId, interrupted: false })).toBe(true);
+    rig.fakeTime.now += 1_000;
+    rig.scheduled.shift()!.callback();
+
+    const phrase = phraseForKind(rig.action.kind)!;
+    await Promise.all([
+      executeGatedAction(ctx, { type: "confirmation", text: phrase }),
+      executeGatedAction(ctx, { type: "confirmation", text: phrase }),
+    ]);
+
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(1);
+    expect(rig.session.pendingGatedAction).toBeNull();
+  });
+
   it("rejects an early phrase, changed field values, and an expired grant without dispatch", async () => {
     const early = preparationRig();
     const earlyCtx = { hub: early.hub, session: early.session, refresher: early.refresher, clock: early.clock, schedule: early.schedule };
@@ -351,7 +370,7 @@ describe("gated Executor read-back preparation", () => {
   });
 
   it("rejects yes, aliases, and a phrase for a different action kind", async () => {
-    for (const text of ["yes", "submit", "book this room", "confirm payment"]) {
+    for (const text of ["yes", "submit", "submit booking", "book this room", "confirm payment"]) {
       const rig = preparationRig();
       const ctx = { hub: rig.hub, session: rig.session, refresher: rig.refresher, clock: rig.clock, schedule: rig.schedule };
       await executeGatedAction(ctx, { type: "request_action", actionId: rig.action.id });
@@ -387,7 +406,7 @@ describe("gated Executor read-back preparation", () => {
     expect(serialized).not.toContain(rig.session.model!.url);
     expect(serialized).not.toContain("Hotel booking");
     expect(serialized).not.toContain("Book room");
-    expect(serialized).not.toContain("submit booking");
+    expect(serialized).not.toContain("submit survey");
   });
 
   it("routes a model-produced click_safe on a gated target into the same read-back Executor", async () => {
@@ -470,7 +489,7 @@ describe("gated Executor read-back preparation", () => {
     try {
       voice.send("utterance", { utteranceId: "request-1", text: "please submit the booking", source: "typed" });
       const firstPrompt = await nextMatching(voice, (frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt");
-      voice.send("utterance", { utteranceId: "early-1", text: "submit booking", source: "typed" });
+      voice.send("utterance", { utteranceId: "early-1", text: "submit survey", source: "typed" });
       await nextMatching(voice, (frame) => frame.type === "speak" && frame.payload.category === "error" && frame.payload.text.includes("not accepted"));
       expect(extension.received().filter((message) => message.type === "act.request")).toHaveLength(0);
       expect(server.session.pendingGatedAction).toBeNull();
@@ -492,7 +511,7 @@ describe("gated Executor read-back preparation", () => {
       scheduled.shift()!.callback();
       await nextMatching(voice, (frame) => frame.type === "confirm.armed");
 
-      voice.send("utterance", { utteranceId: "confirm-1", text: "Submit booking!", source: "typed" });
+      voice.send("utterance", { utteranceId: "confirm-1", text: "Submit survey!", source: "typed" });
       await nextMatching(voice, (frame) => frame.type === "speak" && frame.payload.category === "error" && frame.payload.text.includes("page refused"));
       const acts = extension.received().filter((message) => message.type === "act.request");
       expect(acts).toHaveLength(1);

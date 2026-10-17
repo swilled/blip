@@ -45,6 +45,8 @@ export class Session {
   stale = true;
   /** The text of the last `speak` the server sent, for "repeat". */
   lastSpoken: string | null = null;
+  /** Latest successfully sent speech; stale speak.done frames cannot complete newer speech. */
+  activeSpeakId: string | null = null;
   /** Confirmation state is local to this voice session and never comes from an Intent. */
   pendingGatedAction: PendingGatedAction | null = null;
   /** Existing server-only one-use grant store from the Phase 3 foundation. */
@@ -57,6 +59,18 @@ export class Session {
   constructor(brain: Brain, clock: () => number = Date.now) {
     this.brain = brain;
     this.grants = createGrantStore(clock);
+  }
+
+  /** Track a speech only after its frame was accepted by the live voice connection. */
+  trackSpeech(speakId: string): void {
+    this.activeSpeakId = speakId;
+  }
+
+  /** Clear only the matching active speech; old completion frames are ignored. */
+  completeSpeech(speakId: string): boolean {
+    if (this.activeSpeakId !== speakId) return false;
+    this.activeSpeakId = null;
+    return true;
   }
 
   get extensionConnected(): boolean {

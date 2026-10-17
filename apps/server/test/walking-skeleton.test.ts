@@ -216,11 +216,25 @@ describe("grammar commands", () => {
       const nothing = speaks(await turn(r.voice, "repeat"))[0]!;
       expect(nothing.payload.text).toBe("There's nothing to repeat.");
 
-      const said = speaks(await turn(r.voice, "what's here"))[0]!.payload.text;
+      const saidFrame = speaks(await turn(r.voice, "what's here"))[0]!;
+      const said = saidFrame.payload.text;
+      expect(r.server.session.activeSpeakId).toBe(saidFrame.payload.speakId);
       const stop = speaks(await turn(r.voice, "stop"))[0]!;
       expect(stop.payload.interrupt).toBe(true);
+      expect(stop.payload.speakId).not.toBe(saidFrame.payload.speakId);
+      r.voice.send("speak.done", { speakId: saidFrame.payload.speakId, interrupted: true });
+      await sleep(10);
+      expect(r.server.session.activeSpeakId).toBe(stop.payload.speakId);
+
       const again = speaks(await turn(r.voice, "say that again"))[0]!;
       expect(again.payload.text).toBe(said);
+      expect(again.payload.speakId).not.toBe(stop.payload.speakId);
+      r.voice.send("speak.done", { speakId: stop.payload.speakId, interrupted: true });
+      await sleep(10);
+      expect(r.server.session.activeSpeakId).toBe(again.payload.speakId);
+      r.voice.send("speak.done", { speakId: again.payload.speakId, interrupted: false });
+      await sleep(10);
+      expect(r.server.session.activeSpeakId).toBeNull();
     } finally {
       await r.cleanup();
     }
@@ -234,7 +248,7 @@ describe("fail-closed brain (T-01-26, GATE-05 foundation)", () => {
       const frames = await turn(r.voice, "go ahead and book it");
       const confirmationPrompt = speaks(frames).find((frame) => frame.payload.category === "confirm-prompt");
       expect(confirmationPrompt?.payload.text).toContain("Page: Hotel booking.");
-      expect(confirmationPrompt?.payload.text).toContain("To continue, say: submit booking.");
+      expect(confirmationPrompt?.payload.text).toContain("To continue, say: submit survey.");
       await sleep(100);
       expect(r.extension!.received().filter((m) => m.type === "act.request")).toHaveLength(0);
       expect(r.voice.frames.some((f) => f.type === "confirm.armed")).toBe(false);

@@ -15,6 +15,7 @@ import { RepairCoordinator, type RepairProvider } from "./brain/claude/repair-co
 import type { ClaudeSdkAdapter, ClaudeSessionOptions } from "./brain/claude/session";
 import { handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
+import { createGatePort } from "./act/gate-port";
 
 export type StartServerOptions = {
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
@@ -169,18 +170,18 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     },
     "speak.done": ({ message, hub: h, session: s }) => {
       if (message.type !== "speak.done") return;
-      const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
+      const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       handleGatedSpeakDone(gatedContext, message.payload);
     },
     settings: () => {},
     ptt: ({ message, hub: h, session: s }) => {
       if (message.type !== "ptt" || message.payload.state !== "start") return;
-      const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
+      const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       invalidateGatedAction(gatedContext, "cancelled", "push-to-talk-interrupted");
     },
     control: ({ message, hub: h, session: s }) => {
       if (message.type !== "control") return;
-      const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
+      const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       if (message.payload.cmd === "stop") {
         invalidateGatedAction(gatedContext, "cancelled", "stop-command");
         return sayStop(h, s);
@@ -198,7 +199,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       );
     },
     "page.changed": ({ hub: h, session: s }) => {
-      const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
+      const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       invalidateGatedAction(gatedContext, "page-changed", "page-changed");
       s.stale = true;
       void refresher.request("refresh").then((result) => {

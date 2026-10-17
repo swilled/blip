@@ -21,7 +21,7 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 - [ ] User can dictate values for fields and hear each value echoed back (spelled on request)
 - [ ] User can say "fill from my profile" and Blip fills matching fields from a local profile (autocomplete-token mapped)
 - [ ] User can say "read back" and hear every field and value grouped, with empty required fields called out
-- [ ] Submit / pay / delete / send / cross-domain navigation are hard-blocked by a policy gate until the user speaks a distinct phrase (e.g. "submit booking"), never a bare "yes"
+- [ ] Submit / pay / delete / send / cross-domain navigation are hard-blocked by a policy gate until the user speaks a distinct phrase ("submit survey" for submit), never a bare "yes"
 - [ ] After submit, Blip reads the result page: confirmation or each error tied to its field
 - [ ] Page content is treated as untrusted data; a seeded prompt-injection page cannot trigger a gated action
 - [ ] Push-to-talk input (global hotkey) with typed-text fallback everywhere voice works
@@ -94,7 +94,7 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 | Policy gate in the Executor + extension (default-deny, kind from fail-closed rules, grant bound to target/kind/URL/values hash, 30 s TTL) | Core value: model cannot bypass the submit gate; Enter-to-submit and div buttons bypass a click-only gate | — Pending |
 | Grammar first, model last | ~70–80% of commands (incl. confirm phrase) are code templates; keeps latency and quota down | — Pending |
 | Vertical MVP phase structure in each workstream | Always-demoable state; integration milestones at ~h6–8, ~h12, ~h20 | — Pending |
-| Distinct confirm phrase ("submit booking"), never bare "yes" | Irreversible actions need deliberate intent (from source plan) | — Pending |
+| Distinct confirm phrase ("submit survey"), never bare "yes" | Irreversible actions need deliberate intent (from source plan); wording matches the survey demo | — Pending |
 | TypeScript for everything | One toolchain shared by both developers | — Pending |
 | Web Speech API + push-to-talk first; on-device models out of scope | Fastest path to working voice in timebox | — Pending |
 | GSD workstreams `core` and `voice`, one per developer | Separate STATE/ROADMAP per machine avoids planning merge conflicts | — Pending |
