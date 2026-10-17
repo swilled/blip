@@ -1,4 +1,4 @@
-import { buildFrame, CLOSE_CODES, DEFAULT_PORT, LOOPBACK_HOST, PING_INTERVAL_MS, WS_PATH, parseFrame } from "@blip/protocol";
+import { buildFrame, CLOSE_CODES, DEFAULT_PORT, LOOPBACK_HOST, PING_INTERVAL_MS, WS_PATH, parseFrame, type PayloadOf } from "@blip/protocol";
 import type { Message } from "@blip/protocol";
 import { SOCKET_PONG_TIMEOUT_MS, SocketState } from "./socket-state.js";
 import { dispatchSnapshotRequest } from "./dispatch.js";
@@ -15,6 +15,31 @@ let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let pingTimer: ReturnType<typeof setInterval> | undefined;
 let pongTimer: ReturnType<typeof setTimeout> | undefined;
 const socketState = new SocketState();
+const welcomeListeners = new Set<() => void>();
+
+/** Register a one-way hook for each correlated welcome, including reconnects. */
+export function onSocketWelcome(listener: () => void): () => void {
+  welcomeListeners.add(listener);
+  return () => welcomeListeners.delete(listener);
+}
+
+function notifySocketWelcome(): void {
+  for (const listener of welcomeListeners) {
+    try {
+      listener();
+    } catch {
+      // A page-change callback must never interrupt socket protocol handling.
+    }
+  }
+}
+
+/** Send page signals only on the current, welcomed extension connection. */
+export function sendPageChanged(payload: PayloadOf<"page.changed">): boolean {
+  const current = socket;
+  if (!welcomed || !current || current.readyState !== WebSocket.OPEN) return false;
+  send(current, buildFrame("page.changed", payload));
+  return true;
+}
 
 export function isAllowedSocketUrl(value: string): boolean {
   try {
@@ -107,12 +132,14 @@ export function ensureConnected(): void {
     send(current, hello);
   });
   current.addEventListener("message", (event) => {
+    if (socket !== current) return;
     const parsed = parseFrame(String(event.data));
     if (!parsed.ok) return;
     const message = parsed.message;
     if (!welcomed) {
       if (message.type === "welcome" && message.replyTo === welcomeId) {
         welcomed = true;
+        notifySocketWelcome();
         pingTimer = setInterval(() => {
           if (current.readyState !== WebSocket.OPEN) return;
           socketState.onPing();

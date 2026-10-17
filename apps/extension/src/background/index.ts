@@ -2,12 +2,14 @@ import { buildFrame, parseFrame } from "@blip/protocol";
 import { ensureConnected } from "./socket.js";
 import { injectExistingTabs } from "./inject.js";
 import { registerTargetTabTracking } from "./tabs.js";
+import { handleContentRuntimeMessage, registerPageChangeTracking } from "./changes.js";
 
 function ensureReconnectAlarm(): void {
   void chrome.alarms.create("blip-reconnect", { periodInMinutes: 0.5 });
 }
 
 registerTargetTabTracking();
+registerPageChangeTracking();
 
 // Register all wake-up paths synchronously before opening the first socket.
 chrome.runtime.onStartup.addListener(() => {
@@ -23,7 +25,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "blip-reconnect") ensureConnected();
 });
 chrome.runtime.onMessage.addListener((_message, _sender, sendResponse) => {
-  if (_sender.id !== chrome.runtime.id || typeof _message !== "object" || _message === null) return;
+  if (_sender.id !== chrome.runtime.id) return;
+  if (handleContentRuntimeMessage(_message, _sender)) return;
+  if (typeof _message !== "object" || _message === null) return;
   const parsed = parseFrame(JSON.stringify(_message));
   if (!parsed.ok) return;
 
