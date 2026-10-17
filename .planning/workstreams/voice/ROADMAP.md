@@ -74,7 +74,21 @@ Decimal phases appear between their surrounding integers in numeric order.
   - uiohook-napi fails: use the `chrome.commands` toggle (press to start, press to stop).
   - NVDA DLL fails: route speech to an in-page live region through the extension's `announce` (decided in Phase 4).
 - Typed input is the safety net everywhere.
-**Plans**: TBD
+**Plans**: 11 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — M0 sign-off: review frozen protocol, ptt.hold request, GATE-08 reliance, Effect/Event types, doc fixes
+- [ ] 01-02-PLAN.md — Package gate (uiohook-napi, koffi), voice workspaces, additive root config, PTT state machine
+- [ ] 01-03-PLAN.md — Spike tooling (spike page, log server, PTT/pin/NVDA scripts)
+- [ ] 01-04-PLAN.md — Run spikes A-F and record 01-SPIKE-DECISIONS.md
+- [ ] 01-05-PLAN.md — Broken-form model fixture, dialogue reducer, mock server on the frozen protocol
+- [ ] 01-06-PLAN.md — Voice status machine, speech queue with per-speak completion, window markup and styles
+- [ ] 01-07-PLAN.md — Protocol client, speak.done bridge, earcons, main wiring, Vite build
+- [ ] 01-08-PLAN.md — Listening/barge-in state, echo filter, STT wrapper, global PTT hook wrapper
+- [ ] 01-09-PLAN.md — Talk controller, hold delivery (ptt.hold or sidecar), window wiring
+- [ ] 01-10-PLAN.md — Window launcher, in-process dev and real runners, manual PTT run
+- [ ] 01-11-PLAN.md — I1 hand-offs and real-server cutover run
+
 **UI hint**: yes
 
 ### Phase 2: Fill and Gated Submit on the Broken Form
