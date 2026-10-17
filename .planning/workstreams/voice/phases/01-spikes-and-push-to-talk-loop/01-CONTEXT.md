@@ -20,7 +20,7 @@ The user can hold a key while the form tab is focused, speak or type a command, 
 - **D-02:** Push-to-talk is a global hold of **Right Ctrl + Space** via `uiohook-napi`. Hold to talk, release to send. It works from the form tab.
 
 ### Interrupting Blip
-- **D-03:** Holding push-to-talk or saying "stop" cuts Blip off right away. The mic opens only after Blip has finished speaking.
+- **D-03:** The user can interrupt Blip by speaking. As soon as the user speaks, Blip stops and the new utterance starts a new prompt. (User decision, 2026-10-16.) **Conflict:** this requires the mic to be open during Blip's speech, which contradicts VOX-05 ("the mic is never open while Blip speaks"). VOX-05 and the echo risk (Blip hearing its own voice) must be resolved before planning. See Open Questions.
 
 ### Transcript display
 - **D-04:** The popup shows a live caption of the current utterance and a finished log of each exchange (what was said, what Blip replied).
