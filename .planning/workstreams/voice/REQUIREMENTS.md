@@ -43,7 +43,7 @@
 
 ### Demo
 
-- [ ] **DEMO-01**: A self-hosted deliberately broken form (W3C WAI BAD "Survey" style: unlabeled inputs, placeholder-only labels, div buttons, color-only errors) is available locally
+- [x] **DEMO-01**: A self-hosted deliberately broken form (W3C WAI BAD "Survey" style: unlabeled inputs, placeholder-only labels, div buttons, color-only errors) is available locally
 - [ ] **DEMO-02**: A fictional demo profile and a one-command reset script restore the demo state between runs
 - [ ] **DEMO-03**: At least one real public form (e.g. a team-owned Google Form) can be completed end to end by voice
 - [ ] **DEMO-04**: The demo has a fallback kit: offline copies of the demo sites, a phone hotspot plan, a backup video, and a rehearsed plan-B script
@@ -108,7 +108,7 @@
 | DLG-14 | voice | Phase 3 | Pending |
 | VIS-01 | voice | Phase 1 | Pending |
 | VIS-02 | voice | Phase 2 | Pending |
-| DEMO-01 | voice | Phase 2 | Pending |
+| DEMO-01 | voice | Phase 2 | Complete |
 | DEMO-02 | voice | Phase 2 | Pending |
 | DEMO-03 | voice | Phase 4 | Pending |
 | DEMO-04 | voice | Phase 4 | Pending |
