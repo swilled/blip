@@ -1,10 +1,11 @@
 # Phase 4 Follow-up Live SDK Check
 
-phase04FollowupApproval: defer-04-08-live-check
+phase04FollowupApproval: approve-04-08-live-check
+approvalRecorded: 2026-10-17
 
 ## Decision provenance
 
-The user delegated the `$gsd-next` choice to the executor. The executor selected `defer-04-08-live-check` because the separate live check could consume subscription allowance and no fresh explicit authorization was provided. The user did not send the exact token directly.
+The earlier `$gsd-next` run deferred this check because no fresh explicit authorization had been provided. On 2026-10-17, the user answered `approve-04-08-live-check` to the explicit checkpoint asking approval for one 15-minute, five-prompt synthetic live check. This exact response authorizes only the scope below.
 
 ## Approval scope
 
@@ -26,9 +27,9 @@ The pinned SDK declarations document `tools: []` as disabling built-in tools, `s
 
 ## Result
 
-status: externally_blocked
+status: approved_pending_run
 stage: not_started
-blockingReason: fresh live-use approval was deferred
+blockingReason: none
 sdkInitializationCount: 0
 elapsedMs: 0
 intentPromptCount: 0
