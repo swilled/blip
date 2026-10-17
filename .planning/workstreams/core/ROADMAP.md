@@ -53,7 +53,14 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
   4. The server listens on 127.0.0.1 only; a WebSocket opened from an ordinary web page (Origin not the extension or voice UI) is rejected, and an `utterance` from a client that said hello as `extension` is refused.
   5. The voice developer's UI, pointed at the real server instead of its mock, connects as `role=voice` and receives `welcome` and `state` pushes, so the voice track can retire `dev/mock-server`.
 **Research**: Standard patterns, no spike. Record at M0: port (7777 vs 8787), and intent-as-data with the gate in the Executor (supersedes MCP tools).
-**Plans**: TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Workspace scaffold, dependency-pin gate, registry tracer, domain schemas (ActionKind, Snapshot, FormModel, Intent, Act*)
+- [ ] 01-02-PLAN.md — Full 24-message registry, PROTOCOL.md checked against it by test, pinned extension identity
+- [ ] 01-03-PLAN.md — Fixtures, pure baseline form model under 100 ms (PAGE-02), M0 freeze decision and lock
+- [ ] 01-04-PLAN.md — Loopback hub with Origin/Host guard and role-bound permissions (PROT-04)
+- [ ] 01-05-PLAN.md — Walking skeleton: fake brain, fake extension, REPL, `npm run dev -- --brain=fake` (PROT-02)
 **UI hint**: no
 
 ### Phase 2: Real Page Read and Fill
@@ -130,7 +137,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract and Walking Skeleton | 0/TBD | Not started | - |
+| 1. Contract and Walking Skeleton | 0/5 | Planned | - |
 | 2. Real Page Read and Fill | 0/TBD | Not started | - |
 | 3. Gated Submit and Result Reading | 0/TBD | Not started | - |
 | 4. Claude Brain and Label Repair | 0/TBD | Not started | - |
