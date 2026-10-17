@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 02
 current_phase_name: Fill and Gated Submit on the Broken Form
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-10-17T04:55:31.424Z"
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-10-17T05:14:33.330Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 02 execution started
-state_head: 49ae9f57ea472286cdad065ce944d0080049b289
+state_head: e363f1eb89016d8ea93a750dd9163e995c835d61
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 18
-  completed_plans: 14
+  completed_plans: 15
 milestone_name: milestone
 ---
 
@@ -30,7 +30,7 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 ## Current Position
 
 Phase: 02 (Fill and Gated Submit on the Broken Form) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-10-16 — Phase 02 execution started
 
@@ -68,6 +68,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P01 | 8min | 2 tasks | 5 files |
 | Phase 02 P02 | 10 min | 3 tasks | 8 files |
 | Phase 02 P03 | 8min | 2 tasks | 5 files |
+| Phase 02 P04 | 18min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,7 @@ Recent decisions affecting the voice track:
 - [Phase 02]: Field matching uses normalized token lists and returns ambiguity instead of guessing. — This keeps page text out of regular expressions and makes uncertain dictation fail closed.
 - [Phase 02]: Confirmation accepts only the exact requested token sequence with a one-second gate window. — Affirmatives and near-phrases cannot arm or satisfy the submit gate.
 - [Phase 02]: Spoken echo and read-back use observed page values and hide sensitive fields. — The user hears what the page holds while password and card values remain undisclosed.
+- [Phase 02]: Keep kind: armConfirm as the Effect discriminant and name its ActionKind payload actionKind. — An Effect object cannot carry two different kind properties; this keeps the type contract unambiguous and aligned with Plans 02-05 and 02-06.
 
 ### Pending Todos
 
@@ -105,6 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-17T04:55:31.280Z
-Stopped at: Completed 02-03-PLAN.md
+Last session: 2026-10-17T05:14:21.040Z
+Stopped at: Completed 02-04-PLAN.md
 Resume file: None

@@ -22,12 +22,12 @@
 ### Dialogue & Commands
 
 - [x] **DLG-01**: User can ask "what's here" and hear a short counts-first summary (form title, step, number of fields, number required)
-- [ ] **DLG-02**: User can say "read the form" and hear each field in page order with its label and whether it's required
-- [ ] **DLG-03**: User can dictate a value into the current or a named field and hear it echoed back
+- [x] **DLG-02**: User can say "read the form" and hear each field in page order with its label and whether it's required
+- [x] **DLG-03**: User can dictate a value into the current or a named field and hear it echoed back
 - [ ] **DLG-04**: User can say "spell X" and hear the field's value spelled letter by letter
 - [ ] **DLG-05**: User can say "fill from my profile" and matching fields are filled from a local profile mapped by autocomplete tokens; the model only ever sees profile keys, never values
 - [ ] **DLG-06**: User can say "change X to Y" to edit a filled field
-- [ ] **DLG-07**: For selects/radios, Blip reads options numbered in page order and the user can pick by number or name
+- [x] **DLG-07**: For selects/radios, Blip reads options numbered in page order and the user can pick by number or name
 - [ ] **DLG-08**: User can say "read back" and hear every field and value grouped, with empty required fields called out and sensitive values masked
 - [ ] **DLG-09**: Before a gated action, Blip gives a full read-back, then states the distinct phrase (e.g. "say 'submit survey'"); a bare "yes" is rejected
 - [ ] **DLG-10**: User can ask "where am I" (site, step, current field) and "what's required" (remaining required fields)
@@ -93,12 +93,12 @@
 | VOX-07 | voice | Phase 4 | Pending |
 | VOX-08 | voice | Phase 4 | Pending |
 | DLG-01 | voice | Phase 1 | Pending |
-| DLG-02 | voice | Phase 2 | Pending |
-| DLG-03 | voice | Phase 2 | Pending |
+| DLG-02 | voice | Phase 2 | Complete |
+| DLG-03 | voice | Phase 2 | Complete |
 | DLG-04 | voice | Phase 3 | Pending |
 | DLG-05 | voice | Phase 3 | Pending |
 | DLG-06 | voice | Phase 3 | Pending |
-| DLG-07 | voice | Phase 2 | Pending |
+| DLG-07 | voice | Phase 2 | Complete |
 | DLG-08 | voice | Phase 2 | Pending |
 | DLG-09 | voice | Phase 2 | Pending |
 | DLG-10 | voice | Phase 3 | Pending |
