@@ -8,10 +8,15 @@ import {
   type FrameCaptureAdapter,
 } from "./frames.js";
 import { parseElementId } from "./ids.js";
+import { verifySubmitMethodGuard } from "./submit-method-guard.js";
 import { findTargetTab, type TargetTab } from "./tabs.js";
 
 type ActRequestMessage = Extract<Message, { type: "act.request" }>;
 type ActSocket = Pick<WebSocket, "readyState" | "send">;
+
+const GATED_ACTION_KINDS = new Set<ActRequest["expectedKind"]>([
+  "submit", "pay", "delete", "send", "navigate-cross-domain",
+]);
 
 export interface ActFrameAdapter extends FrameCaptureAdapter {
   sendAct(frameId: number, request: ActRequest, snapshotVersion: number): Promise<unknown>;
@@ -41,6 +46,17 @@ function failure(actId: string, error: NonNullable<ActResult["error"]>, newSnaps
     error,
     ...(newSnapshotVersion !== undefined ? { newSnapshotVersion } : {}),
   };
+}
+
+/** A server grant is required only for a click whose requested kind is gated. */
+function hasValidGate(request: ActRequest): boolean {
+  const gated = GATED_ACTION_KINDS.has(request.expectedKind);
+  if (!gated) return request.gate === undefined;
+  return request.action.op === "click" &&
+    request.gate !== undefined &&
+    request.gate.grantId.trim().length > 0 &&
+    request.gate.kind === request.expectedKind &&
+    GATED_ACTION_KINDS.has(request.gate.kind);
 }
 
 function contentActResult(value: unknown, expectedActId: string): ActResult | undefined {
@@ -122,6 +138,22 @@ export async function dispatchActRequest(
     }
     if (before.version !== request.snapshotVersion) {
       reply(socket, message, failure(request.actId, "stale-snapshot", before.version));
+      return;
+    }
+
+    if (!hasValidGate(request)) {
+      reply(socket, message, failure(request.actId, "gate-required", before.version));
+      return;
+    }
+
+    let methodGuardVerified = false;
+    try {
+      methodGuardVerified = await verifySubmitMethodGuard(tab.id, identity.frameId);
+    } catch {
+      methodGuardVerified = false;
+    }
+    if (!methodGuardVerified) {
+      reply(socket, message, failure(request.actId, "exception", before.version));
       return;
     }
 
