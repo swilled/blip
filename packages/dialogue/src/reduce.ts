@@ -3,7 +3,7 @@ import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
 import { handleActResult, handleFillUtterance, handleOptionPick, handleReadUtterance } from "./read-fill";
-import { handleSubmitFlow } from "./submit";
+import { handleSubmitFlow, handleSubmitUtterance } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
 // before it is spoken; only counts are spoken, never field labels or values.
@@ -38,22 +38,32 @@ export function reduce(
   event: DialogueEvent,
   ctx: DialogueContext,
 ): { state: DialogueState; effects: Effect[] } {
-  if (event.type === "intent.reply") return answer(state, event.text);
-
-  if (event.type === "control") {
-    if (event.cmd === "stop") {
-      const ready = cancelEffect({ ...state, mode: "ready" });
-      return { state: ready.state, effects: [ready.effect] };
+  if (event.type !== "utterance") {
+    if (event.type === "speak.done" || event.type === "form.changed" || event.type === "confirm.armed"
+      || event.type === "confirm.refused" || event.type === "confirm.cleared" || event.type === "gated.result") {
+      return handleSubmitFlow(state, event, ctx);
     }
-    return answer(state, state.lastSpoken ?? "There's nothing to repeat.");
+    if (event.type === "act.result") return handleActResult(state, event, ctx);
+    if (event.type === "intent.reply") return answer(state, event.text);
+
+    if (event.type === "control") {
+      if (event.cmd === "stop") {
+        const ready = cancelEffect({ ...state, mode: "ready", readBack: null });
+        return { state: ready.state, effects: [ready.effect] };
+      }
+      return answer(state, state.lastSpoken ?? "There's nothing to repeat.");
+    }
+
+    return handleSubmitFlow(state, event, ctx);
   }
 
-  if (event.type === "act.result") return handleActResult(state, event, ctx);
-  if (event.type !== "utterance") return handleSubmitFlow(state, event, ctx);
   const raw = event.utterance.text;
   if (raw.length > 200) return { state, effects: [{ kind: "parseIntent", text: raw }] };
   const norm = normalizeCommand(raw);
   if (norm === "") return { state, effects: [] };
+
+  const submitResult = handleSubmitUtterance(state, norm, raw, event, ctx);
+  if (submitResult !== null) return submitResult;
 
   if (WHATS_HERE.some((re) => re.test(norm))) {
     const text = ctx.form === null ? "I can't see a page yet." : describe(ctx.form);
