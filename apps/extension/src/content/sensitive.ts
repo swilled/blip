@@ -1,4 +1,7 @@
 import { labelCandidatesOf } from "./labels.js";
+import { isSsn, luhnValid } from "@blip/policy/sensitive-shapes";
+
+export { isSsn, luhnValid } from "@blip/policy/sensitive-shapes";
 
 export type Sensitivity = "none" | "password" | "card-number" | "card-cvc" | "otp" | "ssn";
 
@@ -45,35 +48,6 @@ function semanticSensitivity(element: Element): Sensitivity {
     }
   }
   return "none";
-}
-
-/** Luhn check for a 13-19 digit value that may contain spaces or hyphens. */
-export function luhnValid(value: string): boolean {
-  const normalized = value.trim();
-  if (!normalized || !/^[\d -]+$/.test(normalized)) return false;
-  const digits = normalized.replace(/[ -]/g, "");
-  if (digits.length < 13 || digits.length > 19) return false;
-
-  let sum = 0;
-  let double = false;
-  for (let index = digits.length - 1; index >= 0; index -= 1) {
-    let digit = Number(digits[index]);
-    if (double) {
-      digit *= 2;
-      if (digit > 9) digit -= 9;
-    }
-    sum += digit;
-    double = !double;
-  }
-  return sum % 10 === 0;
-}
-
-/** Recognize the conventional US SSN shape without treating arbitrary nine-digit IDs as SSNs. */
-export function isSsn(value: string): boolean {
-  const match = /^(\d{3})-(\d{2})-(\d{4})$/.exec(value.trim());
-  if (!match) return false;
-  const [, area, group] = match;
-  return area !== "000" && area !== "666" && !area.startsWith("9") && group !== "00" && match[3] !== "0000";
 }
 
 function isHiddenInput(element: Element): boolean {
