@@ -4,7 +4,7 @@ import type { DialogueState, UndoEntry } from "./state";
 import { cancelEffect, speakEffect } from "./state";
 import { fillableFields, matchOption, optionLabelFor, optionList, profileFieldMatches, resolveField, spokenLabel } from "./fields";
 import { cleanValue, normalizeCommand, normalizeEmail, normalizeNumberish } from "./normalize";
-import { changeText, echoText, profileBatchText, readBatchText, requiredEmptyText, spellValueText, undoSummaryText } from "./templates";
+import { changeText, echoText, profileBatchText, readBatchText, requiredEmptyText, requiredFieldsBatchText, spellValueText, undoSummaryText } from "./templates";
 import type { DialogueEvent } from "./events";
 
 type DialogueResult = { state: DialogueState; effects: Effect[] };
@@ -45,14 +45,6 @@ function errorAnswer(state: DialogueState, text: string): DialogueResult {
   return { state: spoken.state, effects: [spoken.effect] };
 }
 
-function requiredText(form: FormModel): string {
-  const fields = fillableFields(form);
-  const required = fields.flatMap((field, index) => field.required ? [{ field, index }] : []);
-  if (required.length === 0) return "No fields are required.";
-  const labels = required.map(({ field, index }) => spokenLabel(field, index + 1));
-  return `${required.length} required: ${labels.join(", ")}.`;
-}
-
 function read(state: DialogueState, form: FormModel, start: number): DialogueResult {
   const batch = readBatchText(form, start, 3);
   const spoken = speakEffect(state, batch.text, "answer", { interruptible: true });
@@ -60,6 +52,7 @@ function read(state: DialogueState, form: FormModel, start: number): DialogueRes
     state: {
       ...spoken.state,
       mode: "reading",
+      requiredCursor: null,
       readCursor: batch.nextIndex,
       currentFieldId: batch.lastFieldId,
       pendingOptions: batch.optionsFieldId ? { fieldId: batch.optionsFieldId } : null,
@@ -550,6 +543,11 @@ export function handleReadUtterance(
   }
 
   if (CONTINUE.has(norm)) {
+    if (state.requiredCursor !== null && ctx.form !== null) {
+      const batch = requiredFieldsBatchText(ctx.form, state.requiredCursor);
+      const spoken = speakEffect(state, batch.text, "answer", { interruptible: true });
+      return { state: { ...spoken.state, requiredCursor: batch.nextCursor }, effects: [spoken.effect] };
+    }
     if (state.readCursor === null) return answer(state, "Say read the form to start.");
     if (ctx.form === null) return answer(state, "I can't see a page yet.");
     return read(state, ctx.form, state.readCursor);
@@ -563,11 +561,14 @@ export function handleReadUtterance(
   if (REPEAT.has(norm)) return answer(state, state.lastSpoken ?? "There's nothing to repeat.");
 
   if (MISSING.has(norm)) {
-    return answer(state, ctx.form === null ? "I can't see a page yet." : requiredEmptyText(ctx.form));
+    return answer(state, ctx.form === null ? "I can't read the page yet. Please reconnect or try again." : requiredEmptyText(ctx.form));
   }
 
   if (REQUIRED.has(norm)) {
-    return answer(state, ctx.form === null ? "I can't see a page yet." : requiredText(ctx.form));
+    if (ctx.form === null) return answer(state, "I can't read the page yet. Please reconnect or try again.");
+    const batch = requiredFieldsBatchText(ctx.form);
+    const spoken = speakEffect(state, batch.text, "answer", { interruptible: true });
+    return { state: { ...spoken.state, requiredCursor: batch.nextCursor }, effects: [spoken.effect] };
   }
 
   return null;

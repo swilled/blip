@@ -2,6 +2,7 @@ import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
+import { orientationText } from "./templates";
 import { continueProfileBatch, continueUndo, handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance, handleUndoUtterance } from "./read-fill";
 import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
 
@@ -44,6 +45,9 @@ export function reduce(
     }
     if (event.type === "form.changed" && state.profileBatch !== null) {
       return continueProfileBatch(state, ctx.form);
+    }
+    if (event.type === "form.changed" && state.requiredCursor !== null) {
+      state = { ...state, requiredCursor: null };
     }
     if (event.type === "speak.done" || event.type === "form.changed" || event.type === "confirm.armed"
       || event.type === "confirm.refused" || event.type === "confirm.cleared" || event.type === "gated.result") {
@@ -95,6 +99,12 @@ export function reduce(
   }
   const norm = normalizeCommand(raw);
   if (norm === "") return { state, effects: [] };
+
+  if (norm === "where am i" || norm === "where am i on this page" || norm === "where am i in the form") {
+    return answer(state, ctx.form === null
+      ? "I can't read the page yet. Please reconnect or try again."
+      : orientationText(ctx.form, state.currentFieldId));
+  }
 
   const undoResult = handleUndoUtterance(state, norm);
   if (undoResult !== null) return undoResult;

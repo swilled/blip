@@ -9,6 +9,7 @@ export type DialogueState = {
   mode: Mode;
   seq: number;
   readCursor: number | null;
+  requiredCursor: number | null;
   currentFieldId: string | null;
   pendingOptions: { fieldId: string } | null;
   pendingFill: { fieldId: string; replaced: boolean; previousValue?: string | null; undoPreviousValue?: string | null; profileBatch?: boolean; undoEntry?: UndoEntry } | null;
@@ -43,6 +44,7 @@ export function initialState(): DialogueState {
     mode: "ready",
     seq: 1,
     readCursor: null,
+    requiredCursor: null,
     currentFieldId: null,
     pendingOptions: null,
     pendingFill: null,

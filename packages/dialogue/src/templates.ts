@@ -162,6 +162,35 @@ export function requiredEmptyText(form: FormModel): string {
   return `I can't submit yet. ${joinAnd(labels)} ${missing.length === 1 ? "is" : "are"} required and empty.`;
 }
 
+/** Answer "what's required" from the current snapshot, pausing after three labels. */
+export function requiredFieldsBatchText(form: FormModel, start = 0): { text: string; nextCursor: number | null } {
+  const missing = requiredEmpty(form);
+  if (missing.length === 0) return { text: "No required fields are empty.", nextCursor: null };
+  const fields = fillableFields(form);
+  const labels = missing.slice(start, start + 3)
+    .map((field) => spokenLabel(field, fields.indexOf(field) + 1));
+  const more = start + labels.length < missing.length;
+  const opening = start === 0
+    ? `${missing.length} required ${missing.length === 1 ? "field is" : "fields are"} empty:`
+    : "Still empty and required:";
+  return {
+    text: `${opening} ${labels.join(", ")}.${more ? " Say continue for more." : ""}`,
+    nextCursor: more ? start + labels.length : null,
+  };
+}
+
+/** Describe only the current field and page position, never its value. */
+export function orientationText(form: FormModel, currentFieldId: string | null): string {
+  const title = cleanSpoken(form.title) || "Untitled form";
+  const step = form.step ? cleanSpoken(form.step) : "";
+  const field = currentFieldId === null ? undefined : fillableFields(form).find((item) => item.id === currentFieldId);
+  if (!field) return `${title}${step ? `, ${step}` : ""}. No current field is selected.`;
+  const fields = fillableFields(form);
+  const label = spokenLabel(field, fields.indexOf(field) + 1);
+  const status = !field.hasValue ? "empty" : field.sensitive !== "none" ? "filled, hidden" : "filled";
+  return `${title}${step ? `, ${step}` : ""}. Current field: ${label}, ${status}.`;
+}
+
 /** Summarize a completed local profile batch from the refreshed page model. */
 export function profileBatchText(filled: string[], skipped: string[], form: FormModel): string {
   const filledText = filled.length > 0 ? `Filled ${joinAnd(filled)}.` : "No profile fields were filled.";

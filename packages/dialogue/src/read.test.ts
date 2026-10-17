@@ -333,15 +333,49 @@ describe("dialogue read and option picks", () => {
   it("answers required-field grammar with the established spoken labels", () => {
     const result = reduce(initialState(), say("what's required"), ctx(survey));
     expect(result.effects).toEqual([speak(
-      "3 required: probably Email, unlabeled field 3, probably How did you hear about us.",
+      "3 required fields are empty: probably Email, unlabeled field 3, probably How did you hear about us.",
     )]);
     const optional = FormModel.parse({
       ...survey,
       fields: survey.fields.map((field) => ({ ...field, required: false })),
     });
     expect(reduce(initialState(), say("what fields are required"), ctx(optional)).effects).toEqual([
-      speak("No fields are required."),
+      speak("No required fields are empty."),
     ]);
+  });
+
+  it("batches empty required fields in page order and resumes only on continue", () => {
+    const manyRequired = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => ({ ...field, required: true })),
+    });
+    const first = reduce(initialState(), say("what's required"), ctx(manyRequired));
+    expect(first.effects).toEqual([speak(
+      "6 required fields are empty: probably Your name, probably Email, unlabeled field 3. Say continue for more.",
+    )]);
+    expect(first.state.requiredCursor).toBe(3);
+    const next = reduce(first.state, say("continue"), ctx(manyRequired));
+    expect(next.effects).toEqual([speak(
+      "Still empty and required: probably How did you hear about us, probably Satisfaction, probably Age.",
+      "b2",
+    )]);
+    expect(next.state.requiredCursor).toBeNull();
+  });
+
+  it("orients only from the current snapshot and masks sensitive values", () => {
+    const afterRead = readSurvey();
+    const oriented = reduce(afterRead.state, say("where am I"), ctx(survey));
+    expect(oriented.effects).toEqual([speak("Customer survey. Current field: unlabeled field 3, empty.", "b2")]);
+    const sensitive = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e2"
+        ? { ...field, hasValue: true, value: null, sensitive: "password" as const }
+        : field),
+    });
+    expect(reduce({ ...initialState(), currentFieldId: "e2" }, say("where am I"), ctx(sensitive)).effects)
+      .toEqual([speak("Customer survey. Current field: probably Email, filled, hidden.")]);
+    expect(reduce({ ...afterRead.state, lastSpoken: "stale title and field" }, say("where am I"), ctx(null)).effects)
+      .toEqual([speak("I can't read the page yet. Please reconnect or try again.", "b2")]);
   });
 
   it.each(["what's missing", "what do I still need", "what do I need to fill"])(
