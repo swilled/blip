@@ -57,6 +57,12 @@ describe("structural signatures", () => {
     expect(changeSignature(snapshot({ alerts: ["Saved"] }))).not.toBe(base);
   });
 
+  it("includes the boolean warning state so detector changes trigger refresh", () => {
+    const base = changeSignature(snapshot());
+    expect(changeSignature(snapshot({ untrustedInstructionDetected: true }))).not.toBe(base);
+    expect(changeSignature(snapshot({ untrustedInstructionDetected: false }))).toBe(base);
+  });
+
   it("excludes entered values, value presence, checked state, and selected option state", () => {
     const base = changeSignature(snapshot({
       elements: [element({
