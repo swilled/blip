@@ -1,7 +1,6 @@
-import { buildFrame, type Message, type Snapshot as SnapshotData, type RawElement } from "@blip/protocol";
+import { buildFrame, type ActRequest, type Message, type Snapshot as SnapshotData, type RawElement } from "@blip/protocol";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { dispatchActRequest, type ActDispatchDependencies } from "../src/background/acts.js";
-import type { FrameCaptureAdapter } from "../src/background/frames.js";
+import { dispatchActRequest, type ActDispatchDependencies, type ActFrameAdapter } from "../src/background/acts.js";
 
 const CARD_NUMBER = "4111111111111111";
 
@@ -57,11 +56,12 @@ function request(snapshotVersion = 1) {
 }
 
 function setup(captures: SnapshotData[], actResponse: unknown) {
-  const adapter: FrameCaptureAdapter & { sendAct: ReturnType<typeof vi.fn> } = {
+  const sendAct = vi.fn(async (_frameId: number, _request: ActRequest, _snapshotVersion: number): Promise<unknown> => actResponse);
+  const adapter: ActFrameAdapter = {
     listFrames: vi.fn(async () => []),
     readFrame: vi.fn(async () => undefined),
     isFrameVisible: vi.fn(async () => true),
-    sendAct: vi.fn(async () => actResponse),
+    sendAct,
   };
   const capture = vi.fn(async () => {
     const next = captures.shift();
@@ -75,7 +75,7 @@ function setup(captures: SnapshotData[], actResponse: unknown) {
   };
   const sent: string[] = [];
   const socket = { readyState: 1, send: vi.fn((line: string) => sent.push(line)) };
-  return { adapter, capture, dependencies, sent, socket };
+  return { adapter, capture, dependencies, sendAct, sent, socket };
 }
 
 async function dispatchAndRead(sent: string[], socket: { readyState: number; send: (line: string) => void }, deps: ActDispatchDependencies, message = request()) {
@@ -96,7 +96,7 @@ describe("service-worker act routing", () => {
 
     const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies);
 
-    expect(setupState.adapter.sendAct).toHaveBeenCalledWith(7, expect.objectContaining({
+    expect(setupState.sendAct).toHaveBeenCalledWith(7, expect.objectContaining({
       action: expect.objectContaining({ targetId: "f7e1" }),
     }), 1);
     expect(setupState.capture).toHaveBeenCalledTimes(2);
@@ -110,7 +110,7 @@ describe("service-worker act routing", () => {
 
     const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies);
 
-    expect(setupState.adapter.sendAct).not.toHaveBeenCalled();
+    expect(setupState.sendAct).not.toHaveBeenCalled();
     expect(setupState.capture).toHaveBeenCalledTimes(1);
     expect(reply.payload).toMatchObject({ actId: "act-1", ok: false, error: "stale-snapshot", newSnapshotVersion: 2 });
   });
