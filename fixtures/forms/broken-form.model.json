@@ -1,0 +1,123 @@
+{
+  "snapshotVersion": 1,
+  "structuralHash": "broken-structure-v1",
+  "url": "http://127.0.0.1:7777/fixtures/forms/broken.html",
+  "title": "Customer survey",
+  "fields": [
+    {
+      "id": "e1",
+      "role": "textbox",
+      "type": "text",
+      "label": "Your name",
+      "labelSource": "placeholder",
+      "confidence": 0.5,
+      "required": false,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 1
+    },
+    {
+      "id": "e2",
+      "role": "textbox",
+      "type": "text",
+      "label": "q2 email",
+      "labelSource": "inferred",
+      "confidence": 0.3,
+      "required": true,
+      "autocomplete": "email",
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 2
+    },
+    {
+      "id": "e3",
+      "role": "textbox",
+      "type": "text",
+      "label": "",
+      "labelSource": "inferred",
+      "confidence": 0,
+      "required": false,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 3
+    },
+    {
+      "id": "e4",
+      "role": "combobox",
+      "type": "select",
+      "label": "How did you hear about us",
+      "labelSource": "nearby-text",
+      "confidence": 0.6,
+      "required": true,
+      "options": [
+        {
+          "value": "",
+          "label": ""
+        },
+        {
+          "value": "friend",
+          "label": "Friend"
+        },
+        {
+          "value": "web",
+          "label": "Web"
+        }
+      ],
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 4
+    },
+    {
+      "id": "e5",
+      "role": "textbox",
+      "type": "text",
+      "label": "Age",
+      "labelSource": "label",
+      "confidence": 0.95,
+      "required": false,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "error": null,
+      "disabled": false,
+      "order": 5
+    }
+  ],
+  "actions": [
+    {
+      "id": "e7",
+      "label": "Send feedback",
+      "kind": "submit",
+      "kindReasons": [
+        "no usable kind supplied; treated as submit (fail-closed)"
+      ],
+      "primary": true
+    },
+    {
+      "id": "e8",
+      "label": "",
+      "kind": "submit",
+      "kindReasons": [
+        "no usable kind supplied; treated as submit (fail-closed)"
+      ],
+      "primary": false
+    }
+  ],
+  "groups": [],
+  "pageErrors": [
+    "Some answers need attention"
+  ],
+  "repairStatus": "baseline"
+}
