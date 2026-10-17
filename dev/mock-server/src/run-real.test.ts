@@ -1,13 +1,14 @@
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { buildFrame, FormModel, parseFrame, type Message } from "@blip/protocol";
 import { initialState, reduce } from "@blip/dialogue";
 import fixtureJson from "../../../fixtures/forms/broken-form.model.json" with { type: "json" };
-import { DEMO_EXTENSION_ID, startReal } from "./run-real";
+import { buildManagedRunnerArgs, DEMO_EXTENSION_ID, installManagedShutdownHandlers, startReal } from "./run-real";
 
 const form = FormModel.parse(fixtureJson);
 const closers: Array<() => Promise<void> | void> = [];
@@ -16,6 +17,31 @@ afterEach(async () => {
 });
 
 describe("run-real", () => {
+  it("restarts direct entry-point launches with a verifiable process token and repository root", () => {
+    expect(buildManagedRunnerArgs(
+      ["--browser-extension", "--fixture=broken", "--demo-root", "C:\\repo"],
+      "C:\\repo",
+      "demo-run-token-123456",
+    )).toEqual([
+      "--browser-extension",
+      "--fixture=broken",
+      "--demo-run-id=demo-run-token-123456",
+      "--demo-root=C:\\repo",
+    ]);
+  });
+
+  it("routes early IPC and OS shutdown requests to the managed runner cleanup handler", () => {
+    const events = new EventEmitter();
+    const shutdown = vi.fn();
+    installManagedShutdownHandlers(events, shutdown);
+
+    events.emit("message", { type: "shutdown", signal: "SIGTERM" });
+    events.emit("message", { type: "unrelated" });
+    events.emit("SIGINT");
+
+    expect(shutdown).toHaveBeenCalledTimes(2);
+  });
+
   it("uses the pinned local Chrome extension origin without connecting the in-memory fixture", async () => {
     const real = await startReal({ port: 0, browserExtension: true, fakeDelayMs: 0 });
     closers.push(() => real.close());
