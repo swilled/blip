@@ -180,7 +180,7 @@ Plans:
   5. Freeze (~h30): `main` is tagged `demo-safe`, demo-form repairs are pre-warmed in the cache, and the full demo script also runs with `--brain=fake` as plan B.
 
 **Research**: Spike needed: real-site widgets (Google Forms ARIA radios and listboxes, React fills on the live form); one-command Chrome launch now that branded Chrome 137 removed `--load-extension` (load unpacked once into a dedicated `--user-data-dir` profile).
-**Plans**: 11/11 executed. Local synthetic I3, GATE-07 speech, exact repair-cache reuse, and the fake fallback are verified. The implementation is on `integration/ho8-voice-gate`; Freeze stays open until teammate review, merge to main, and the `demo-safe` tag. Public-form DEMO-03 is explicitly deferred, not replaced with an arbitrary external target. See `05-VERIFICATION.md`.
+**Plans**: 11/11 executed. Local synthetic I3, GATE-07 speech, exact repair-cache reuse, and the fake fallback are verified. Core adapter commit `bc6d2f0` is pushed to `integration/ho8-voice-gate`; Freeze stays open until the voice Phase 2 DialogueRunner/GatePort adopts it, teammate review is complete, the branch is merged to main, and `demo-safe` is tagged. The fetched voice branch at `18ebb67` contains Phase 1 dialogue code and Phase 2 plans, but not that runtime implementation yet. Public-form DEMO-03 is explicitly deferred, not replaced with an arbitrary external target. See `05-VERIFICATION.md`.
 Plans:
 - [x] 05-01-PLAN.md — Add the synthetic hostile-page fixture and deterministic refusal assertions
 - [x] 05-02-PLAN.md — Implement the bounded local warning detector
@@ -191,6 +191,8 @@ Plans:
 - [x] 05-07-PLAN.md — Verify hostile-page refusal and warning flow end to end
 - [x] 05-08-PLAN.md — Build and smoke-test the isolated one-command local demo
 - [x] 05-09-PLAN.md — Record evidence and apply the local freeze tag only when eligible
+- [x] 05-10-PLAN.md — Prove hostile-page refusal with the bounded real-Claude synthetic check
+- [x] 05-11-PLAN.md — Complete local synthetic survey acceptance, repair-cache reuse, and fake fallback
 **UI hint**: no
 
 ## Progress
@@ -204,7 +206,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. Claude Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
-| 5. Hostile Pages, Real Web and Freeze | 9/9 | In Progress | - |
+| 5. Hostile Pages, Real Web and Freeze | 11/11 | In Progress | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 
