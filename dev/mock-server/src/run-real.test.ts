@@ -55,5 +55,9 @@ describe("run-real", () => {
 
     const res = await fetch(`http://127.0.0.1:${port}/`);
     expect(await res.text()).toContain("temp-index");
+
+    const formPage = await fetch(`http://127.0.0.1:${port}/fixtures/forms/broken.html`);
+    expect(formPage.status).toBe(200);
+    expect(await formPage.text()).toContain("Customer survey");
   });
 });

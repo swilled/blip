@@ -4,10 +4,14 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { DEFAULT_PORT } from "@blip/protocol";
+import { DEFAULT_PORT, type ActRequest } from "@blip/protocol";
 import { FIXTURE_NAMES, type FixtureName } from "@blip/protocol/fixtures-loader";
 import { startServer, type RunningServer } from "../../../apps/server/src/server";
+import type { GatePort } from "../../../apps/server/src/voice/gate-port";
+import { createStubGate } from "../../../apps/server/src/voice/gate-port";
+import { createDialogueHandlers } from "../../../apps/server/src/voice/dialogue-runner";
 import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
+import type { FakeExtension } from "../../../tools/fake-extension/src/fake-extension";
 import { launchVoiceWindow } from "./launch-window";
 import { startPttWire } from "./ptt-wire";
 
@@ -16,19 +20,34 @@ export interface RealOptions {
   fixture?: FixtureName;
   fakeDelayMs?: number;
   staticDir?: string;
+  gate?: GatePort;
+  now?: () => number;
+  onActRequest?: (request: ActRequest) => void;
 }
 
 export async function startReal(opts: RealOptions = {}): Promise<{
   server: RunningServer;
+  extension: FakeExtension;
   close(): Promise<void>;
 }> {
   const staticDir = opts.staticDir ?? fileURLToPath(new URL("../../../apps/voice/dist", import.meta.url));
+  const fixturesDir = fileURLToPath(new URL("../../../fixtures/forms", import.meta.url));
+  const now = opts.now ?? Date.now;
+  const staticRoots = [
+    ...(existsSync(staticDir) ? [{ urlPrefix: "/", dir: staticDir }] : []),
+    ...(existsSync(fixturesDir) ? [{ urlPrefix: "/fixtures/forms", dir: fixturesDir }] : []),
+  ];
   const server = await startServer({
     port: opts.port ?? DEFAULT_PORT,
     dev: true, // the fake extension connects without an Origin, exactly as scripts/dev.ts does
     brain: "fake",
     fakeDelayMs: opts.fakeDelayMs ?? 1500,
-    staticRoots: existsSync(staticDir) ? [{ urlPrefix: "/", dir: staticDir }] : [],
+    staticRoots,
+    handlers: createDialogueHandlers({
+      gate: opts.gate ?? createStubGate(now),
+      now,
+      ...(opts.onActRequest !== undefined ? { onActRequest: opts.onActRequest } : {}),
+    }),
   });
   const extension = startFakeExtension({ url: server.url, fixture: opts.fixture ?? "broken" });
   try {
@@ -39,6 +58,7 @@ export async function startReal(opts: RealOptions = {}): Promise<{
   }
   return {
     server,
+    extension,
     async close() {
       extension.close();
       await server.close();
