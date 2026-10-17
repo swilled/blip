@@ -58,7 +58,7 @@ completed: 2026-10-17
 
 1. **Task 1: Make role initialization observable without weakening the tool gate** — `4a0b3c2` (feat)
 2. **Task 2: Add a separately approved eight-dispatch live-check gate** — `0bc51d7` (feat)
-3. **Task 3: Run one bounded synthetic check and record evidence-backed status** — documentation and metadata commit follows.
+3. **Task 3: Run one bounded synthetic check and record evidence-backed status** — `a130b9a` (docs).
 
 Additional authorized test-only correction:
 
