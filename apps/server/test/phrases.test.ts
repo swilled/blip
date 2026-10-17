@@ -34,7 +34,10 @@ function operationModel(): FormModel {
     hasValue: false,
     order: 91,
   };
-  return { ...base, fields: [...base.fields, select, checkbox] };
+  return {
+    ...base,
+    fields: [...base.fields.filter((field) => field.label !== "Room type" && field.label !== "Email updates"), select, checkbox],
+  };
 }
 
 describe("field phrases", () => {
