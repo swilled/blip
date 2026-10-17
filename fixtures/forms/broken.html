@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Customer survey</title>
+    <style>
+      body { max-width: 44rem; margin: 2rem auto; padding: 0 1rem; font: 1rem/1.5 system-ui, sans-serif; color: #18212b; }
+      .field { margin: 1rem 0; }
+      input, select { box-sizing: border-box; min-height: 2.5rem; padding: 0.4rem; border: 2px solid #687482; border-radius: 0.2rem; }
+      input.invalid, select.invalid { border-color: #c00; }
+      #page-error { margin: 1rem 0; }
+      #result { margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Customer survey</h1>
+    <form id="survey" novalidate autocomplete="off">
+      <div class="field">
+        <input id="name" name="q1" type="text" placeholder="Your name" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <span>Email *</span>
+        <input id="email" name="q2" type="email" required autocomplete="off">
+      </div>
+
+      <div class="field">
+        <input name="q3" type="text" autocomplete="tel" required>
+      </div>
+
+      <div class="field">
+        <span>How did you hear about us *</span>
+        <select id="source" name="q4" required autocomplete="off">
+          <option value="">Choose one</option>
+          <option value="friend">Friend</option>
+          <option value="web">Web search</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <span>Satisfaction</span>
+        <div><input id="satisfaction-low" type="radio" name="satisfaction" value="low" autocomplete="off"> Low</div>
+        <div><input id="satisfaction-medium" type="radio" name="satisfaction" value="medium" autocomplete="off"> Medium</div>
+        <div><input id="satisfaction-high" type="radio" name="satisfaction" value="high" autocomplete="off"> High</div>
+      </div>
+
+      <div class="field">
+        <input id="age" name="age" type="number" placeholder="Age" autocomplete="off">
+      </div>
+
+      <div id="page-error" role="alert" hidden>Some answers need attention</div>
+      <div id="send" role="button" tabindex="0">Send feedback</div>
+      <div id="decoy" role="button" tabindex="0"></div>
+    </form>
+    <div id="result" role="status" hidden>Thank you. Confirmation BLIP-1234</div>
+
+    <script>
+      const form = document.getElementById("survey");
+      const pageError = document.getElementById("page-error");
+      const result = document.getElementById("result");
+      const send = document.getElementById("send");
+
+      function resetForm() {
+        form.reset();
+        form.querySelectorAll(".invalid").forEach((control) => control.classList.remove("invalid"));
+        pageError.hidden = true;
+        result.hidden = true;
+        form.hidden = false;
+      }
+
+      function submitSurvey() {
+        const required = [...form.querySelectorAll("[required]")];
+        const invalid = required.filter((control) => !control.value.trim());
+        form.querySelectorAll(".invalid").forEach((control) => control.classList.remove("invalid"));
+        invalid.forEach((control) => control.classList.add("invalid"));
+        if (invalid.length > 0) {
+          pageError.hidden = false;
+          return;
+        }
+        pageError.hidden = true;
+        form.hidden = true;
+        result.hidden = false;
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        submitSurvey();
+      });
+      send.addEventListener("click", () => form.requestSubmit());
+      send.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          form.requestSubmit();
+        }
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        resetForm();
+        setTimeout(resetForm, 0);
+      });
+      window.addEventListener("pageshow", resetForm);
+    </script>
+  </body>
+</html>
