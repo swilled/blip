@@ -1,4 +1,4 @@
-import { findTargetTab, isSupportedTargetTab, type TabRecord, type TargetTab } from "./tabs.js";
+import { findTargetTab, isSupportedTargetTab, rememberTargetTab, type TabRecord, type TargetTab } from "./tabs.js";
 import type { PageChange, PageChangeScheduler } from "./changes.js";
 
 type Event<T extends (...args: never[]) => void> = { addListener(listener: T): void; removeListener?(listener: T): void };
@@ -25,6 +25,7 @@ export type NavigationDependencies = {
   api?: NavigationBrowserApi;
   scheduler: PageChangeScheduler;
   findTargetTab?: (tabId?: number) => Promise<TargetTab | undefined>;
+  rememberTargetTab?: (tab: TabRecord) => boolean;
 };
 
 async function selectedTarget(
@@ -48,6 +49,7 @@ export function registerNavigationListeners(dependencies: NavigationDependencies
   const webNavigation = api?.webNavigation;
   const windows = api?.windows;
   const getTarget = dependencies.findTargetTab ?? findTargetTab;
+  const rememberTarget = dependencies.rememberTargetTab ?? rememberTargetTab;
   const listeners: Array<() => void> = [];
 
   const register = <T extends (...args: never[]) => void>(event: Event<T> | undefined, listener: T): void => {
@@ -82,7 +84,9 @@ export function registerNavigationListeners(dependencies: NavigationDependencies
     if (windowId === (windows?.WINDOW_ID_NONE ?? -1) || !tabs?.query) return;
     void tabs.query({ active: true, windowId }).then((activeTabs) => {
       const tab = activeTabs[0];
-      if (tab?.id !== undefined && typeof tab.url === "string") void emit(tab.id, "tab-activated", tab.url);
+      if (tab?.id !== undefined && rememberTarget(tab) && typeof tab.url === "string") {
+        void emit(tab.id, "tab-activated", tab.url);
+      }
     }).catch(() => undefined);
   });
 

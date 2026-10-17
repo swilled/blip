@@ -31,6 +31,13 @@ export function isSupportedTargetTab(tab: TabRecord): tab is TargetTab {
   }
 }
 
+/** Update the retained page when focus moves to another browser window. */
+export function rememberTargetTab(tab: TabRecord): boolean {
+  if (!isSupportedTargetTab(tab)) return false;
+  mostRecentlyActivatedTargetId = tab.id;
+  return true;
+}
+
 /** Pure selection rule for tests and the browser-backed tab query. */
 export function selectTargetTabFromTabs<T extends TabRecord>(
   tabs: readonly T[],

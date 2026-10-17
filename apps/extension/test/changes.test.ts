@@ -54,7 +54,7 @@ describe("page change scheduler", () => {
 });
 
 describe("navigation and target-tab listeners", () => {
-  it("registers wake events synchronously and filters subframes, background tabs, and Blip tabs", async () => {
+  it("registers wake events, filters background tabs, and selects the focused window page", async () => {
     const handlers = new Map<string, (...args: any[]) => void>();
     const event = (name: string) => ({
       addListener: (listener: (...args: any[]) => void) => { handlers.set(name, listener); },
@@ -65,6 +65,11 @@ describe("navigation and target-tab listeners", () => {
       [7, { id: 7, url: "http://127.0.0.1:7777/" }],
     ]);
     let selectedId = 5;
+    const rememberTargetTab = vi.fn((tab: { id?: number; url?: string }) => {
+      if (tab.id === undefined || !pages.has(tab.id) || tab.url?.includes(":7777/")) return false;
+      selectedId = tab.id;
+      return true;
+    });
     const findTargetTab = vi.fn(async (tabId?: number) => {
       const record = pages.get(tabId ?? selectedId);
       if (!record) return undefined;
@@ -89,7 +94,7 @@ describe("navigation and target-tab listeners", () => {
       windows: { WINDOW_ID_NONE: -1, onFocusChanged: event("focus") },
     };
 
-    registerNavigationListeners({ api, scheduler, findTargetTab });
+    registerNavigationListeners({ api, scheduler, findTargetTab, rememberTargetTab });
     expect([...handlers.keys()]).toEqual(["committed", "history", "updated", "activated", "removed", "focus"]);
 
     handlers.get("committed")?.({ tabId: 5, frameId: 2, url: "https://forms.test/frame" });
@@ -105,8 +110,11 @@ describe("navigation and target-tab listeners", () => {
     handlers.get("activated")?.({ tabId: 6 });
     await vi.waitFor(() => expect(enqueue).toHaveBeenLastCalledWith({ tabId: 6, url: "https://other.test/", reason: "tab-activated" }));
 
+    selectedId = 5;
     handlers.get("focus")?.(12);
     expect(query).toHaveBeenCalledWith({ active: true, windowId: 12 });
     await vi.waitFor(() => expect(enqueue).toHaveBeenCalledWith({ tabId: 6, url: "https://other.test/", reason: "tab-activated" }));
+    expect(rememberTargetTab).toHaveBeenCalledWith({ id: 6, url: "https://other.test/" });
+    expect(selectedId).toBe(6);
   });
 });
