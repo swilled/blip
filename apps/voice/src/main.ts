@@ -1,6 +1,7 @@
 // Voice window wiring: start gate, typed input, log, earcons, socket, tts.
 // The window never matches a confirm phrase; that lives in server code.
 import { STT_ENABLED_WHEN_UNFOCUSED } from "./config";
+import { applyArmed, applyCleared, applyClose, applyState, createBannerModel, renderBanner } from "./banner";
 import { createEarcons } from "./earcons";
 import { createHoldClient } from "./hold-client";
 import { createSocket, type VoiceSocket } from "./socket";
@@ -42,6 +43,7 @@ const earcons = createEarcons();
 let connectionExtra = "";
 let replaced = false;
 let socket: VoiceSocket | null = null;
+let bannerModel = createBannerModel();
 
 // Per-exchange bookkeeping for the log.
 let pendingUser = "";
@@ -50,6 +52,12 @@ let replyParts: string[] = [];
 let replyInterrupted = false;
 let pendingSource: "speech" | "typed" = "typed";
 let captionTimer: ReturnType<typeof setTimeout> | null = null;
+
+function renderBannerSlot(): void {
+  const slot = document.getElementById("banner-slot");
+  if (!slot) throw new Error("missing element #banner-slot");
+  renderBanner(slot, bannerModel);
+}
 
 const state = createVoiceState((s) => {
   setStatus(s);
@@ -116,6 +124,8 @@ socket = createSocket({
     } else {
       connectionExtra = "";
       state.socketClosed();
+      bannerModel = applyClose(bannerModel);
+      renderBannerSlot();
       // Anything outstanding can never be acknowledged on this connection.
       tts.cancel();
     }
@@ -123,6 +133,8 @@ socket = createSocket({
   onReplaced: () => {
     replaced = true;
     state.socketClosed();
+    bannerModel = applyClose(bannerModel);
+    renderBannerSlot();
     setStatus("offline");
     el("status-hint").textContent = "Another Blip window took over.";
     el("connection").textContent = "Another Blip window took over";
@@ -140,14 +152,24 @@ socket = createSocket({
       case "earcon":
         earcons.play(m.payload.name);
         break;
+      case "confirm.armed":
+        bannerModel = applyArmed(bannerModel, m.payload);
+        renderBannerSlot();
+        break;
+      case "confirm.cleared":
+        bannerModel = applyCleared(bannerModel, m.payload);
+        renderBannerSlot();
+        break;
       case "state": {
+        bannerModel = applyState(bannerModel, m.payload);
+        renderBannerSlot();
         connectionExtra = m.payload.extensionConnected ? "Browser extension connected." : "Browser extension not connected.";
         if (m.payload.busy && !tts.isSpeaking()) state.messageSent();
         refreshConnection();
         break;
       }
       default:
-        // transcript, confirm.armed, confirm.cleared: accepted and ignored in Phase 1.
+        // Transcript and other informational frames are not rendered in the voice window.
         break;
     }
   },
