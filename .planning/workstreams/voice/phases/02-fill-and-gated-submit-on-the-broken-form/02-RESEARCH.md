@@ -487,24 +487,30 @@ Not a rename/refactor phase. Omitted. (Related reset state, listed so reset is c
 | A7 | `Intent` adds nothing needed for Phase 2 (set_fields/read_form/read_back exist), so the fake brain's `clarify` answer remains the only model-routed reply in I2 | Summary | Unmatched phrases get the fake brain's offline message; fine for I2 |
 | A8 | Last-`at` heuristic is adequate for emails whose local part contains the word "at" | Normalization | Rare; wrong value is visible in the page-read echo |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Who owns the dialogue->hub wiring at I2?**
    - Known: core has no reducer wiring; `handlers` makes a voice-owned runner possible with zero core edits; core's `scripts/dev.ts` (HO-7 already pending) is where it would be plugged in for the product launcher.
    - Unclear: whether Pranav prefers to adopt `createDialogueHandlers` or write his own effect runner for the same Effect union.
    - Recommendation: build the voice-owned runner now, post HO-8 (Effect union additions, handler factory, "survey" noun, `speak.done` correlation by id) and let him adopt it; keep ports (`GatePort`) so his Executor drops in.
+   - **RESOLVED:** voice builds `createDialogueHandlers` (plan 02-06) and records the adoption request, Effect additions, phrase noun and speak.done correlation as HO-8 in `02-HANDOFFS.md`; no core file is edited.
 
 2. **Is the I2 real-submit achievable if core's Executor slips?**
    - The voice-visible I2 beats (banner, refusals, blocked earcon) work on the stub. Actual submission needs core's GATE-01..05 and real extension.
    - Recommendation: gate the success criterion "Only submit survey submits" on core; Phase 2 verification marks that item `human_needed` until C6 lands, as Phase 1 did for GATE-08.
+   - **RESOLVED:** yes. If core's Executor/gate is absent at I2, "only 'submit survey' submits" is `human_needed`; the stub-gate refusal message is the expected pass criterion in the meantime (plans 02-06, 02-07).
 
 3. **STT confidence for bare values** (`sttConfidence` is optional on utterance): require >= 0.5 when present? Recommend yes, cheap, safe; if lower, ask "Did you say <value>? Say it again to confirm" is too heavy, so just re-prompt "I'm not sure I heard that. Say it again."
+   - **RESOLVED:** a bare value with sttConfidence below 0.5 is rejected and Blip asks again (plan 02-04 Task 3).
 
 4. **Fallback label from `autocomplete`** for the unlabeled phone field before Phase 3's repair: recommend "unlabeled field 3, looks like phone" (deterministic, no model). It lets D-07's "Phone and Email are required and empty" example be true on the fake brain. Planner to confirm with the user if it conflicts with Phase 3's DLG-11 wording.
+   - **RESOLVED:** no autocomplete guess in Phase 2; fields read as "unlabeled field N". The "looks like" wording belongs to Phase 3 DLG-11 (plan 02-02).
 
 5. **In-place reset vs restart reset:** restart is recommended for determinism; if the user wants a hot reset mid-demo, a file-watch trigger (`fixtures/demo/.reset` mtime) is the no-network option.
+   - **RESOLVED:** restart-based reset via `npm run reset -w @blip/mock-server`; no hot reset and no network endpoint (plan 02-07).
 
 6. **Field edit while armed:** recommended behavior (perform the edit, void the grant, say the form changed) follows D-06 "any field edit ends the wait". If the user would rather block edits until "cancel", flip one branch.
+   - **RESOLVED:** dictation of a named field while a confirm is armed performs the edit and voids the grant (D-06 "any field edit ends the wait"); a bare value while armed is refused (plan 02-05).
 
 ## Environment Availability
 
