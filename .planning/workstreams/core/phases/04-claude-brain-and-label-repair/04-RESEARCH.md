@@ -264,9 +264,35 @@ Remove ANTHROPIC_API_KEY before constructing env. SDK env replaces subprocess en
 | npm | Workspaces | Yes | v11.9.0 | — |
 | Agent SDK | Intent and repair | Installed and declared in `apps/server` | `@anthropic-ai/claude-agent-sdk@0.3.302`; Node >=18; Windows optional package installed | Keep `--brain=fake` for offline checks |
 | Claude CLI | Local runtime diagnostic only | Found | `2.1.280` from `claude --version`; authentication was not inspected | SDK package bundles native Windows runtime |
-| Subscription login | Live Claude | User authorized one 04-11 synthetic attempt that may use subscription allowance; authentication was not inspected | Any further live use requires a new plan and fresh, precise authorization | Preserve `--brain=fake` offline |
+| Subscription login | Live Claude | User authorized repeated bounded synthetic attempts on 2026-10-17; authentication was not inspected | Each attempt remains synthetic-only, at most 900 seconds/eight dispatches, and requires its own plan-specific report and exclusive claim | Preserve `--brain=fake` offline |
 
-**Live-evidence boundary:** A successful production SDK initialization and role result remain unverified. The 04-10 attempt failed during initialization after one synthetic intent bootstrap, without a role result or tool count. The separately approved 04-11 attempt also failed during initialization after one synthetic intent bootstrap in 7,157 ms, without a role result or tool count; its approval is consumed. Offline fake-provider coverage remains available and must not be represented as live proof. Do not retry without a new plan and fresh, precise authorization.
+**Live-evidence boundary:** 04-17 produced a strict schema-valid current-id Intent in 1,621 ms and verified live cancellation, zero-tool intent-role recreation, and a valid recovery Intent. The run reached repair, but the synthetic patch did not pass local patch validation. The harness currently sends a generic repair sentence, while the production coordinator includes a value-free page projection and eligible ids; plan 04-18 will align these prompts. BRAIN-02 and BRAIN-03 are complete. BRAIN-01 remains pending because auth source was not inspected; PAGE-04 remains pending until repair/cache evidence succeeds.
+
+## Latest Live Evidence — 04-15
+
+The 04-15 run observed `system/init`, empty tools, and completed fixed warmups for both roles. The first actual route dispatched twice, exercising `routeIntent`'s existing one retry, but ended after 4,201 ms without an accepted Intent. Only the sanitized `route_failed` fallback was recorded; no model output or error message was retained, so the provider failure subtype remains unresolved. No cancellation/recreation, repair patch, or cache hit exists. Each further check uses a fresh plan-specific report and one-use claim under the user's repeated-check authorization. Offline fake-provider coverage must not be represented as live proof.
+
+The 04-16 run classified both actual-call responses as `intent_schema_rejected` through a fixed provider-owned enum. Plan 04-17 should list allowed Intent discriminants and required key names in the prompt, with no example ids/values, while leaving parsers, current-id checks, and the empty-tool gate unchanged.
+
+The new output-shape contract is prompt guidance only. It must not replace `Intent.safeParse`, exact-key checks, sensitive-shape checks, or current page-id membership validation.
+
+## Latest Live Evidence — 04-16
+
+The 04-16 run observed both production roles initialize with empty tools and complete fixed warmups. Both Intent route responses were rejected by the strict local schema after 3,398 ms total route time; only `intent_schema_rejected` was recorded. The model output was discarded. This is evidence that the route reaches the local validator, but not that a valid Intent is produced. No cancellation/recovery, repair, or cache behavior was reached; all four production requirements remain pending.
+
+Plan 04-17 should include the fixed Intent discriminants and required key names in the JSON-only prompt, then run one new synthetic check under the existing caps.
+
+## Latest Live Evidence — 04-17
+
+Plan 04-17 produced a valid current-id Intent in 1,621 ms, then proved actual cancellation, zero-tool intent-role recreation, and successful recovery. It reached repair, but the returned patch failed local synthetic validation. The harness prompt contains only a generic sentence, while the production repair coordinator sends a value-free page projection and exact eligible field ids. The harness mismatch is the next likely cause to correct; PAGE-04 remains pending until a live patch validates and cache round-trips.
+
+The watchdog's exact spoken fallback and queued-turn recovery are covered by `turn-brain.test.ts`; Plan 04-17 adds live SDK cancellation/recreation/next-call evidence. BRAIN-02 and BRAIN-03 are complete. BRAIN-01 remains pending because auth source was not inspected; PAGE-04 remains pending.
+
+## Latest Live Evidence — 04-18
+
+The production check used the exact value-free projection and eligible-id contract from `RepairCoordinator.promptFor`. Both roles initialized with empty tools and completed prewarm. Both synthetic current-id Intents passed; the primary took 1,292 ms. Cancellation, zero-tool role recreation, and recovery passed. The live repair patch passed `validateRepairPatch`, then passed the RepairCache save/reload/revalidation round trip. The run completed in 20,514 ms with 7/8 dispatches. Only sanitized counts, booleans, enums, and timing were retained; credentials/auth values, environment values, model output, and real page/user data were not inspected or retained.
+
+BRAIN-01, BRAIN-02, BRAIN-03, and PAGE-04 are complete. BRAIN-01 uses the checked-in SDK configuration, successful live empty-tool initialization, and the user's authorization to use the local subscription allowance; account identity was not independently inspected. PAGE-04 has direct real-model synthetic patch/cache evidence, with asynchronous merge and later cache reuse covered by existing integration tests.
 
 ## Existing Test Infrastructure
 
@@ -295,10 +321,10 @@ Do not require subscription credentials or live Claude in CI. Make spike/live sm
 
 The implementation choices are resolved below. Remaining live-provider evidence is explicitly separate and is not treated as a research decision.
 
-1. **Resolved — use the streaming/Zod path and retain fail-closed tool checks; production initialization remains unverified.** The earlier `startup()` probes reported one init tool for each role, even with `disallowedTools: ["*"]`, so that route is not acceptable for this contract. The 04-08 streaming run timed out before an init result; the 04-10 and 04-11 runs failed during initialization after one fixed synthetic intent bootstrap, without a role result or tool count. Do not relax the empty-tool refusal. The available evidence does not identify the runtime failure's cause.
+1. **Resolved — keep the streaming/Zod path and fail-closed tool checks; bootstrap is prewarming only.** The earlier `startup()` probes reported one init tool for each role, so that route remains unacceptable. The 04-14 streaming run observed intent and repair `system/init`, accepted empty tool lists, and completed both fixed synthetic warmups. Discarding warmup text allowed both roles to initialize. The next observed failure is the first actual grammar-miss probe; the verifier's one-dispatch route wrapper blocked the production router's one retry. The follow-up plan gives one route up to two dispatches while keeping the total eight-dispatch cap. Do not relax the empty-tool refusal or actual-call schema checks.
 2. **Resolved — use the conservative projection estimate without claiming tokenizer calibration.** `estimateProjectionTokens` uses `ceil(UTF-8 bytes / 2)` over the exact serialized prompt guide and projection, with projection-only trimming to an 8,000 estimate. The live probes produced no model usage data, so this remains an approximate bound.
-3. **Planning disposition resolved — keep cancellation/recreation covered offline and mark production Windows behavior unverified.** The role manager and watchdog have injected-adapter tests. None of the 04-08, 04-10, or 04-11 live attempts reached a measured cancellation/recreation path; do not claim that the pinned SDK's Windows behavior is proven.
-4. **Resolved for the consumed 04-11 attempt — the user authorized one synthetic check that may use subscription allowance.** Credentials were not inspected. The 04-11 authorization has been consumed; another production SDK invocation requires a new plan and fresh, precise authorization. Do not switch to an API-key path.
+3. **Resolved — retain watchdog integration coverage and verify the pinned SDK cancellation/recreation path live.** The 04-17 and 04-18 production runs on Windows successfully cancelled the intent role, recreated it with zero tools, and accepted a recovery Intent. `turn-brain.test.ts` verifies the exact watchdog fallback and queued-turn recovery.
+4. **Resolved — the user authorized repeated bounded synthetic checks on 2026-10-17.** Credentials and authentication state were not inspected. The 04-12, 04-13, and 04-14 plan-specific approvals are consumed; each further attempt requires a new plan/report/claim, while the user's repeated-check authorization remains in force. Do not switch to an API-key path.
 5. **Resolved — use the approved additive label-source split.** The user reported the voice owner approved deterministic raw extension label candidates while allowing `model` only on resolved FormModel labels. This report records that as user-reported approval; it does not claim direct voice-owner authorship.
 
 ## Sources
@@ -332,7 +358,7 @@ The implementation choices are resolved below. Remaining live-provider evidence 
 
 **Confidence breakdown:**
 - Standard stack: HIGH — installed repository versions, the pinned SDK package, and current official docs/registry were checked.
-- Architecture: HIGH for offline implementation and isolation tests; production startup and model results remain unverified.
+- Architecture: HIGH for offline implementation and isolation tests; production startup, Intent routing, cancellation/recovery, and repair/cache behavior are now directly exercised with bounded synthetic live runs.
 - Privacy/action boundary: HIGH — locked requirements and existing protocol/server/extension patterns.
 - Token trimming: LOW for exact token count; MEDIUM for conservative calibrated estimate.
 - Subscription policy: HIGH that official docs impose third-party use constraints; MEDIUM applying them to this owner-operated local hackathon case.

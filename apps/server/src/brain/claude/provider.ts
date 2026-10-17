@@ -20,10 +20,21 @@ const RepairPatchSchema = z.object({
 
 export type RepairPatch = z.infer<typeof RepairPatchSchema>;
 
+export type ClaudeOutputFailureCategory =
+  | "invalid_json"
+  | "intent_schema_rejected"
+  | "intent_shape_rejected"
+  | "repair_schema_rejected";
+
 export class InvalidClaudeOutputError extends Error {
-  constructor(role: ClaudeRole, reason: string) {
-    super(`Claude ${role} output was not valid JSON data: ${reason}`);
+  readonly role: ClaudeRole;
+  readonly category: ClaudeOutputFailureCategory;
+
+  constructor(role: ClaudeRole, category: ClaudeOutputFailureCategory) {
+    super("Claude output was rejected by local validation.");
     this.name = "InvalidClaudeOutputError";
+    this.role = role;
+    this.category = category;
   }
 }
 
@@ -45,7 +56,7 @@ function parseJson(role: ClaudeRole, raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
-    throw new InvalidClaudeOutputError(role, "the response was not a JSON value");
+    throw new InvalidClaudeOutputError(role, "invalid_json");
   }
 }
 
@@ -53,7 +64,7 @@ function parseIntentStrict(raw: string): z.infer<typeof Intent> {
   const value = parseJson("intent", raw);
   const parsed = Intent.safeParse(value);
   if (!parsed.success) {
-    throw new InvalidClaudeOutputError("intent", "the response did not match the Intent schema");
+    throw new InvalidClaudeOutputError("intent", "intent_schema_rejected");
   }
 
   const allowedKeys: Record<z.infer<typeof Intent>["type"], string[]> = {
@@ -75,12 +86,12 @@ function parseIntentStrict(raw: string): z.infer<typeof Intent> {
     unknown: ["type"],
   };
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new InvalidClaudeOutputError("intent", "the response must be an object");
+    throw new InvalidClaudeOutputError("intent", "intent_shape_rejected");
   }
   const object = value as Record<string, unknown>;
   const allowed = allowedKeys[parsed.data.type];
   if (Object.keys(object).some((key) => !allowed.includes(key))) {
-    throw new InvalidClaudeOutputError("intent", "the response contained unsupported fields");
+    throw new InvalidClaudeOutputError("intent", "intent_shape_rejected");
   }
   if (parsed.data.type === "set_fields") {
     const fills = object.fills;
@@ -88,7 +99,7 @@ function parseIntentStrict(raw: string): z.infer<typeof Intent> {
       typeof fill !== "object" || fill === null || Array.isArray(fill) ||
       Object.keys(fill).some((key) => key !== "fieldId" && key !== "value"),
     )) {
-      throw new InvalidClaudeOutputError("intent", "set_fields contained unsupported fields");
+      throw new InvalidClaudeOutputError("intent", "intent_shape_rejected");
     }
   }
   return parsed.data;
@@ -104,7 +115,7 @@ export async function createClaudeProvider(options: ClaudeProviderOptions = {}):
     },
     async repairFormModel(prompt, signal) {
       const parsed = RepairPatchSchema.safeParse(parseJson("repair", await sessions.call("repair", prompt, signal)));
-      if (!parsed.success) throw new InvalidClaudeOutputError("repair", "the response did not match the repair patch schema");
+      if (!parsed.success) throw new InvalidClaudeOutputError("repair", "repair_schema_rejected");
       return parsed.data;
     },
     abortRole: (role) => sessions.abortRole(role),

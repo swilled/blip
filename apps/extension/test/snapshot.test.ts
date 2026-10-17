@@ -82,7 +82,7 @@ describe("captureFrameSnapshot", () => {
   it("caps headings, alerts and options without marking the element list truncated", () => {
     document.body.innerHTML = `${Array.from({ length: 41 }, (_, index) => `<h2>Heading ${index}</h2>`).join("")}${Array.from({ length: 21 }, (_, index) => `<div role="alert">Alert ${index}</div>`).join("")}<label for="large">Choice</label><select id="large" name="large">${Array.from({ length: 201 }, (_, index) => `<option value="${index}" ${index === 200 ? "selected" : ""}>Option ${index}</option>`).join("")}</select>`;
 
-    const frame = captureFrameSnapshot({ document, topOrigin: "https://forms.example" });
+    const frame = captureFrameSnapshot({ document, topOrigin: "https://forms.example", timeBudgetMs: 1000 });
     const select = frame.elements.find((element) => element.name === "large");
 
     expect(frame.headings).toHaveLength(40);

@@ -158,6 +158,13 @@ describe("privacy-gated intent routing", () => {
 
     expect(provider.parseIntent).toHaveBeenCalledOnce();
     expect(provider.parseIntent.mock.calls[0]![0]).toContain("tell me about this form");
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("no markdown fences");
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("schema-valid clarify Intent with a short question");
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("Allowed Intent types and required keys");
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("go_to_field and spell require fieldId");
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("set_fields requires fills with exactly one item containing fieldId and value");
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("request_action and click_safe require actionId");
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("answer requires text; clarify requires question");
     expect(provider.parseIntent.mock.calls[0]![0]).not.toContain("page-value-sentinel-275");
   });
 });
