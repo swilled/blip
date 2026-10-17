@@ -83,7 +83,7 @@ describe("server brain mode", () => {
     ]);
   });
 
-  it("does not send raw legacy utterances to Claude before the privacy-gated router is installed", async () => {
+  it("does not send an utterance to Claude when no accepted page snapshot exists", async () => {
     const events: string[] = [];
     const f = adapterWithInit({ events });
     const server = await startServer({ port: 0, dev: true, brain: "claude", claudeAdapter: f.adapter });
@@ -102,7 +102,7 @@ describe("server brain mode", () => {
       }
       expect(f.calls).toEqual([]);
       expect(frames.filter((frame) => frame.type === "speak").at(-1)?.payload.text)
-        .toBe("Something went wrong on my side.");
+        .toBe("I can't see the page because the browser extension is not connected.");
     } finally {
       voice.ws.terminate();
       await server.close();
