@@ -1,3 +1,5 @@
+export {};
+
 type BlipContentGlobal = typeof globalThis & { __blipContentShellInstalled?: boolean };
 
 const isolatedWorld = globalThis as BlipContentGlobal;
