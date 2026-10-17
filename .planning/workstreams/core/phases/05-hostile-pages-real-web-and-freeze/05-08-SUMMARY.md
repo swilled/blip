@@ -42,7 +42,7 @@ patterns-established:
 requirements-completed: []
 
 # Metrics
-duration: 26min
+duration: 28min
 completed: 2026-10-17
 ---
 
@@ -52,9 +52,9 @@ completed: 2026-10-17
 
 ## Performance
 
-- **Duration:** 26 minutes
+- **Duration:** 28 minutes
 - **Started:** 2026-10-17T17:41:14Z
-- **Completed:** 2026-10-17T18:07:23Z
+- **Completed:** 2026-10-17T18:09:35Z
 - **Tasks:** 2
 - **Files modified:** 4
 
@@ -114,6 +114,13 @@ completed: 2026-10-17
 - The Windows folder picker initially returned a stale `Desktop\\stats` selection. I closed the stale picker and selected the exact `apps/extension/dist` directory in the dedicated profile.
 - An earlier smoke timed out until the stale extension bundle was reloaded from Edge's extension card. The final launcher smoke passed after that one-time refresh.
 
+## Verification
+
+- `npx vitest run scripts/demo.test.ts` - passed, 15 tests.
+- `npm run typecheck` - passed.
+- `npm test` - passed, 78 files and 828 tests; 13 files and 22 tests skipped by their existing opt-in gates.
+- `$env:BLIP_BROWSER='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'; npm run demo -- --brain=fake --smoke` - passed; server observed the extension connection and the dedicated Edge profile was cleaned up afterward.
+
 ## User Setup Required
 
 None for the local fake-brain smoke. A voice client target remains unavailable and is not simulated.
@@ -127,3 +134,9 @@ None for the local fake-brain smoke. A voice client target remains unavailable a
 ---
 *Phase: 05-hostile-pages-real-web-and-freeze*
 *Completed: 2026-10-17*
+
+## Self-Check: PASSED
+
+- Summary artifact exists and matches the completed 05-08 work.
+- Task commits `a94ccf9`, `815740f`, `ba78466`, `7e2a0e7`, and `3e27c89` exist.
+- The final smoke marker was emitted after the server logged the extension connection.
