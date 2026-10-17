@@ -37,7 +37,7 @@
 - [ ] **GATE-03**: A grant is single-use, expires after 30 s, and is bound to target + kind + URL + snapshot version
 - [ ] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
 - [ ] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
-- [ ] **GATE-06**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
+- [ ] **GATE-08**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
 - [ ] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
 - [ ] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
 
@@ -60,7 +60,7 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 |-------------------|------------------------|------------------------------|-----------|
 | VOX-03 typed input + voice UI ws client | Phase 1 criterion 5, Phase 2 I1 round trip | `tools/repl` | I1 |
 | VOX-04 TTS queue + `speak.done` | Read-back -> arm-confirm sequencing (GATE-05) | REPL auto-sends `speak.done` | I1 / I2 |
-| VOX-05 barge-in with confirm guard | Blip's own "say 'submit booking'" can't confirm itself; enforced server-side by GATE-06 | n/a (typed REPL) | I2 |
+| VOX-05 barge-in with confirm guard | Blip's own "say 'submit booking'" can't confirm itself; enforced server-side by GATE-08 | n/a (typed REPL) | I2 |
 | DLG-08 read back, DLG-09 confirm phrase states | Phase 3 I2 gated submit | core stub dialogue reducer | I2 |
 | DLG-05 profile fill, DLG-12 sensitive handoff | Exercise ACT-01/ACT-04 fills and the `focus`-only path for sensitive fields | REPL `set_fields` | I2 |
 | DEMO-01 broken demo form | Phase 3 I2, Phase 4 label repair | core's own extension test pages | I2 |
@@ -116,6 +116,7 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | GATE-05 | core | Phase 3 | Pending |
 | GATE-06 | core | Phase 5 | Pending |
 | GATE-07 | core | Phase 5 | Pending |
+| GATE-08 | core | Phase 3 | Pending |
 | BRAIN-01 | core | Phase 4 | Pending |
 | BRAIN-02 | core | Phase 4 | Pending |
 | BRAIN-03 | core | Phase 4 | Pending |
