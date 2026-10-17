@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 05-05-PLAN.md; additive GATE-07 protocol fields landed
-last_updated: "2026-10-17T18:17:04.254Z"
+stopped_at: Completed 05-06-PLAN.md; warning state reaches accepted page state and REPL
+last_updated: "2026-10-17T18:20:52.163Z"
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 50
-  completed_plans: 47
+  completed_plans: 48
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 05 (hostile-pages-real-web-and-freeze) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 
 ## Performance Metrics
 
@@ -77,6 +77,7 @@ Plan: 3 of 9
 | Phase 04 P10 | untracked continuation | 3 tasks | 12 files |
 | Phase 05 P04 | 1 min | 2 tasks | 1 files |
 | Phase 05 P05 | 8 min | 2 tasks | 4 files |
+| Phase 05 P06 | 15 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -117,6 +118,7 @@ Recent decisions affecting current work:
 - [Phase 04]: The one approved 04-10 initialization failure consumes its approval; no live retry is allowed and BRAIN-01/02/03/PAGE-04 remain pending.
 - [Phase 05]: The user reported that the voice-track owner approved the exact optional GATE-07 warning fields on 2026-10-17; DLG-14 speech and UI remain voice-owned.
 - [Phase 05]: Add only the approved optional boolean fields to Snapshot and voice page state; legacy payloads remain valid and the signal grants no authority.
+- [Phase 05]: Aggregate the warning across captured frames and page-change signatures so child-frame and detector-only changes reach accepted state.
 
 ### Pending Todos
 
@@ -142,6 +144,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T18:17:04.250Z
-Stopped at: Completed 05-05-PLAN.md; additive GATE-07 protocol fields landed
+Last session: 2026-10-17T18:20:52.158Z
+Stopped at: Completed 05-06-PLAN.md; warning state reaches accepted page state and REPL
 Resume file: None
