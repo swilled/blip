@@ -184,7 +184,12 @@ Plans:
 - If the NVDA path isn't solid by ~h30, demo in agent-voice mode and show NVDA only in the opening hook.
 - The demo script follows the four beats in research/FEATURES.md: hook, repair, fill, then the gate (bare "yes" blocked, injection ignored, phrase submits).
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Exclusive NVDA output routing and tracked completion
+- [ ] 04-02-PLAN.md — Session-scoped speech-rate commands
+- [ ] 04-03-PLAN.md — Live-form rehearsal, offline fallbacks, and freeze evidence
 
 ## Progress
 
@@ -196,4 +201,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
 | 2. Fill and Gated Submit on the Broken Form | 6/7 | In Progress | - |
 | 3. Full Command Set with Real Claude | 0/TBD | Not started | - |
-| 4. NVDA Mode and Demo-Safe | 0/TBD | Not started | - |
+| 4. NVDA Mode and Demo-Safe | 0/3 | Planned | - |
