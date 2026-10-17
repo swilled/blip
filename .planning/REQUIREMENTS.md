@@ -135,16 +135,69 @@ Deferred beyond the hackathon. Tracked, not in the current roadmap.
 
 ## Traceability
 
-Filled by the roadmappers (one per workstream).
+Merged from `.planning/workstreams/core/REQUIREMENTS.md` and `.planning/workstreams/voice/REQUIREMENTS.md`. Phase numbers are per workstream (core Phase 1 ≠ voice Phase 1).
 
 | Requirement | Workstream | Phase | Status |
 |-------------|------------|-------|--------|
+| PROT-01 | core | Phase 1 | Pending |
+| PROT-02 | core | Phase 1 | Pending |
+| PROT-03 | core | Phase 5 | Pending |
+| PROT-04 | core | Phase 1 | Pending |
+| PAGE-01 | core | Phase 2 | Pending |
+| PAGE-02 | core | Phase 1 | Pending |
+| PAGE-03 | core | Phase 2 | Pending |
+| PAGE-04 | core | Phase 4 | Pending |
+| PAGE-05 | core | Phase 2 | Pending |
+| ACT-01 | core | Phase 2 | Pending |
+| ACT-02 | core | Phase 2 | Pending |
+| ACT-03 | core | Phase 2 | Pending |
+| ACT-04 | core | Phase 2 | Pending |
+| GATE-01 | core | Phase 3 | Pending |
+| GATE-02 | core | Phase 3 | Pending |
+| GATE-03 | core | Phase 3 | Pending |
+| GATE-04 | core | Phase 3 | Pending |
+| GATE-05 | core | Phase 3 | Pending |
+| GATE-06 | core | Phase 5 | Pending |
+| GATE-07 | core | Phase 5 | Pending |
+| BRAIN-01 | core | Phase 4 | Pending |
+| BRAIN-02 | core | Phase 4 | Pending |
+| BRAIN-03 | core | Phase 4 | Pending |
+| RES-01 | core | Phase 3 | Pending |
+| RES-02 | core | Phase 3 | Pending |
+| VOX-01 | voice | Phase 1 | Pending |
+| VOX-02 | voice | Phase 1 | Pending |
+| VOX-03 | voice | Phase 1 | Pending |
+| VOX-04 | voice | Phase 1 | Pending |
+| VOX-05 | voice | Phase 1 | Pending |
+| VOX-06 | voice | Phase 1 | Pending |
+| VOX-07 | voice | Phase 4 | Pending |
+| VOX-08 | voice | Phase 4 | Pending |
+| DLG-01 | voice | Phase 1 | Pending |
+| DLG-02 | voice | Phase 2 | Pending |
+| DLG-03 | voice | Phase 2 | Pending |
+| DLG-04 | voice | Phase 3 | Pending |
+| DLG-05 | voice | Phase 3 | Pending |
+| DLG-06 | voice | Phase 3 | Pending |
+| DLG-07 | voice | Phase 2 | Pending |
+| DLG-08 | voice | Phase 2 | Pending |
+| DLG-09 | voice | Phase 2 | Pending |
+| DLG-10 | voice | Phase 3 | Pending |
+| DLG-11 | voice | Phase 3 | Pending |
+| DLG-12 | voice | Phase 3 | Pending |
+| DLG-13 | voice | Phase 3 | Pending |
+| DLG-14 | voice | Phase 3 | Pending |
+| VIS-01 | voice | Phase 1 | Pending |
+| VIS-02 | voice | Phase 2 | Pending |
+| DEMO-01 | voice | Phase 2 | Pending |
+| DEMO-02 | voice | Phase 2 | Pending |
+| DEMO-03 | voice | Phase 4 | Pending |
+| DEMO-04 | voice | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 53 total (core 25, voice 28 — voice items are mostly cheap templates)
-- Mapped to phases: 0
-- Unmapped: 53 ⚠️
+- Mapped to phases: 53 (core 5 phases, voice 4 phases)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-16*
-*Last updated: 2026-10-16 after initial definition*
+*Last updated: 2026-10-16 after roadmap creation*

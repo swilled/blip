@@ -79,7 +79,7 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 - **Model access**: Claude subscription only, no API key — agent must run through Claude Code headless / Claude Agent SDK on each developer's logged-in subscription; subject to subscription rate limits and Anthropic's terms for subscription auth (fine for personal hackathon use on own machine; do not ship as hosted product)
 - **Tech stack**: TypeScript everywhere (extension, agent server, voice app) — one toolchain for both developers
 - **Platform**: Both machines Windows; Chrome; demo screen reader is NVDA
-- **Latency**: headless Claude turns are ~2–5 s; mitigate with background schema building, filler speech ("one moment"), smaller/faster model for conversational turns, trimmed accessibility tree
+- **Latency**: measured Agent SDK turns: Haiku 5.5 0.7–1.8 s, Sonnet 5.5 (low effort) 1.6–2.5 s; keep it low with grammar-first commands, background cached label repair, filler speech ("one moment"), Haiku for intents, snapshots capped ~8k tokens
 - **Security**: every page is untrusted input; Claude Code built-in tools must be disabled so prompt injection can't reach a shell or filesystem; passwords/card numbers never sent to the model
 - **Collaboration**: two people on separate machines; both have Claude subscriptions and can run the agent locally
 
