@@ -24,19 +24,30 @@ describe("MV3 extension build inputs", () => {
 
   it("injects into related frames and excludes Blip's own loopback pages", () => {
     const contentScripts = manifestTemplate["content_scripts"] as Array<Record<string, unknown>>;
-    expect(contentScripts).toHaveLength(1);
+    expect(contentScripts).toHaveLength(2);
     expect(contentScripts[0]).toMatchObject({
+      js: ["submit-method-guard.js"],
+      all_frames: true,
+      run_at: "document_start",
+      match_about_blank: true,
+      match_origin_as_fallback: true,
+      world: "MAIN",
+    });
+    expect(contentScripts[1]).toMatchObject({
+      js: ["content.js"],
       all_frames: true,
       run_at: "document_idle",
       match_about_blank: true,
       match_origin_as_fallback: true,
     });
-    expect(contentScripts[0]?.["exclude_matches"]).toEqual([
-      "http://127.0.0.1:7777/*",
-      "http://localhost:7777/*",
-      "http://127.0.0.1:5173/*",
-      "http://localhost:5173/*",
-    ]);
+    for (const contentScript of contentScripts) {
+      expect(contentScript["exclude_matches"]).toEqual([
+        "http://127.0.0.1:7777/*",
+        "http://localhost:7777/*",
+        "http://127.0.0.1:5173/*",
+        "http://localhost:5173/*",
+      ]);
+    }
   });
 
   it("accepts only explicit loopback test WebSocket URLs for /ws", () => {

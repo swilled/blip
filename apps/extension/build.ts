@@ -43,6 +43,7 @@ export async function buildExtension(options: { socketUrl?: string; watch?: bool
       entryPoints: [
         { in: path.join(here, "src/background/index.ts"), out: "background" },
         { in: path.join(here, "src/content/index.ts"), out: "content" },
+        { in: path.join(here, "src/content/submit-method-guard-main.ts"), out: "submit-method-guard" },
       ],
       outdir: output,
     });
@@ -56,6 +57,7 @@ export async function buildExtension(options: { socketUrl?: string; watch?: bool
     entryPoints: [
       { in: path.join(here, "src/background/index.ts"), out: "background" },
       { in: path.join(here, "src/content/index.ts"), out: "content" },
+      { in: path.join(here, "src/content/submit-method-guard-main.ts"), out: "submit-method-guard" },
     ],
     outdir: output,
   });
