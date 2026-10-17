@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing Phase 4
-stopped_at: Phase 4 paused at exact SDK pin approval checkpoint
-last_updated: "2026-10-17T07:58:12.937Z"
+status: Ready to execute
+stopped_at: Completed 04-01-PLAN.md; D-01 live spike deferred pending explicit owner confirmation
+last_updated: "2026-10-17T08:10:18.173Z"
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 38
-  completed_plans: 31
+  completed_plans: 32
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 4 (Claude Brain and Label Repair) — EXECUTING
-Plan: 1 of 7
+Plan: 2 of 7
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Plan: 1 of 7
 | Phase 03 P04 | 8m | 3 tasks | 10 files |
 | Phase 03 P05 | 9m | 2 tasks | 11 files |
 | Phase 03 P06 | 22m | 3 tasks | 11 files |
+| Phase 04 P01 | 13m | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -101,6 +102,7 @@ Recent decisions affecting current work:
 - [Phase 03]: Keep the persistent window-capture submit guard with stopImmediatePropagation and prove valid routes using a matched no-extension browser baseline.
 - [Phase 03]: The fake request-action phrase is an optional exact-match test hook; omission preserves static fake behavior.
 - [Phase 03]: Report submit outcomes only from fresh page evidence, keeping labeled field errors separate from page errors and sensitive values presence-only.
+- [Phase 04]: Keep the D-01 fallback provisional; no live spike ran because active eligible local subscription and usage allocation were not confirmed.
 
 ### Pending Todos
 
@@ -109,7 +111,7 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; voice's `Effect` union remains a cross-track integration item
-- [Phase 4] `outputFormat` + `startup()` combination unverified; run a 30-minute spike before h8 if possible (fallback: streaming session + `zod.safeParse` + one retry)
+- [Phase 4] Live `outputFormat` + `startup()` composition remains unverified. The owner response did not confirm an eligible local subscription or usage allocation, so no live call was made; keep the D-01 fallback provisional and preserve the live spike as a follow-up checkpoint.
 - [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
@@ -124,6 +126,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T07:58:12.933Z
-Stopped at: Phase 4 paused at exact SDK pin approval checkpoint
-Resume file: .planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-01-PLAN.md
+Last session: 2026-10-17T08:10:18.168Z
+Stopped at: Completed 04-01-PLAN.md; D-01 live spike deferred pending explicit owner confirmation
+Resume file: None

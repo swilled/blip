@@ -141,7 +141,16 @@ Plans:
   4. On the broken demo form, unlabeled and placeholder-only fields get repaired labels in the background (marked model-sourced, with a confidence) without delaying the instant baseline answer; patches touch only existing ids and never kind, value or sensitivity; a second visit loads the repair from cache instantly.
 
 **Research**: Spike needed: `outputFormat` (json_schema) combined with `startup()` warm processes is unverified. Run a 30-minute standalone spike at the first natural pause, ideally before h8. Fallback: one streaming session per role, JSON-only prompt, `zod.safeParse` plus one retry, still `tools: []`. Watch subscription quota (Haiku-class intents, Sonnet-class repair, disk cache). Apply the roughly 8k-token snapshot trim here, at the model-prompt boundary; Phase 2 only caps the extension wire snapshot at 250 elements.
-**Plans**: TBD
+**Plans**: 1/7 executed (7 plans created)
+
+Plans:
+- [x] 04-01-PLAN.md — Approve the exact SDK pin and add a bounded, gated SDK lifecycle spike
+- [ ] 04-02-PLAN.md — Implement the isolated, tool-less Claude provider and role lifecycle
+- [ ] 04-03-PLAN.md — Build the sanitized, value-free prompt projection with an approximate 8k-token bound
+- [ ] 04-04-PLAN.md — Share pure sensitive-shape checks and gate secret-bearing utterances
+- [ ] 04-05-PLAN.md — Separate deterministic label candidates from model-sourced resolved labels
+- [ ] 04-06-PLAN.md — Route grammar misses through schema-checked intents and a recovering watchdog
+- [ ] 04-07-PLAN.md — Repair labels asynchronously and cache validated value-free patches
 **UI hint**: no
 
 ### Phase 5: Hostile Pages, Real Web and Freeze
@@ -173,7 +182,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
-| 4. Claude Brain and Label Repair | 0/TBD | Not started | - |
+| 4. Claude Brain and Label Repair | 1/7 | In Progress |  |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
