@@ -132,6 +132,7 @@ describe("real-browser hostile injection and no-grant submit barrier", () => {
         warningStart,
         (state) => state.payload.page?.untrustedInstructionDetected === true,
       );
+      // This proves core boolean delivery only; DLG-14 speech requires the voice-owned consumer and remains pending.
       expect(warningState.payload.page?.untrustedInstructionDetected).toBe(true);
       expect(fixture.voiceClient.frames().some((message) => message.type === "confirm.armed")).toBe(false);
       expect(fixture.actResults()).toEqual([]);
