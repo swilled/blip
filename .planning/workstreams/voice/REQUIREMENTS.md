@@ -25,7 +25,7 @@
 - [x] **DLG-02**: User can say "read the form" and hear each field in page order with its label and whether it's required
 - [x] **DLG-03**: User can dictate a value into the current or a named field and hear it echoed back
 - [x] **DLG-04**: User can say "spell X" and hear the field's value spelled letter by letter
-- [ ] **DLG-05**: User can say "fill from my profile" and matching fields are filled from a local profile mapped by autocomplete tokens; the model only ever sees profile keys, never values
+- [x] **DLG-05**: User can say "fill from my profile" and matching fields are filled from a local profile mapped by autocomplete tokens; the model only ever sees profile keys, never values
 - [x] **DLG-06**: User can say "change X to Y" to edit a filled field
 - [x] **DLG-07**: For selects/radios, Blip reads options numbered in page order and the user can pick by number or name
 - [x] **DLG-08**: User can say "read back" and hear every field and value grouped, with empty required fields called out and sensitive values masked
@@ -33,7 +33,7 @@
 - [ ] **DLG-10**: User can ask "where am I" (site, step, current field) and "what's required" (remaining required fields)
 - [ ] **DLG-11**: When a label was guessed, Blip says so and why ("I think this is phone, based on the text next to it")
 - [x] **DLG-12**: On password or card fields, Blip announces the field and hands off to the user to type; those values are never spoken or sent to the model
-- [ ] **DLG-13**: User can say "undo" to revert the last fill
+- [x] **DLG-13**: User can say "undo" to revert the last fill
 - [ ] **DLG-14**: Blip speaks the injection warning flagged by GATE-07 before continuing
 
 ### Visibility
@@ -96,7 +96,7 @@
 | DLG-02 | voice | Phase 2 | Complete |
 | DLG-03 | voice | Phase 2 | Complete |
 | DLG-04 | voice | Phase 3 | Complete |
-| DLG-05 | voice | Phase 3 | Pending |
+| DLG-05 | voice | Phase 3 | Complete |
 | DLG-06 | voice | Phase 3 | Complete |
 | DLG-07 | voice | Phase 2 | Complete |
 | DLG-08 | voice | Phase 2 | Complete |
@@ -104,7 +104,7 @@
 | DLG-10 | voice | Phase 3 | Pending |
 | DLG-11 | voice | Phase 3 | Pending |
 | DLG-12 | voice | Phase 3 | Complete |
-| DLG-13 | voice | Phase 3 | Pending |
+| DLG-13 | voice | Phase 3 | Complete |
 | DLG-14 | voice | Phase 3 | Pending |
 | VIS-01 | voice | Phase 1 | Pending |
 | VIS-02 | voice | Phase 2 | Complete |
