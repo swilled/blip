@@ -18,6 +18,7 @@
     "ext:watch": "npm run watch --workspace @blip/extension",
     "ext:typecheck": "npm run typecheck --workspace @blip/extension",
     "ext:test": "npm run test --workspace @blip/extension",
+    "ext:smoke": "tsx scripts/ext-smoke.ts",
     "gen:extension-key": "tsx scripts/gen-extension-key.ts",
     "fixtures:update": "tsx scripts/gen-golden.ts",
     "protocol:lock": "tsx scripts/gen-lock.ts"
