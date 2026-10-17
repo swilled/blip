@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 04 live-provider evidence pending; Phase 05 local execution is 3/9 plans complete
-stopped_at: 05-08 setup checkpoint awaits dedicated-profile extension approval; Phase 04 remains open
-last_updated: "2026-10-17T16:45:51.000Z"
+status: Phase 04 live-provider evidence pending; Phase 05 is 3/9 complete with 05-08 awaiting manual profile setup
+stopped_at: 05-08 needs Developer mode and Load unpacked in the dedicated profile; automation cannot change this in-app security setting
+last_updated: "2026-10-17T17:41:14.000Z"
 progress:
   total_phases: 5
   completed_phases: 4
