@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/react-form.tsx --bundle --format=esm --outfile=dist/react-form.js --loader:.tsx=tsx"
+    "build": "tsx build.ts"
   },
   "dependencies": {
     "react": "18.3.1",
