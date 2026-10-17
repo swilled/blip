@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 03-03-PLAN.md; 03-02 remains next
-last_updated: "2026-10-17T06:16:12.841Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-10-17T06:30:34.691Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 31
-  completed_plans: 27
+  completed_plans: 28
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 03 (gated-submit-and-result-reading) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Plan: 2 of 6
 | Phase 02 P19 | 9m | 2 tasks | 10 files |
 | Phase 03 P01 | 6 min | 2 tasks | 6 files |
 | Phase 03 P03 | 6 min | 2 tasks | 9 files |
+| Phase 03 P02 | 14m | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Fixed per-kind confirmation phrases normalize only case, whitespace, and terminal punctuation.
 - [Phase 03]: Grant fingerprints bind ordered field state while omitting sensitive values and retaining sensitive presence only.
 - [Phase 03]: The MAIN-world direct-submit guard remains immutable, while one-use submit-event authorization stays isolated.
+- [Phase 03]: Arm only after matching uninterrupted read-back completion and the full one-second cooldown.
+- [Phase 03]: Bind grants to page, target, kind, and field state while retaining sensitive presence only; consume before one dispatch.
+- [Phase 03]: Model gated Intents enter the same deterministic Executor for read-back; model output cannot authorize dispatch.
 
 ### Pending Todos
 
@@ -111,6 +115,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T06:16:12.834Z
-Stopped at: Completed 03-03-PLAN.md; 03-02 remains next
+Last session: 2026-10-17T06:30:34.686Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
