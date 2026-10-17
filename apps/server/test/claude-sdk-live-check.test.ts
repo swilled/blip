@@ -35,7 +35,7 @@ describe("Claude SDK live-check gate", () => {
     const verify = vi.fn(async () => {});
 
     const result = await runOfflineFirstLiveCheck(
-      { live: false, maxSeconds: LIVE_CHECK_MAX_SECONDS },
+      parseLiveCheckArguments(["--offline"]),
       { readReport, createProvider, verify },
     );
 
@@ -130,6 +130,8 @@ describe("Claude SDK live-check gate", () => {
 
   it("enforces the 900-second ceiling and the Task 2 per-role prompt caps", async () => {
     expect(LIVE_CHECK_PROMPT_LIMITS).toEqual({ intent: 4, repair: 1, total: 5 });
+    expect(parseLiveCheckArguments(["--offline"])).toEqual({ live: false, maxSeconds: LIVE_CHECK_MAX_SECONDS });
+    expect(() => parseLiveCheckArguments(["--offline", "--live"])).toThrow(/cannot be combined/);
     expect(() => parseLiveCheckArguments(["--live", "--max-seconds", "901"])).toThrow(/900 seconds/);
     expect(parseLiveCheckArguments(["--live", "--max-seconds", "900"])).toEqual({ live: true, maxSeconds: 900 });
 

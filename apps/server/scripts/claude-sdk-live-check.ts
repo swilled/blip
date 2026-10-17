@@ -50,11 +50,14 @@ export type LiveCheckDependencies = {
 
 export function parseLiveCheckArguments(args: string[]): LiveCheckArguments {
   let live = false;
+  let offline = false;
   let maxSeconds = LIVE_CHECK_MAX_SECONDS;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--live") {
       live = true;
+    } else if (arg === "--offline") {
+      offline = true;
     } else if (arg === "--max-seconds") {
       const raw = args[index + 1];
       if (raw === undefined || !/^\d+$/.test(raw)) {
@@ -66,6 +69,7 @@ export function parseLiveCheckArguments(args: string[]): LiveCheckArguments {
       throw new Error("Unsupported live-check argument.");
     }
   }
+  if (live && offline) throw new Error("--offline cannot be combined with --live.");
   if (!Number.isSafeInteger(maxSeconds) || maxSeconds < 1 || maxSeconds > LIVE_CHECK_MAX_SECONDS) {
     throw new Error("Live-check duration must be between 1 and 900 seconds.");
   }
