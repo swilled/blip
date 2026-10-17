@@ -128,6 +128,13 @@ Plan 02-06 can connect the completed pure reducer to the hub and gate runner. Th
 
 DLG-08 and DLG-09 remain Pending in the workstream requirements tracker because `requirements ready-ids` reports both blocked by the unfinished sibling Plan 02-06. The plan frontmatter lists both completed requirements as required by the summary contract; the shared tracker was not advanced before the integration plan. `state update-progress` also declined to rewrite the progress display because the phase is not complete; `state advance-plan` and `roadmap update-plan-progress` recorded the current plan position and 5/7 plan summaries.
 
+## Self-Check: PASSED
+
+- Task targets passed: `npm.cmd test -- packages/dialogue/src/submit.test.ts`, `npm.cmd test -- packages/dialogue`, and `npm.cmd test -- packages/dialogue/src/confirm.invariant.test.ts`.
+- Final full suite passed: 53 test files, 732 tests; `npm.cmd run typecheck` passed.
+- Static acceptance checks found one redeem construction, no `alternatives` references in `submit.ts` or `confirm.ts`, and 34 refusal phrases.
+- `verify-summary` passed, and the refreshed phase-plan index marks 02-05 complete with 02-06 ready.
+
 ---
 *Phase: 02-fill-and-gated-submit-on-the-broken-form*
 *Completed: 2026-10-17*
