@@ -3,6 +3,7 @@ import { copyFile, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveChromePath } from "./launch-window";
+import { DEMO_EXTENSION_ID } from "./extension-id";
 
 const RESET_URL = "http://127.0.0.1:7777/";
 const FORM_URL = "http://127.0.0.1:7777/fixtures/forms/broken.html";
@@ -24,6 +25,7 @@ export type ResetDependencies = {
   spawn(command: string, args: string[], options: ResetSpawnOptions): { unref(): unknown };
   kill(pid: number): void;
   fetchReady(url: string): Promise<boolean>;
+  bridgeInstalled(): Promise<boolean>;
   chrome: string;
   repoRoot: string;
   log(line: string): void;
@@ -87,16 +89,21 @@ export async function resetDemo(deps: ResetDependencies): Promise<void> {
   await waitForServer(deps.fetchReady);
   deps.log("demo reset: server is ready");
 
+  const bridgeInstalled = await deps.bridgeInstalled();
   const chrome = deps.spawn(
     deps.chrome,
     [
       `--user-data-dir=${join(deps.repoRoot, ".chrome-profile-demo")}`,
-      `--load-extension=${join(deps.repoRoot, "dev", "mock-server", "extension")}`,
+      "--new-window",
+      ...(bridgeInstalled ? [] : ["chrome://extensions/"]),
       FORM_URL,
     ],
     { cwd: deps.repoRoot, detached: true, stdio: "ignore" },
   );
   chrome.unref();
+  if (!bridgeInstalled) {
+    deps.log(`demo reset: load the unpacked bridge in chrome://extensions from ${join(deps.repoRoot, "dev", "mock-server", "extension")}, then reload the form`);
+  }
   deps.log("demo reset: opened the broken form in Chrome");
 }
 
@@ -110,6 +117,16 @@ if (entry?.endsWith("/reset.ts")) {
     async fetchReady(url) {
       try {
         return (await fetch(url, { signal: AbortSignal.timeout(1_000) })).ok;
+      } catch {
+        return false;
+      }
+    },
+    async bridgeInstalled() {
+      try {
+        const prefs = JSON.parse(await readFile(join(repoRoot, ".chrome-profile-demo", "Default", "Preferences"), "utf8")) as {
+          extensions?: { settings?: Record<string, { state?: number }> };
+        };
+        return prefs.extensions?.settings?.[DEMO_EXTENSION_ID]?.state === 1;
       } catch {
         return false;
       }

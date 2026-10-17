@@ -29,10 +29,6 @@ export function buildChromeArgs(opts: { port?: number; screenWidth?: number; dem
     "--no-first-run",
     "--no-default-browser-check",
   ];
-  if (opts.demoExtension) {
-    const extension = fileURLToPath(new URL("dev/mock-server/extension", repoRoot)).replace(/[\\/]$/, "");
-    args.push(`--load-extension=${extension}`);
-  }
   if (opts.screenWidth !== undefined) {
     args.push(`--window-position=${Math.max(0, opts.screenWidth - WINDOW_WIDTH)},0`);
   }
@@ -74,7 +70,7 @@ export interface LaunchOptions {
   log?: (line: string) => void;
   /** Re-apply the pin this often (ms) so the window returns to the front after you click elsewhere. 0 disables. */
   repinMs?: number;
-  /** Load the isolated local form bridge in a dedicated Chrome profile. */
+  /** Use the dedicated Chrome profile where the local form bridge is installed manually once. */
   demoExtension?: boolean;
 }
 

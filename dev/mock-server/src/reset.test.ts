@@ -16,12 +16,13 @@ type ResetDeps = {
   spawn(command: string, args: string[], options: SpawnOptions): { unref(): void };
   kill(pid: number): void;
   fetchReady(url: string): Promise<boolean>;
+  bridgeInstalled(): Promise<boolean>;
   chrome: string;
   repoRoot: string;
   log(line: string): void;
 };
 
-function fakeDeps(pidContents: string | null, readiness: boolean[] = [true]) {
+function fakeDeps(pidContents: string | null, readiness: boolean[] = [true], bridgeInstalled = false) {
   const repoRoot = "C:\\blip-demo";
   const events: string[] = [];
   const spawnCalls: Array<{ command: string; args: unknown; options: SpawnOptions }> = [];
@@ -68,6 +69,10 @@ function fakeDeps(pidContents: string | null, readiness: boolean[] = [true]) {
       readCount++;
       return result;
     },
+    async bridgeInstalled() {
+      events.push("check-bridge");
+      return bridgeInstalled;
+    },
     chrome: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     repoRoot,
     log: (line) => events.push(`log:${line}`),
@@ -94,7 +99,8 @@ describe("demo reset", () => {
     expect(fake.events.indexOf("kill-pid")).toBeLessThan(fake.events.indexOf("remove-pid"));
     expect(fake.events.indexOf("remove-pid")).toBeLessThan(fake.events.indexOf("spawn-runner"));
     expect(fake.events.indexOf("spawn-runner")).toBeLessThan(fake.events.indexOf("poll-ready"));
-    expect(fake.events.lastIndexOf("poll-ready")).toBeLessThan(fake.events.indexOf("spawn-chrome"));
+    expect(fake.events.lastIndexOf("poll-ready")).toBeLessThan(fake.events.indexOf("check-bridge"));
+    expect(fake.events.indexOf("check-bridge")).toBeLessThan(fake.events.indexOf("spawn-chrome"));
     expect(fake.readyUrls).toEqual(["http://127.0.0.1:7777/", "http://127.0.0.1:7777/"]);
 
     const runner = fake.spawnCalls[0]!;
@@ -109,12 +115,28 @@ describe("demo reset", () => {
     expect(Array.isArray(chrome.args)).toBe(true);
     expect(chrome.args).toEqual([
       `--user-data-dir=${join(fake.repoRoot, ".chrome-profile-demo")}`,
-      `--load-extension=${join(fake.repoRoot, "dev", "mock-server", "extension")}`,
+      "--new-window",
+      "chrome://extensions/",
       "http://127.0.0.1:7777/fixtures/forms/broken.html",
     ]);
     expect(chrome.options).toMatchObject({ cwd: fake.repoRoot, detached: true, stdio: "ignore" });
     expect(chrome.options.shell).toBeUndefined();
     expect(fake.events.filter((event) => event === "unref")).toHaveLength(2);
+    expect(fake.events).toContain(`log:demo reset: load the unpacked bridge in chrome://extensions from ${join(fake.repoRoot, "dev", "mock-server", "extension")}, then reload the form`);
+  });
+
+  it("opens only the form after the bridge has been installed in the demo profile", async () => {
+    const fake = fakeDeps(null, [true], true);
+
+    await resetDemo(fake.deps);
+
+    const chrome = fake.spawnCalls[1]!;
+    expect(chrome.args).toEqual([
+      `--user-data-dir=${join(fake.repoRoot, ".chrome-profile-demo")}`,
+      "--new-window",
+      "http://127.0.0.1:7777/fixtures/forms/broken.html",
+    ]);
+    expect(fake.events.some((event) => event.includes("load the unpacked bridge"))).toBe(false);
   });
 
   it.each([
