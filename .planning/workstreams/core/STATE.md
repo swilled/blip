@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 04-05; 04-07 is next
-last_updated: "2026-10-17T10:06:31.485Z"
+stopped_at: Plans 04-01 through 04-07 complete; Phase 4 verification gaps found, follow-up live SDK check awaits owner approval
+last_updated: "2026-10-17T10:25:52Z"
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 38
-  completed_plans: 37
+  completed_plans: 38
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 4 (Claude Brain and Label Repair) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7 complete; phase verification gaps remain
 
 ## Performance Metrics
 
@@ -103,7 +103,7 @@ Recent decisions affecting current work:
 - [Phase 03]: Keep the persistent window-capture submit guard with stopImmediatePropagation and prove valid routes using a matched no-extension browser baseline.
 - [Phase 03]: The fake request-action phrase is an optional exact-match test hook; omission preserves static fake behavior.
 - [Phase 03]: Report submit outcomes only from fresh page evidence, keeping labeled field errors separate from page errors and sensitive values presence-only.
-- [Phase 04]: Keep the D-01 fallback provisional; no live spike ran because active eligible local subscription and usage allocation were not confirmed.
+- [Phase 04]: The owner authorized one bounded local SDK spike. Both startup()+outputFormat attempts still reported one init tool even with `tools: []` and `disallowedTools: ["*"]`; neither sent a model prompt. Keep the streaming/Zod path fail-closed and do not claim live provider success.
 - [Phase 04]: Voice-owner approval was reported in the 2026-10-17 checkpoint response; Core proceeded with the exact deterministic-raw/model-resolved label source split.
 
 ### Pending Todos
@@ -113,11 +113,11 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; voice's `Effect` union remains a cross-track integration item
-- [Phase 4] Live `outputFormat` + `startup()` composition remains unverified. The owner authorized one bounded local spike; keep the D-01 fallback provisional until the orchestrator records its result.
+- [Phase 4] The bounded `outputFormat` + `startup()` probe failed the required empty-tool check for both roles, including with `disallowedTools: ["*"]`; no model prompt was sent. Live streaming initialization and Windows SDK cancellation/recreation remain unverified, so do not claim live provider success.
 - [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
-- [Phase 4] Plan 04-05's approved label-source split is complete; Plan 04-07 is now unblocked and next.
+- [Phase 4] Plans 04-01 through 04-07 are complete. The verifier found live-provider gaps; keep Phase 4 and BRAIN-01/02/03/PAGE-04 unmarked until safely verified.
 
 ## Deferred Items
 
@@ -129,6 +129,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T10:06:31.478Z
-Stopped at: Completed 04-05; 04-07 is next
+Last session: 2026-10-17T10:25:52Z
+Stopped at: Completed all seven Phase 4 plans; gap closure requires a separately approved live SDK check.
 Resume file: None

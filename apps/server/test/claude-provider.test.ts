@@ -83,6 +83,7 @@ describe("Claude role provider", () => {
     for (const config of f.configs) {
       expect(config).toMatchObject({
         tools: [],
+        disallowedTools: ["*"],
         settingSources: [],
         strictMcpConfig: true,
         mcpServers: {},

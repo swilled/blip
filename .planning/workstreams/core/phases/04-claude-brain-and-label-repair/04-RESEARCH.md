@@ -250,7 +250,7 @@ Remove ANTHROPIC_API_KEY before constructing env. SDK env replaces subprocess en
 - TypeScript throughout; Node.js 24 or newer; Windows and Chrome target.
 - Use Claude Agent SDK with the developer's own logged-in subscription and no direct API key; do not host the product or offer other users subscription login/rate limits.
 - Every page is untrusted. Disable built-in tools. Passwords/card numbers are never spoken, logged or sent to the model.
-- Lock SDK roles with tools: [], settingSources: [], strictMcpConfig: true, permissionMode: "dontAsk", empty cwd, stripped ANTHROPIC_API_KEY, disabled auto-memory/connectors and init tool-list assertion. Never use bypassPermissions.
+- Lock SDK roles with tools: [], disallowedTools: ["*"], settingSources: [], strictMcpConfig: true, permissionMode: "dontAsk", empty cwd, stripped ANTHROPIC_API_KEY, disabled auto-memory/connectors and init tool-list assertion. Never use bypassPermissions.
 - Model returns structured Intent or repair data only; deterministic code owns page actions and gated authorization.
 - Gated actions default-deny; confirmation phrase is matched in server code only from the voice socket.
 - packages/protocol changes need both developers' sign-off; preserve the frozen wire contract and update documentation/tests/lock with additive changes.
@@ -295,11 +295,11 @@ Do not require subscription credentials or live Claude in CI. Make spike/live sm
 
 ## Open Questions
 
-1. **Does outputFormat work reliably with startup prewarming in the pinned SDK?** Docs cover both features separately. Run the required 30-minute spike early. Exercise repeated Intent/repair results, warm/cold start, missing/invalid output, latency, tools list and timeout/restart. Use fallback D-01 if unreliable.
-2. **What local estimate meets “roughly 8k tokens”?** No suitable current tokenizer found. Use a conservative deterministic estimate over the sanitized projection and calibrate via SDK usage.
-3. **How does Windows streaming cancellation/recreation work?** Verify against the pinned SDK; timeout must settle the server chain.
-4. **Does current subscription policy permit this developer-owned local hackathon use?** Project locks local owner use and prohibits hosting or offering login. Verify exact account terms with official guidance before live use; do not switch to an API key design.
-5. **When can the protocol LabelSource addition be made?** Context locks additive model source, while CLAUDE.md requires both developers' sign-off. Include the coordination checkpoint before package edits.
+1. **Resolved — the required empty-tool condition failed.** The bounded live runs initialized both roles with `tools: []`; a second attempt also set `disallowedTools: ["*"]`, but both init messages still reported exactly one tool. Both probes stopped before `WarmQuery.query()`, so no model prompt or structured result was sent. Do not select `startup()` + `outputFormat`; use the D-01 streaming/Zod fallback, which retains a deny-all option and still refuses startup if tools are reported.
+2. **Resolved — conservative estimate selected; calibration unavailable.** `estimateProjectionTokens` uses `ceil(UTF-8 bytes / 2)` over the exact serialized prompt guide and projection, with projection-only trimming to an 8,000 estimate. This is explicitly an approximate bound, not a tokenizer-calibrated count; the live probe did not reach a model result with usage data.
+3. **Open — Windows cancellation/recreation lacks live SDK evidence.** The role manager and watchdog have injected-adapter tests, but the live probe stopped before a query. Keep the timeout settling behavior covered by tests and do not claim the pinned SDK's Windows cancellation/recreation behavior is measured.
+4. **Resolved — local owner use confirmed for this spike.** The owner confirmed the eligible subscription and bounded local use. Anthropic's current help article explicitly permits Agent SDK and third-party app use against Claude subscription limits; the project remains owner-run and does not share login or host a service. Do not switch to an API-key path.
+5. **Resolved — exact additive split approved.** The owner confirmed the voice owner explicitly approved keeping raw extension label candidates deterministic while allowing `model` only on resolved FormModel labels. The approval was received in the Phase 4 checkpoint response before protocol edits.
 
 ## Sources
 
@@ -311,6 +311,8 @@ Do not require subscription credentials or live Claude in CI. Make spike/live sm
 - [Agent SDK configuration](https://code.claude.com/docs/en/agent-sdk/configuration) — child environment replacement and settings/config.
 - [Agent SDK Claude Code features](https://code.claude.com/docs/en/agent-sdk/claude-code-features) — settings sources, memory and connector controls.
 - [Agent SDK permissions](https://code.claude.com/docs/en/agent-sdk/permissions) — dontAsk and bypass warning.
+- [Agent SDK permissions](https://code.claude.com/docs/en/agent-sdk/permissions) — `disallowedTools: ["*"]` removes every tool definition; retained as an additional deny-all control alongside `tools: []` and the mandatory init check.
+- [Use the Claude Agent SDK with your Claude plan](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan) — Anthropic Help Center update 2026-10-07 confirms Agent SDK and third-party app usage can draw from subscription limits.
 - [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview) — auth and third-party use restrictions; verify terms for locked local use.
 - [Haiku 5.5 overview](https://platform.claude.com/docs/en/models/haiku-5-5/overview) and [Sonnet 5.5 overview](https://platform.claude.com/docs/en/models/sonnet-5-5/overview) — current model IDs and role fit.
 - [Haiku 5.5 migration guide](https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide) — current tokenizer change; avoid old estimates.

@@ -47,6 +47,7 @@ type Observation = {
   structuredOutputPresent: boolean;
   schemaValid: boolean;
   initToolsEmpty: boolean | null;
+  initToolCount: number | null;
   error: "timeout" | "unexpected-tools" | "sdk-error" | null;
 };
 
@@ -138,6 +139,7 @@ async function runOneProbe(
   let warm: Awaited<ReturnType<typeof import("@anthropic-ai/claude-agent-sdk").startup>> | undefined;
   let startupMs: number | null = null;
   let initToolsEmpty: boolean | null = null;
+  let initToolCount: number | null = null;
   let structuredOutput: unknown;
   let structuredOutputPresent = false;
   let sdkDurationMs: number | null = null;
@@ -165,6 +167,7 @@ async function runOneProbe(
           cwd,
           model: role.model,
           tools: [],
+          disallowedTools: ["*"],
           settingSources: [],
           strictMcpConfig: true,
           permissionMode: "dontAsk",
@@ -184,6 +187,7 @@ async function runOneProbe(
       const query = warm.query(role.prompt);
       for await (const message of query) {
         if (message.type === "system" && message.subtype === "init") {
+          initToolCount = message.tools.length;
           initToolsEmpty = message.tools.length === 0;
           if (!initToolsEmpty) {
             probeError = "unexpected-tools";
@@ -231,6 +235,7 @@ async function runOneProbe(
     structuredOutputPresent,
     schemaValid: role.schema.safeParse(structuredOutput).success,
     initToolsEmpty,
+    initToolCount,
     error: probeError,
   };
 }

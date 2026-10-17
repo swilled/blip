@@ -11,6 +11,7 @@ export type ClaudeRoleConfig = {
   cwd: string;
   env: Record<string, string | undefined>;
   tools: [];
+  disallowedTools: ["*"];
   settingSources: [];
   strictMcpConfig: true;
   mcpServers: Record<string, never>;
@@ -60,6 +61,7 @@ export function buildRoleConfig(
     cwd,
     env,
     tools: [],
+    disallowedTools: ["*"],
     settingSources: [],
     strictMcpConfig: true,
     mcpServers: {},
@@ -261,6 +263,7 @@ function createSdkAdapter(): ClaudeSdkAdapter {
           env: config.env,
           model: config.model,
           tools: config.tools,
+          disallowedTools: config.disallowedTools,
           settingSources: config.settingSources,
           strictMcpConfig: config.strictMcpConfig,
           mcpServers: config.mcpServers,

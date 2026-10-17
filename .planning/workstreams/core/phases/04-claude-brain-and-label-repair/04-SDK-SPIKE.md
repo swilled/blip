@@ -8,9 +8,9 @@ The owner delegated the exact version choice by repeatedly asking GSD to choose 
 
 ## Live-use gate
 
-ownerLiveUse: not confirmed
+ownerLiveUse: confirmed
 
-The user's latest response was: “do what u think is best if this is a discuss phase, on the core track.” This does not confirm an active eligible local subscription or authorize its usage allocation, so the live-use gate remains closed. No subscription credentials were inspected and no Claude request was made. The live spike leg was not run; no live result is claimed.
+On 2026-10-17, the owner confirmed their own eligible Claude subscription is available for local use and authorized one bounded startup()+outputFormat spike, with a maximum duration of 30 minutes, in the Phase 4 checkpoint response. No subscription credentials were inspected. The probe below uses synthetic prompts and records only bounded timing, usage, schema-validity, tool-list, and error observations.
 
 ## Offline setup and spike
 
@@ -20,6 +20,90 @@ The user's latest response was: “do what u think is best if this is a discuss 
 
 ## Lifecycle decision
 
-The structured `outputFormat` plus `startup()` composition has not been exercised live. The decision is **provisional**: retain the documented D-01 fallback of one streaming session per role, JSON-only prompts, local `zod.safeParse`, and one retry until the live spike can be authorized and measured. Keep `tools: []` in either path.
+The bounded live probe first exercised `startup()` for both roles with `tools: []`; each init message reported a nonempty tool list, and the probe stopped before calling `WarmQuery.query()`. A second bounded attempt added the SDK's `disallowedTools: ["*"]` deny-all option; both roles still reported exactly one tool. That attempt also stopped before `WarmQuery.query()`, so neither run sent a model prompt or measured schema output, usage, warm-call behavior, or recovery. The combined `outputFormat` + `startup()` path therefore failed the required empty-tool safety check and was not selected. The production provider remains fail-closed on any unexpected init tool.
+
+**Selected D-01 fallback:** one streaming session per role, JSON-only prompts, local `zod.safeParse`, and one retry, still with `tools: []`. Neither startup probe established whether the streaming adapter can initialize with an empty tool list, so successful live provider use remains unverified until that check can pass safely.
 
 The installed SDK type declares that a `WarmQuery` accepts one query, so the spike uses a new prewarmed handle for each sample and records that lifecycle limitation. This API fact does not establish whether structured output is reliable or whether later application calls can reuse a session.
+
+
+## Live SDK probe (tools disabled through `tools: []`)
+
+```json
+{
+  "startedAt": "2026-10-17T10:02:12.984Z",
+  "elapsedMs": 6583,
+  "maxSeconds": 1800,
+  "observations": [
+    {
+      "role": "intent",
+      "repetition": 1,
+      "model": "haiku",
+      "startupMs": 3641,
+      "wallMs": 4338,
+      "sdkDurationMs": null,
+      "inputTokens": null,
+      "structuredOutputPresent": false,
+      "schemaValid": false,
+      "initToolsEmpty": false,
+      "error": "unexpected-tools"
+    },
+    {
+      "role": "repair",
+      "repetition": 1,
+      "model": "sonnet",
+      "startupMs": 1261,
+      "wallMs": 2243,
+      "sdkDurationMs": null,
+      "inputTokens": null,
+      "structuredOutputPresent": false,
+      "schemaValid": false,
+      "initToolsEmpty": false,
+      "error": "unexpected-tools"
+    }
+  ],
+  "warmHandleReuse": "WarmQuery.query() is documented as one-use; each probe starts a fresh prewarmed handle."
+}
+```
+
+
+## Live SDK probe (explicit `disallowedTools: ["*"]` deny-all)
+
+```json
+{
+  "startedAt": "2026-10-17T10:06:50.291Z",
+  "elapsedMs": 3792,
+  "maxSeconds": 1700,
+  "observations": [
+    {
+      "role": "intent",
+      "repetition": 1,
+      "model": "haiku",
+      "startupMs": 2084,
+      "wallMs": 2833,
+      "sdkDurationMs": null,
+      "inputTokens": null,
+      "structuredOutputPresent": false,
+      "schemaValid": false,
+      "initToolsEmpty": false,
+      "initToolCount": 1,
+      "error": "unexpected-tools"
+    },
+    {
+      "role": "repair",
+      "repetition": 1,
+      "model": "sonnet",
+      "startupMs": 542,
+      "wallMs": 956,
+      "sdkDurationMs": null,
+      "inputTokens": null,
+      "structuredOutputPresent": false,
+      "schemaValid": false,
+      "initToolsEmpty": false,
+      "initToolCount": 1,
+      "error": "unexpected-tools"
+    }
+  ],
+  "warmHandleReuse": "WarmQuery.query() is documented as one-use; each probe starts a fresh prewarmed handle."
+}
+```
