@@ -15,32 +15,33 @@ The per-workstream copies under `.planning/workstreams/{core,voice}/REQUIREMENTS
 ### Protocol & Runtime (core)
 
 - [ ] **PROT-01**: Both developers build against one `@blip/protocol` package of zod schemas + fixtures covering extension↔server and voice↔server messages, the snapshot/form-model shapes, ActRequest/ActResult and the Intent union
-- [ ] **PROT-02**: Either developer can run the full system offline from Claude using a fake extension, a fake brain (`--brain=fake`) and a typed REPL
+- [x] **PROT-02**: Either developer can run the full system offline from Claude using a fake extension, a fake brain (`--brain=fake`) and a typed REPL
 - [ ] **PROT-03**: Developer can start Blip with one command that launches the server, a dedicated Chrome profile with the extension, and the voice window
-- [ ] **PROT-04**: The server binds only to 127.0.0.1 and rejects WebSocket connections whose Origin is not the extension or the voice UI
+- [x] **PROT-04**: The server binds only to 127.0.0.1 and rejects WebSocket connections whose Origin is not the extension or the voice UI
 
 ### Page Understanding (core)
 
-- [ ] **PAGE-01**: Blip captures a snapshot of the active tab's form controls via a content-script DOM walk (accessible names, roles, values, required, options, errors), capped at 250 elements on the extension wire; `truncated` is true only when that element cap cuts the result, and the ~8k-token trim is applied in Phase 4 at the model-prompt boundary
-- [ ] **PAGE-02**: Blip builds a baseline form model in code from the snapshot (field id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms
-- [ ] **PAGE-03**: Every actionable element gets a kind (fill / select / check / click-safe / submit / pay / delete / send / navigate-cross-domain) from fail-closed rules, never from the model
+- [x] **PAGE-01**: Blip captures a snapshot of the active tab's form controls via a content-script DOM walk (accessible names, roles, values, required, options, errors), capped at 250 elements on the extension wire; `truncated` is true only when that element cap cuts the result, and the ~8k-token trim is applied in Phase 4 at the model-prompt boundary
+- [x] **PAGE-02**: Blip builds a baseline form model in code from the snapshot (field id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms
+- [x] **PAGE-03**: Every actionable element gets a kind (fill / select / check / click-safe / submit / pay / delete / send / navigate-cross-domain) from fail-closed rules, never from the model
 - [ ] **PAGE-04**: For unlabeled or placeholder-only fields, Claude repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
-- [ ] **PAGE-05**: When the page changes (navigation, revealed fields, new errors), Blip re-snapshots and the form model updates within ~1 s
+- [x] **PAGE-05**: When the page changes (navigation, revealed fields, new errors), Blip re-snapshots and the form model updates within ~1 s
 
 ### Actions (core)
 
-- [ ] **ACT-01**: Blip types a value into a text field so that React/Vue-style site validation fires, without ever sending Enter
-- [ ] **ACT-02**: Blip selects options in selects, radio groups and checkboxes
-- [ ] **ACT-03**: The field Blip is working on is visibly highlighted on the page (for sighted judges)
-- [ ] **ACT-04**: After every fill, Blip reads the value back from the DOM and reports that actual value (not what was heard)
+- [x] **ACT-01**: Blip types a value into a text field so that React/Vue-style site validation fires, without ever sending Enter
+- [x] **ACT-02**: Blip selects options in selects, radio groups and checkboxes
+- [x] **ACT-03**: The field Blip is working on is visibly highlighted on the page (for sighted judges)
+- [x] **ACT-04**: After every fill, Blip reads the value back from the DOM and reports that actual value (not what was heard)
 
 ### Safety Gate (core)
 
-- [ ] **GATE-01**: Submit / pay / delete / send / cross-domain navigation actions are blocked by default and only execute through the single Executor with a valid grant
-- [ ] **GATE-02**: Pressing Enter in a field, `form.submit()`, `requestSubmit()` or a div "button" cannot submit the form while no grant is armed (capture-phase interception in the extension)
-- [ ] **GATE-03**: A grant is single-use, expires after 30 s, and is bound to target + kind + URL + snapshot version
-- [ ] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
-- [ ] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
+- [x] **GATE-01**: Submit / pay / delete / send / cross-domain navigation actions are blocked by default and only execute through the single Executor with a valid grant
+- [x] **GATE-02**: Pressing Enter in a field, `form.submit()`, `requestSubmit()` or a div "button" cannot submit the form while no grant is armed (capture-phase interception in the extension)
+- [x] **GATE-03**: A grant is single-use, expires after 30 s, and is bound to target + kind + URL + snapshot version
+- [x] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
+- [x] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
+- [x] **GATE-08**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
 - [ ] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
 - [ ] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
 
@@ -52,8 +53,8 @@ The per-workstream copies under `.planning/workstreams/{core,voice}/REQUIREMENTS
 
 ### Results (core)
 
-- [ ] **RES-01**: After a gated submit, Blip reads the result page: a confirmation (with any confirmation number) or each error tied to its field; it never claims success the page doesn't confirm
-- [ ] **RES-02**: User can ask "what went wrong" and hear each validation error tied to its field label
+- [x] **RES-01**: After a gated submit, Blip reads the result page: a confirmation (with any confirmation number) or each error tied to its field; it never claims success the page doesn't confirm
+- [x] **RES-02**: User can ask "what went wrong" and hear each validation error tied to its field label
 
 ### Voice I/O (voice)
 
@@ -140,30 +141,31 @@ Merged from `.planning/workstreams/core/REQUIREMENTS.md` and `.planning/workstre
 | Requirement | Workstream | Phase | Status |
 |-------------|------------|-------|--------|
 | PROT-01 | core | Phase 1 | Pending |
-| PROT-02 | core | Phase 1 | Pending |
+| PROT-02 | core | Phase 1 | Complete |
 | PROT-03 | core | Phase 5 | Pending |
-| PROT-04 | core | Phase 1 | Pending |
-| PAGE-01 | core | Phase 2 | Pending |
-| PAGE-02 | core | Phase 1 | Pending |
-| PAGE-03 | core | Phase 2 | Pending |
+| PROT-04 | core | Phase 1 | Complete |
+| PAGE-01 | core | Phase 2 | Complete |
+| PAGE-02 | core | Phase 1 | Complete |
+| PAGE-03 | core | Phase 2 | Complete |
 | PAGE-04 | core | Phase 4 | Pending |
-| PAGE-05 | core | Phase 2 | Pending |
-| ACT-01 | core | Phase 2 | Pending |
-| ACT-02 | core | Phase 2 | Pending |
-| ACT-03 | core | Phase 2 | Pending |
-| ACT-04 | core | Phase 2 | Pending |
-| GATE-01 | core | Phase 3 | Pending |
-| GATE-02 | core | Phase 3 | Pending |
-| GATE-03 | core | Phase 3 | Pending |
-| GATE-04 | core | Phase 3 | Pending |
-| GATE-05 | core | Phase 3 | Pending |
+| PAGE-05 | core | Phase 2 | Complete |
+| ACT-01 | core | Phase 2 | Complete |
+| ACT-02 | core | Phase 2 | Complete |
+| ACT-03 | core | Phase 2 | Complete |
+| ACT-04 | core | Phase 2 | Complete |
+| GATE-01 | core | Phase 3 | Complete |
+| GATE-02 | core | Phase 3 | Complete |
+| GATE-03 | core | Phase 3 | Complete |
+| GATE-04 | core | Phase 3 | Complete |
+| GATE-05 | core | Phase 3 | Complete |
+| GATE-08 | core | Phase 3 | Complete |
 | GATE-06 | core | Phase 5 | Pending |
 | GATE-07 | core | Phase 5 | Pending |
 | BRAIN-01 | core | Phase 4 | Pending |
 | BRAIN-02 | core | Phase 4 | Pending |
 | BRAIN-03 | core | Phase 4 | Pending |
-| RES-01 | core | Phase 3 | Pending |
-| RES-02 | core | Phase 3 | Pending |
+| RES-01 | core | Phase 3 | Complete |
+| RES-02 | core | Phase 3 | Complete |
 | VOX-01 | voice | Phase 1 | Pending |
 | VOX-02 | voice | Phase 1 | Pending |
 | VOX-03 | voice | Phase 1 | Pending |
@@ -194,10 +196,10 @@ Merged from `.planning/workstreams/core/REQUIREMENTS.md` and `.planning/workstre
 | DEMO-04 | voice | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 53 total (core 25, voice 28 — voice items are mostly cheap templates)
-- Mapped to phases: 53 (core 5 phases, voice 4 phases)
+- v1 requirements: 54 total (core 26, voice 28 — voice items are mostly cheap templates)
+- Mapped to phases: 54 (core 5 phases, voice 4 phases)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-10-16*
-*Last updated: 2026-10-16 after roadmap creation*
+*Last updated: 2026-10-17 after core Phase 3*

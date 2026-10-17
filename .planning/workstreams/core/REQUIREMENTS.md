@@ -11,14 +11,14 @@
 ### Protocol & Runtime
 
 - [ ] **PROT-01**: Both developers build against one `@blip/protocol` package of zod schemas + fixtures covering extension↔server and voice↔server messages, the snapshot/form-model shapes, ActRequest/ActResult and the Intent union
-- [ ] **PROT-02**: Either developer can run the full system offline from Claude using a fake extension, a fake brain (`--brain=fake`) and a typed REPL
+- [x] **PROT-02**: Either developer can run the full system offline from Claude using a fake extension, a fake brain (`--brain=fake`) and a typed REPL
 - [ ] **PROT-03**: Developer can start Blip with one command that launches the server, a dedicated Chrome profile with the extension, and the voice window
-- [ ] **PROT-04**: The server binds only to 127.0.0.1 and rejects WebSocket connections whose Origin is not the extension or the voice UI
+- [x] **PROT-04**: The server binds only to 127.0.0.1 and rejects WebSocket connections whose Origin is not the extension or the voice UI
 
 ### Page Understanding
 
 - [x] **PAGE-01**: Blip captures a snapshot of the active tab's form controls via a content-script DOM walk (accessible names, roles, values, required, options, errors), capped at 250 elements on the extension wire; `truncated` is true only when that element cap cuts the result, and the ~8k-token trim is applied in Phase 4 at the model-prompt boundary
-- [ ] **PAGE-02**: Blip builds a baseline form model in code from the snapshot (field id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms
+- [x] **PAGE-02**: Blip builds a baseline form model in code from the snapshot (field id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms
 - [x] **PAGE-03**: Every actionable element gets a kind (fill / select / check / click-safe / submit / pay / delete / send / navigate-cross-domain) from fail-closed rules, never from the model
 - [ ] **PAGE-04**: For unlabeled or placeholder-only fields, Claude repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
 - [x] **PAGE-05**: When the page changes (navigation, revealed fields, new errors), Blip re-snapshots and the form model updates within ~1 s
@@ -97,11 +97,11 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | Requirement | Workstream | Phase | Status |
 |-------------|------------|-------|--------|
 | PROT-01 | core | Phase 1 | Pending |
-| PROT-02 | core | Phase 1 | Pending |
+| PROT-02 | core | Phase 1 | Complete |
 | PROT-03 | core | Phase 5 | Pending |
-| PROT-04 | core | Phase 1 | Pending |
+| PROT-04 | core | Phase 1 | Complete |
 | PAGE-01 | core | Phase 2 | Complete |
-| PAGE-02 | core | Phase 1 | Pending |
+| PAGE-02 | core | Phase 1 | Complete |
 | PAGE-03 | core | Phase 2 | Complete |
 | PAGE-04 | core | Phase 4 | Pending |
 | PAGE-05 | core | Phase 2 | Complete |
@@ -124,10 +124,10 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | RES-02 | core | Phase 3 | Complete |
 
 **Coverage:**
-- Core v1 requirements: 25 total
-- Mapped to phases: 25
+- Core v1 requirements: 26 total
+- Mapped to phases: 26
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-16*
-*Last updated: 2026-10-16 after core roadmap creation*
+*Last updated: 2026-10-17 after Phase 3*

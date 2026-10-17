@@ -2,7 +2,7 @@
 
 **Workstream:** `core` (Person A, Pranav)
 **Owns:** `@blip/protocol`, server hub, Chrome MV3 extension, Executor + policy gate (`packages/policy`), Claude brain (intent-as-data), result reading
-**Scope:** the 25 core v1 requirements (PROT, PAGE, ACT, GATE, BRAIN, RES). Voice-track requirements (VOX, DLG, VIS, DEMO) are planned in `.planning/workstreams/voice/` and appear here only as dependencies.
+**Scope:** the 26 core v1 requirements (PROT, PAGE, ACT, GATE, BRAIN, RES). Voice-track requirements (VOX, DLG, VIS, DEMO) are planned in `.planning/workstreams/voice/` and appear here only as dependencies.
 **Granularity:** coarse (5 phases) | **Project mode:** mvp (vertical slices; the build is demoable at the end of every phase)
 
 ## Overview
