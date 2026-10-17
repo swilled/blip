@@ -5,15 +5,65 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { buildExtension } from "../../build.js";
 import { resolveBrowser } from "../../../../scripts/browser.js";
-import { EXTENSION_ID, extensionOrigin, type ActRequest, type Message, type Snapshot as SnapshotData } from "@blip/protocol";
+import { buildFrame, EXTENSION_ID, extensionOrigin, parseFrame, type ActRequest, type FormModel, type Message, type Snapshot as SnapshotData, type StatePayload } from "@blip/protocol";
+import { WebSocket as VoiceWebSocket } from "ws";
 import type { RunningServer } from "../../../server/src/server.js";
 import { startTestPages, type TestPageReport, type TestPagesServer } from "../../../../tools/test-pages/serve.js";
+import { setLogSink } from "../../../server/src/log.js";
 
 const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const profileRoot = path.join(repoRoot, ".chrome-profile");
 const distDir = path.join(repoRoot, "apps", "extension", "dist");
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export type ModelObservation = {
+  url: string;
+  title: string;
+  step?: string;
+  fieldLabels: string[];
+  pageErrors: string[];
+};
+
+export type StateObservation = {
+  receivedAt: number;
+  payload: StatePayload;
+  model: ModelObservation | null;
+};
+
+function observeModel(model: FormModel | null): ModelObservation | null {
+  if (!model) return null;
+  return {
+    url: model.url,
+    title: model.title,
+    ...(model.step !== undefined ? { step: model.step } : {}),
+    fieldLabels: model.fields.map((field) => field.label),
+    pageErrors: [...model.pageErrors],
+  };
+}
+
+async function connectVoiceStateStream(
+  running: RunningServer,
+  onState: (payload: StatePayload) => void,
+): Promise<VoiceWebSocket> {
+  const voice = new VoiceWebSocket(running.url, { origin: `http://127.0.0.1:${running.port}` });
+  const hello = buildFrame("hello", { role: "voice", clientVersion: "test", protocolVersion: 1 });
+  return await new Promise<VoiceWebSocket>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("timed out connecting the fixture state stream")), 5_000);
+    voice.once("error", (error) => { clearTimeout(timeout); reject(error); });
+    voice.on("message", (data) => {
+      const parsed = parseFrame(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer));
+      if (!parsed.ok) return;
+      if (parsed.message.type === "welcome" && parsed.message.replyTo === hello.id) {
+        clearTimeout(timeout);
+        resolve(voice);
+      } else if (parsed.message.type === "state") {
+        onState(parsed.message.payload);
+      }
+    });
+    voice.once("open", () => voice.send(JSON.stringify(hello)));
+  });
+}
 
 async function stopOwnedBrowser(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
@@ -25,6 +75,11 @@ async function stopOwnedBrowser(child: ChildProcess): Promise<void> {
 
 export interface BrowserFixtureSession {
   pages: TestPagesServer;
+  stateEvents(): StateObservation[];
+  model(): ModelObservation | null;
+  pageChangedCount(): number;
+  waitForState(afterCount: number, predicate: (state: StateObservation) => boolean, timeoutMs?: number): Promise<StateObservation>;
+  waitForReport(pagePath: string, type: string, timeoutMs?: number): Promise<TestPageReport>;
   requestSnapshot(): Promise<SnapshotData>;
   requestAct(snapshot: SnapshotData, action: ActRequest["action"], expectedKind: ActRequest["expectedKind"]): Promise<Extract<Message, { type: "act.result" }>["payload"]>;
   reports(pagePath: string): Promise<TestPageReport[]>;
@@ -99,6 +154,17 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
   const pages = await startTestPages({ port: 0, build: false });
   const browser = resolveBrowser();
   const profileDir = path.join(profileRoot, `act-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const stateEvents: StateObservation[] = [];
+  let pageChangedCount = 0;
+  const previousLogSink = setLogSink((line) => {
+    try {
+      const entry = JSON.parse(line) as { msg?: unknown; type?: unknown };
+      if (entry.msg === "frame in" && entry.type === "page.changed") pageChangedCount += 1;
+    } catch {
+      // Test instrumentation intentionally retains only a count, never a log line or page payload.
+    }
+  });
+  let voice: VoiceWebSocket | undefined;
   let child: ChildProcess | undefined;
   let closed = false;
 
@@ -107,9 +173,18 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
     closed = true;
     try {
       if (child) await stopOwnedBrowser(child);
+      if (voice) {
+        await new Promise<void>((resolve) => {
+          if (voice?.readyState === VoiceWebSocket.CLOSED) return resolve();
+          const timer = setTimeout(() => { voice?.terminate(); resolve(); }, 1_000);
+          voice?.once("close", () => { clearTimeout(timer); resolve(); });
+          voice?.close();
+        });
+      }
       await pages.close();
       await running.close();
     } finally {
+      setLogSink(previousLogSink);
       await rm(profileDir, { recursive: true, force: true });
     }
   };
@@ -117,6 +192,9 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
   try {
     await mkdir(profileRoot, { recursive: true });
     await mkdir(profileDir, { recursive: true });
+    voice = await connectVoiceStateStream(running, (payload) => {
+      stateEvents.push({ receivedAt: Date.now(), payload, model: observeModel(running.session.model) });
+    });
     await buildExtension({ socketUrl: running.url });
     const normalizedPath = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
     const fixtureUrl = `${pages.origins.primary}${normalizedPath}`;
@@ -145,6 +223,31 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
 
     return {
       pages,
+      stateEvents: () => stateEvents.slice(),
+      model: () => observeModel(running.session.model),
+      pageChangedCount: () => pageChangedCount,
+      async waitForState(afterCount, predicate, timeoutMs = 15_000) {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const match = stateEvents.slice(afterCount).find(predicate);
+          if (match) return match;
+          await delay(20);
+        }
+        throw new Error("timed out waiting for the expected server state update");
+      },
+      async waitForReport(pagePath, type, timeoutMs = 15_000) {
+        const deadline = Date.now() + timeoutMs;
+        while (Date.now() < deadline) {
+          const url = `${pages.origins.primary}/__reports?page=${encodeURIComponent(pagePath)}`;
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`fixture reports returned HTTP ${response.status}`);
+          const records = await response.json() as TestPageReport[];
+          const match = records.find((report) => report.type === type);
+          if (match) return match;
+          await delay(25);
+        }
+        throw new Error(`timed out waiting for the ${type} fixture report`);
+      },
       async requestSnapshot() {
         const response = await running.hub.request("extension", "snapshot.request", { reason: "user" }, {
           expect: "snapshot.result",
