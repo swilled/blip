@@ -28,7 +28,7 @@ describe("captureFrameSnapshot", () => {
       <label for="reference">Reference</label><input id="reference" name="reference" value="4111 1111 1111 1111">
     `;
 
-    const frame = captureFrameSnapshot({ document, topOrigin: "https://forms.example", frameId: 0 });
+    const frame = captureFrameSnapshot({ document, topOrigin: "https://forms.example", frameId: 0, timeBudgetMs: 1000 });
     const cardLikeField = frame.elements.find((element) => element.name === "reference");
     const fullSnapshot = Snapshot.safeParse({
       snapshotId: "test-frame",
@@ -44,19 +44,20 @@ describe("captureFrameSnapshot", () => {
   });
 
   it("sets truncated only when the 250-element wire list is cut, keeping fields before actions", () => {
-    document.body.innerHTML = `${Array.from({ length: 251 }, (_, index) => `<input name="field${index}">`).join("")}<button type="button">Close</button>`;
+    document.body.innerHTML = `<button type="button">Close</button>${Array.from({ length: 249 }, (_, index) => `<input name="field${index}">`).join("")}<button type="button">Dismiss</button>`;
 
-    const frame = captureFrameSnapshot({ document, topOrigin: "https://forms.example" });
+    const frame = captureFrameSnapshot({ document, topOrigin: "https://forms.example", timeBudgetMs: 1000 });
 
     expect(frame.elements).toHaveLength(250);
     expect(frame.truncated).toBe(true);
-    expect(frame.elements.every((element) => element.category === "field")).toBe(true);
+    expect(frame.elements.slice(0, 249).every((element) => element.category === "field")).toBe(true);
     expect(frame.elements[0]?.name).toBe("field0");
-    expect(frame.elements[249]?.name).toBe("field249");
+    expect(frame.elements[248]?.name).toBe("field248");
+    expect(frame.elements[249]).toMatchObject({ category: "action", text: "Close" });
   });
 
   it("caps headings, alerts and options without marking the element list truncated", () => {
-    document.body.innerHTML = `${Array.from({ length: 41 }, (_, index) => `<h2>Heading ${index}</h2>`).join("")}${Array.from({ length: 21 }, (_, index) => `<div role="alert">Alert ${index}</div>`).join("")}<label for="large">Choice</label><select id="large">${Array.from({ length: 201 }, (_, index) => `<option value="${index}" ${index === 200 ? "selected" : ""}>Option ${index}</option>`).join("")}</select>`;
+    document.body.innerHTML = `${Array.from({ length: 41 }, (_, index) => `<h2>Heading ${index}</h2>`).join("")}${Array.from({ length: 21 }, (_, index) => `<div role="alert">Alert ${index}</div>`).join("")}<label for="large">Choice</label><select id="large" name="large">${Array.from({ length: 201 }, (_, index) => `<option value="${index}" ${index === 200 ? "selected" : ""}>Option ${index}</option>`).join("")}</select>`;
 
     const frame = captureFrameSnapshot({ document, topOrigin: "https://forms.example" });
     const select = frame.elements.find((element) => element.name === "large");
