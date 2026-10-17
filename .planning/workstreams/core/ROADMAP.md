@@ -40,6 +40,7 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
 ## Phase Details
 
 ### Phase 1: Contract and Walking Skeleton
+
 **Goal**: Both developers build against one frozen contract, and the whole loop (typed utterance -> server -> extension snapshot -> spoken reply) runs on one machine with no Chrome, no voice UI and no Claude.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
@@ -52,11 +53,21 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
   3. For every protocol fixture snapshot, code builds the baseline form model (id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms, checked by unit tests.
   4. The server listens on 127.0.0.1 only; a WebSocket opened from an ordinary web page (Origin not the extension or voice UI) is rejected, and an `utterance` from a client that said hello as `extension` is refused.
   5. The voice developer's UI, pointed at the real server instead of its mock, connects as `role=voice` and receives `welcome` and `state` pushes, so the voice track can retire `dev/mock-server`.
+
 **Research**: Standard patterns, no spike. Record at M0: port (7777 vs 8787), and intent-as-data with the gate in the Executor (supersedes MCP tools).
-**Plans**: TBD
+**Plans:** 5/5 plans executed
+
+Plans:
+- [x] 01-01-PLAN.md — Workspace scaffold, dependency-pin gate, registry tracer, domain schemas (ActionKind, Snapshot, FormModel, Intent, Act*)
+- [x] 01-02-PLAN.md — Full 24-message registry, PROTOCOL.md checked against it by test, pinned extension identity
+- [x] 01-03-PLAN.md — Fixtures, pure baseline form model under 100 ms (PAGE-02), M0 freeze decision and lock
+- [x] 01-04-PLAN.md — Loopback hub with Origin/Host guard and role-bound permissions (PROT-04)
+- [x] 01-05-PLAN.md — Walking skeleton: fake brain, fake extension, REPL, `npm run dev -- --brain=fake` (PROT-02)
+
 **UI hint**: no
 
 ### Phase 2: Real Page Read and Fill
+
 **Goal**: On a real page in Chrome, Blip reads the form's controls and fills them the way a person would, and only ever reports the value the page actually holds.
 **Mode:** mvp
 **Depends on**: Phase 1
@@ -69,11 +80,13 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
   3. From the REPL, the developer fills a React-controlled text input and picks a select option, a radio and a checkbox: the site's own validation reacts, no Enter is ever sent, the active field is visibly highlighted, and each reply reports the value read back from the DOM (a maxlength-truncated value is reported truncated).
   4. When the page navigates, reveals new fields or shows new errors, the server's form model reflects it within about 1 s without a manual refresh, and the extension's socket survives an idle service worker (keepalive + reconnect).
   5. I1 (~h6-8): the voice developer's UI sends an utterance that travels through the server to the extension (real one preferred, fake acceptable) and comes back as a spoken reply.
+
 **Research**: Spike needed: React/Vue-safe fills (native value setter + bubbling `input`/`change`), MV3 service-worker keepalive and reconnect, shadow DOM and iframes. Check `--silent-debugger-extension-api` only if CDP gets used.
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 3: Gated Submit and Result Reading
+
 **Goal**: Nothing irreversible can happen on a page except through the single Executor, after a full read-back and the exact spoken phrase from the user's voice channel, and afterwards the user hears what the page actually said.
 **Mode:** mvp
 **Depends on**: Phase 2
@@ -86,11 +99,13 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
   3. A grant works exactly once: it executes only for the same target, kind, URL and snapshot version within 30 s; a second use, a 31 s wait, a page change, or any field value changing after the read-back the user heard voids it, and Blip says it is not submitting.
   4. Saying "yes", sending the phrase from the extension socket, or a fake brain returning `request_action` for the submit button never executes it; only the exact phrase from the fixed kind table, matched in code on a voice-socket utterance after the read-back finished speaking, does.
   5. I2 (~h12): on the local broken demo form with the fake brain, a user goes describe -> fill -> read back -> says the phrase -> submitted, then hears the confirmation (with any confirmation number) or each error tied to its field label; "what went wrong" repeats the errors, and Blip never claims a success the page doesn't show.
+
 **Research**: No research; needs adversarial tests in `packages/policy/test` ("yes", injected labels, typeless buttons, Enter, value change after read-back, phrase from the wrong socket).
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 4: Claude Brain and Label Repair
+
 **Goal**: Real Claude, running locked down on the developer's own subscription, understands free-form requests and repairs a broken form's labels in the background, with no way to act on the page.
 **Mode:** mvp
 **Depends on**: Phase 3 (gate before brain)
@@ -102,11 +117,13 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
   2. An utterance the grammar can't match (e.g. "put my work email in the second box") comes back as a schema-valid Intent that refers only to existing field ids, typically within about 2 s, from a pre-warmed process.
   3. When a Claude call hangs, errors or returns invalid output, the user hears "I couldn't understand that" within the watchdog timeout instead of silence, and the next utterance works normally.
   4. On the broken demo form, unlabeled and placeholder-only fields get repaired labels in the background (marked model-sourced, with a confidence) without delaying the instant baseline answer; patches touch only existing ids and never kind, value or sensitivity; a second visit loads the repair from cache instantly.
+
 **Research**: Spike needed: `outputFormat` (json_schema) combined with `startup()` warm processes is unverified. Run a 30-minute standalone spike at the first natural pause, ideally before h8. Fallback: one streaming session per role, JSON-only prompt, `zod.safeParse` plus one retry, still `tools: []`. Watch subscription quota (Haiku-class intents, Sonnet-class repair, disk cache).
 **Plans**: TBD
 **UI hint**: no
 
 ### Phase 5: Hostile Pages, Real Web and Freeze
+
 **Goal**: Blip holds up against a page that tries to hijack it and against a real public form, starts with one command, and is frozen in a state the team can demo without surprises.
 **Mode:** mvp
 **Depends on**: Phase 4
@@ -119,6 +136,7 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
   3. I3 (~h20): in one run with real Claude, a real public form (e.g. a team-owned Google Form) is completed by voice end to end through the gated submit, the broken demo form's labels are repaired by Claude, and the injection page is blocked.
   4. One command on either developer's machine launches the server, the dedicated Chrome profile with the extension (which connects on its own), and the voice window.
   5. Freeze (~h30): `main` is tagged `demo-safe`, demo-form repairs are pre-warmed in the cache, and the full demo script also runs with `--brain=fake` as plan B.
+
 **Research**: Spike needed: real-site widgets (Google Forms ARIA radios and listboxes, React fills on the live form); one-command Chrome launch now that branded Chrome 137 removed `--load-extension` (load unpacked once into a dedicated `--user-data-dir` profile).
 **Plans**: TBD
 **UI hint**: no
@@ -130,7 +148,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract and Walking Skeleton | 0/TBD | Not started | - |
+| 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 0/TBD | Not started | - |
 | 3. Gated Submit and Result Reading | 0/TBD | Not started | - |
 | 4. Claude Brain and Label Repair | 0/TBD | Not started | - |

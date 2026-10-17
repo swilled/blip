@@ -1,0 +1,232 @@
+{
+  "snapshotId": "broken-1",
+  "version": 1,
+  "tabId": 1,
+  "url": "http://127.0.0.1:7777/fixtures/forms/broken.html",
+  "origin": "http://127.0.0.1:7777",
+  "title": "Customer survey",
+  "headings": [
+    {
+      "level": 1,
+      "text": "Customer survey"
+    }
+  ],
+  "alerts": [
+    "Some answers need attention"
+  ],
+  "elements": [
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "required": false,
+      "requiredSource": "none",
+      "value": "",
+      "hasValue": false,
+      "id": "e1",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "name": "q1",
+      "labelCandidates": [
+        {
+          "text": "Your name",
+          "source": "placeholder",
+          "confidence": 0.5
+        }
+      ],
+      "order": 1,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "required": true,
+      "requiredSource": "attr",
+      "value": "",
+      "hasValue": false,
+      "id": "e2",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "name": "q2",
+      "labelCandidates": [
+        {
+          "text": "q2 email",
+          "source": "inferred",
+          "confidence": 0.3
+        }
+      ],
+      "autocomplete": "email",
+      "order": 2,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "required": false,
+      "requiredSource": "none",
+      "value": "",
+      "hasValue": false,
+      "id": "e3",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "name": "q3",
+      "labelCandidates": [],
+      "order": 3,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "required": true,
+      "requiredSource": "asterisk",
+      "value": "",
+      "hasValue": false,
+      "id": "e4",
+      "tag": "select",
+      "role": "combobox",
+      "name": "q4",
+      "labelCandidates": [
+        {
+          "text": "How did you hear about us",
+          "source": "nearby-text",
+          "confidence": 0.6
+        }
+      ],
+      "options": [
+        {
+          "value": "",
+          "label": "",
+          "selected": true
+        },
+        {
+          "value": "friend",
+          "label": "Friend",
+          "selected": false
+        },
+        {
+          "value": "web",
+          "label": "Web",
+          "selected": false
+        }
+      ],
+      "order": 4,
+      "kind": "select"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": true,
+      "errorText": null,
+      "sensitive": "none",
+      "required": false,
+      "requiredSource": "none",
+      "value": "",
+      "hasValue": false,
+      "id": "e5",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "name": "age",
+      "labelCandidates": [
+        {
+          "text": "Age",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "order": 5,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": false,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "required": false,
+      "requiredSource": "none",
+      "value": "",
+      "hasValue": false,
+      "id": "e6",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "name": "honeypot",
+      "labelCandidates": [
+        {
+          "text": "Honeypot",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "order": 6,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "action",
+      "labelCandidates": [],
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "id": "e7",
+      "tag": "div",
+      "role": "button",
+      "text": "Send feedback",
+      "order": 7
+    },
+    {
+      "frameId": 0,
+      "category": "action",
+      "labelCandidates": [],
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "id": "e8",
+      "tag": "div",
+      "role": "button",
+      "order": 8
+    }
+  ],
+  "truncated": false,
+  "structuralHash": "broken-structure-v1",
+  "capturedAt": 1760000000000
+}

@@ -1,0 +1,38 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "phases": [
+    {
+      "number": "1",
+      "name": "Contract and Walking Skeleton",
+      "status": "in_progress"
+    },
+    {
+      "number": "2",
+      "name": "Real Page Read and Fill",
+      "status": "pending"
+    },
+    {
+      "number": "3",
+      "name": "Gated Submit and Result Reading",
+      "status": "pending"
+    },
+    {
+      "number": "4",
+      "name": "Claude Brain and Label Repair",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "Hostile Pages, Real Web and Freeze",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step (verify)",
+    "reason": "Phase 1 of 5 · 0% · ready to verify"
+  },
+  "updated_at": "2026-10-17T00:20:29.766Z"
+}

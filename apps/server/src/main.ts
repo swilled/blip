@@ -1,0 +1,109 @@
+// CLI entry (D-21). Flag parsing only; everything real lives in startServer().
+//   --port <n>            default 7777 (0 = ephemeral)
+//   --dev                 allow no-Origin clients and the dev voice origins
+//   --brain=fake|claude   default fake; claude arrives in Phase 4
+//   --fake-delay <ms>     default 1500: how long a model-routed turn waits (the fake brain "thinking")
+//   --fake-request-action <actionId>
+//                         TEST ONLY: the fake brain answers model-routed turns with request_action for
+//                         this id. The server still refuses it (no act.request, no confirm.armed).
+//   --allow-origin <o>    repeatable; requires --dev; loopback http origins; grants voice only
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+import { DEFAULT_PORT, WS_PATH, LOOPBACK_HOST } from "@blip/protocol";
+import { parseAllowedOrigin } from "./hub/guard";
+import type { StaticRoot } from "./hub/static";
+import { BrainUnavailableError, CLAUDE_BRAIN_UNAVAILABLE, startServer } from "./server";
+
+function die(message: string, code: number): never {
+  process.stderr.write(`${message}\n`);
+  process.exit(code);
+}
+
+function parseIntegerFlag(name: string, raw: string | undefined, fallback: number, max: number): number {
+  if (raw === undefined) return fallback;
+  if (!/^[0-9]+$/.test(raw) || Number(raw) > max) {
+    die(`--${name} must be a whole number between 0 and ${max}, got "${raw}"`, 2);
+  }
+  return Number(raw);
+}
+
+async function main(): Promise<void> {
+  let values;
+  try {
+    ({ values } = parseArgs({
+      args: process.argv.slice(2),
+      options: {
+        port: { type: "string" },
+        dev: { type: "boolean", default: false },
+        brain: { type: "string", default: "fake" },
+        "fake-delay": { type: "string" },
+        "fake-request-action": { type: "string" },
+        "allow-origin": { type: "string", multiple: true },
+      },
+      strict: true,
+      allowPositionals: false,
+    }));
+  } catch (err) {
+    die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
+  }
+
+  const dev = values.dev === true;
+  const brain = values.brain;
+  if (brain === "claude") {
+    die(CLAUDE_BRAIN_UNAVAILABLE, 2);
+  }
+  if (brain !== "fake") die(`--brain must be fake (claude arrives in Phase 4), got "${brain}"`, 2);
+
+  const port = parseIntegerFlag("port", values.port, DEFAULT_PORT, 65535);
+  const fakeDelayMs = parseIntegerFlag("fake-delay", values["fake-delay"], 1500, 600000);
+
+  const allowOrigins = values["allow-origin"] ?? [];
+  if (allowOrigins.length > 0 && !dev) {
+    die("--allow-origin requires --dev: extra origins are only honored in development mode", 2);
+  }
+  const extraVoiceOrigins: string[] = [];
+  for (const o of allowOrigins) {
+    try {
+      extraVoiceOrigins.push(parseAllowedOrigin(o));
+    } catch (err) {
+      die(`--allow-origin ${(err as Error).message}`, 2);
+    }
+  }
+
+  // Static roots only when the directories exist (the voice build and fixtures arrive in other plans).
+  const staticRoots: StaticRoot[] = [];
+  const voiceDist = fileURLToPath(new URL("../../../apps/voice/dist", import.meta.url));
+  const fixtures = fileURLToPath(new URL("../../../fixtures/forms", import.meta.url));
+  if (existsSync(voiceDist)) staticRoots.push({ urlPrefix: "/", dir: voiceDist });
+  if (existsSync(fixtures)) staticRoots.push({ urlPrefix: "/fixtures/forms", dir: fixtures });
+
+  let running;
+  try {
+    running = await startServer({
+      port,
+      dev,
+      brain,
+      fakeDelayMs,
+      extraVoiceOrigins,
+      staticRoots,
+      ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
+    });
+  } catch (err) {
+    if (err instanceof BrainUnavailableError) die(err.message, 2);
+    if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
+      die(`port ${port} is already in use; stop the other process or pick another with --port <n>`, 1);
+    }
+    die(`failed to start: ${(err as Error).message}`, 1);
+  }
+
+  process.stdout.write(
+    `listening on ws://${LOOPBACK_HOST}:${running.port}${WS_PATH} (brain=${brain}, dev=${dev})\n`,
+  );
+
+  process.on("SIGINT", () => {
+    void running.close().then(() => process.exit(0));
+  });
+}
+
+void main();

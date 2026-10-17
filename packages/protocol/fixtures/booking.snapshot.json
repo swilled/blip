@@ -1,0 +1,397 @@
+{
+  "snapshotId": "booking-1",
+  "version": 1,
+  "tabId": 1,
+  "url": "http://127.0.0.1:7777/fixtures/forms/booking.html",
+  "origin": "http://127.0.0.1:7777",
+  "title": "Blip Hotel - Reserve a room",
+  "headings": [
+    {
+      "level": 1,
+      "text": "Hotel booking"
+    },
+    {
+      "level": 2,
+      "text": "Guest details"
+    },
+    {
+      "level": 2,
+      "text": "Stay"
+    },
+    {
+      "level": 2,
+      "text": "Payment"
+    }
+  ],
+  "alerts": [],
+  "elements": [
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "id": "e1",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "name": "fullName",
+      "labelCandidates": [
+        {
+          "text": "Full name",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "autocomplete": "name",
+      "required": true,
+      "requiredSource": "attr",
+      "value": "",
+      "hasValue": false,
+      "group": "Guest details",
+      "order": 1,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "id": "e2",
+      "tag": "input",
+      "inputType": "email",
+      "role": "textbox",
+      "name": "email",
+      "labelCandidates": [
+        {
+          "text": "Email address",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "autocomplete": "email",
+      "required": true,
+      "requiredSource": "attr",
+      "value": "",
+      "hasValue": false,
+      "group": "Guest details",
+      "order": 2,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "id": "e3",
+      "tag": "input",
+      "inputType": "tel",
+      "role": "textbox",
+      "name": "phone",
+      "labelCandidates": [
+        {
+          "text": "Phone number",
+          "source": "aria",
+          "confidence": 0.95
+        }
+      ],
+      "describedBy": "Include country code",
+      "autocomplete": "tel",
+      "required": false,
+      "requiredSource": "none",
+      "value": "",
+      "hasValue": false,
+      "group": "Guest details",
+      "order": 3,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "id": "e4",
+      "tag": "input",
+      "inputType": "date",
+      "role": "textbox",
+      "name": "checkin",
+      "labelCandidates": [
+        {
+          "text": "Check-in date",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "describedBy": "Format MM/DD/YYYY",
+      "required": true,
+      "requiredSource": "attr",
+      "value": "",
+      "hasValue": false,
+      "group": "Stay",
+      "order": 4,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "id": "e5",
+      "tag": "select",
+      "role": "combobox",
+      "name": "room",
+      "labelCandidates": [
+        {
+          "text": "Room type",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "required": true,
+      "requiredSource": "attr",
+      "options": [
+        {
+          "value": "",
+          "label": "Choose a room",
+          "selected": true
+        },
+        {
+          "value": "standard",
+          "label": "Standard",
+          "selected": false
+        },
+        {
+          "value": "deluxe",
+          "label": "Deluxe",
+          "selected": false
+        },
+        {
+          "value": "suite",
+          "label": "Suite",
+          "selected": false
+        }
+      ],
+      "value": "",
+      "hasValue": false,
+      "group": "Stay",
+      "order": 5,
+      "kind": "select"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "id": "e6",
+      "tag": "fieldset",
+      "inputType": "radio",
+      "role": "radiogroup",
+      "name": "bed",
+      "labelCandidates": [
+        {
+          "text": "Bed preference",
+          "source": "aria",
+          "confidence": 0.95
+        }
+      ],
+      "required": true,
+      "requiredSource": "aria",
+      "options": [
+        {
+          "value": "king",
+          "label": "King",
+          "selected": false
+        },
+        {
+          "value": "twin",
+          "label": "Twin",
+          "selected": false
+        }
+      ],
+      "value": null,
+      "hasValue": false,
+      "group": "Stay",
+      "order": 6,
+      "kind": "select"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "id": "e7",
+      "tag": "input",
+      "inputType": "checkbox",
+      "role": "checkbox",
+      "name": "breakfast",
+      "labelCandidates": [
+        {
+          "text": "Breakfast included",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "required": false,
+      "requiredSource": "none",
+      "checked": false,
+      "value": null,
+      "hasValue": false,
+      "group": "Stay",
+      "order": 7,
+      "kind": "check"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "none",
+      "id": "e8",
+      "tag": "textarea",
+      "role": "textbox",
+      "name": "requests",
+      "labelCandidates": [
+        {
+          "text": "Special requests",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "required": false,
+      "requiredSource": "none",
+      "value": "",
+      "hasValue": false,
+      "group": "Stay",
+      "order": 8,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "field",
+      "disabled": false,
+      "visible": true,
+      "invalid": false,
+      "errorText": null,
+      "sensitive": "card-number",
+      "id": "e9",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "name": "cardNumber",
+      "labelCandidates": [
+        {
+          "text": "Card number",
+          "source": "label",
+          "confidence": 0.95
+        }
+      ],
+      "autocomplete": "cc-number",
+      "required": true,
+      "requiredSource": "attr",
+      "value": null,
+      "hasValue": false,
+      "group": "Payment",
+      "order": 9,
+      "kind": "fill"
+    },
+    {
+      "frameId": 0,
+      "category": "action",
+      "labelCandidates": [],
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "id": "e10",
+      "tag": "button",
+      "role": "button",
+      "text": "Book room",
+      "buttonType": "submit",
+      "inForm": true,
+      "order": 10,
+      "kind": "submit",
+      "kindReasons": [
+        "button type=submit inside form"
+      ]
+    },
+    {
+      "frameId": 0,
+      "category": "action",
+      "labelCandidates": [],
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "id": "e11",
+      "tag": "button",
+      "role": "button",
+      "text": "Add another guest",
+      "buttonType": "button",
+      "inForm": true,
+      "order": 11,
+      "kind": "click-safe",
+      "kindReasons": [
+        "type=button with text on the click-safe allowlist"
+      ]
+    },
+    {
+      "frameId": 0,
+      "category": "action",
+      "labelCandidates": [],
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "id": "e12",
+      "tag": "a",
+      "role": "link",
+      "text": "Privacy policy",
+      "href": "https://example.com/privacy",
+      "order": 12,
+      "kind": "navigate-cross-domain",
+      "kindReasons": [
+        "link to a different registrable domain"
+      ]
+    }
+  ],
+  "truncated": false,
+  "structuralHash": "booking-structure-v1",
+  "capturedAt": 1760000000000
+}

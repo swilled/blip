@@ -1,0 +1,14 @@
+{
+  "name": "@blip/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fixtures-loader": "./src/fixtures-loader.ts",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  }
+}
