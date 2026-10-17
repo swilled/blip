@@ -29,6 +29,46 @@ function readSecondSurveyBatch() {
 }
 
 describe("dialogue read and option picks", () => {
+  it("changes a named field and confirms its prior and page-observed values", () => {
+    const filled = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e2"
+        ? { ...field, hasValue: true, value: "old@example.com" }
+        : field),
+    });
+    const command = reduce(initialState(), say("change email to new@example.com"), ctx(filled));
+    expect(command.effects).toEqual([{ kind: "fill", fieldId: "e2", value: "new@example.com" }]);
+    expect(command.state.pendingFill).toEqual({ fieldId: "e2", replaced: true, previousValue: "old@example.com" });
+    const result = reduce(command.state, {
+      type: "act.result", op: "fill", fieldId: "e2", ok: true, observedValue: "new@example.co",
+    }, ctx(filled));
+    expect((result.effects[0] as { text: string }).text).toContain("old at example dot com");
+    expect((result.effects[0] as { text: string }).text).toContain("new at example dot co");
+    expect((result.effects[0] as { text: string }).text).not.toContain("new at example dot com.");
+  });
+
+  it("does not claim or echo a requested value after a failed change", () => {
+    const command = reduce(initialState(), say("change email to secret@example.com"), ctx(survey));
+    const result = reduce(command.state, {
+      type: "act.result", op: "fill", fieldId: "e2", ok: false, observedValue: null,
+    }, ctx(survey));
+    expect((result.effects[0] as { text: string }).text).toContain("page shows nothing");
+    expect((result.effects[0] as { text: string }).text).not.toContain("secret");
+  });
+
+  it("clarifies an ambiguous change target without emitting a fill or model request", () => {
+    const ambiguous = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e3"
+        ? { ...field, label: "Email" }
+        : field),
+    });
+    const result = reduce(initialState(), say("change email to new@example.com"), ctx(ambiguous));
+    expect(result.effects.some((effect) => effect.kind === "fill")).toBe(false);
+    expect(result.effects.some((effect) => effect.kind === "parseIntent")).toBe(false);
+    expect((result.effects[0] as { text: string }).text).toMatch(/^Which one/);
+  });
+
   it("spells each page-observed email character and names punctuation", () => {
     const emailForm = FormModel.parse({
       ...survey,

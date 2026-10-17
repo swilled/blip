@@ -106,6 +106,13 @@ export function echoText(field: Field, observedDisplay: string | null, replaced:
   return `${label}, ${value}.${replaced ? " Replacing the old value." : ""}`;
 }
 
+/** Confirm a named change with the safe prior value and the value observed after the write. */
+export function changeText(field: Field, previous: string | null, observedDisplay: string): string {
+  const before = previous === null ? "empty" : spokenValue(previous, field) || "empty";
+  const after = spokenValue(observedDisplay, field);
+  return `${spokenLabel(field, 1)} changed from ${before} to ${after}.`;
+}
+
 function fieldReadBack(field: Field, number: number): string {
   const label = spokenLabel(field, number);
   let detail: string;

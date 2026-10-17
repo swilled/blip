@@ -9,7 +9,7 @@ export type DialogueState = {
   readCursor: number | null;
   currentFieldId: string | null;
   pendingOptions: { fieldId: string } | null;
-  pendingFill: { fieldId: string; replaced: boolean } | null;
+  pendingFill: { fieldId: string; replaced: boolean; previousValue?: string | null } | null;
   outstanding: string[];
   lastDoneAt: number | null;
   readBack: { speakId: string; actionId: string; digest: string } | null;

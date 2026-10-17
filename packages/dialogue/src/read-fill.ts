@@ -4,7 +4,7 @@ import type { DialogueState } from "./state";
 import { cancelEffect, speakEffect } from "./state";
 import { fillableFields, matchOption, optionLabelFor, optionList, resolveField, spokenLabel } from "./fields";
 import { cleanValue, normalizeCommand, normalizeEmail, normalizeNumberish } from "./normalize";
-import { echoText, readBatchText, requiredEmptyText, spellValueText } from "./templates";
+import { changeText, echoText, readBatchText, requiredEmptyText, spellValueText } from "./templates";
 import type { DialogueEvent } from "./events";
 
 type DialogueResult = { state: DialogueState; effects: Effect[] };
@@ -114,6 +114,37 @@ export function handleSpellUtterance(
     return answer(state, `${spokenLabel(match.field, fieldNumber(ctx.form, match.field))} is empty, so there is nothing to spell.`);
   }
   return answer(state, spellValueText(match.field.value));
+}
+
+/** Handle "change {field} to {value}" without asking the model to route a known command. */
+export function handleChangeUtterance(
+  state: DialogueState,
+  norm: string,
+  raw: string,
+  ctx: DialogueContext,
+): DialogueResult | null {
+  if (norm !== "change" && !norm.startsWith("change ")) return null;
+  if (ctx.form === null) return answer(state, "I can't see a page yet. Which field should I change?");
+  const trimmed = raw.trimStart();
+  const commandEnd = trimmed.search(/\s/);
+  const candidate = commandEnd < 0 ? "" : trimmed.slice(commandEnd).trimStart();
+  if (!candidate) return answer(state, "Which field should I change, and what value should I use?");
+  const match = resolveField(ctx.form, candidate);
+  if (match.kind === "ambiguous") return answer(state, `Which one, ${sayOr(speakableLabels(match.labels))}?`);
+  if (match.kind === "none") return answer(state, "I couldn't find that field. Which field should I change?");
+  if (match.field.sensitive !== "none") return handoffSensitive(state, match.field, ctx.form);
+  if (!match.rest.trim()) {
+    return answer(state, `What value should I use for ${spokenLabel(match.field, fieldNumber(ctx.form, match.field))}?`);
+  }
+  const result = fillField(state, match.field, match.rest, ctx.form);
+  if (result === null || result.state.pendingFill === null || !result.effects.some((effect) => effect.kind === "fill" || effect.kind === "select")) {
+    return result ?? errorAnswer(state, `I couldn't change ${spokenLabel(match.field, fieldNumber(ctx.form, match.field))}.`);
+  }
+  const previousValue = match.field.hasValue && match.field.value !== null ? match.field.value : null;
+  return {
+    ...result,
+    state: { ...result.state, pendingFill: { ...result.state.pendingFill, previousValue } },
+  };
 }
 
 function handoffSensitive(state: DialogueState, field: Field, form: FormModel): DialogueResult {
@@ -302,6 +333,12 @@ export function handleActResult(
       return { state: spoken.state, effects: [spoken.effect, { kind: "earcon", name: "error" }] };
     }
     display = label;
+  }
+
+  if (Object.hasOwn(pending, "previousValue")) {
+    const text = changeText(field, pending.previousValue ?? null, display);
+    const spoken = speakEffect(base, text, "answer", { interruptible: true });
+    return { state: spoken.state, effects: [spoken.effect, { kind: "refreshForm" }] };
   }
 
   const text = echoText(field, display, pending.replaced);
