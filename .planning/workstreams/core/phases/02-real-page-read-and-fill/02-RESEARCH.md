@@ -176,6 +176,15 @@ Seam output: `gsd-tools query package-legitimacy check --ecosystem npm ...` (run
 
 All package names above came from CLAUDE.md, the repo, or official docs and were checked with the seam; none is `[ASSUMED]`.
 
+### Human approval — 2026-10-16
+
+The user approved these exact package pins at the blocking checkpoint in `02-01-PLAN.md`:
+
+- `@blip/extension`: `esbuild@0.28.2`, `jsdom@29.1.1`, `@types/chrome@0.3.5`
+- `@blip/test-pages`: `esbuild@0.28.2`, `react@18.3.1`, `react-dom@18.3.1`
+
+This records approval for the listed versions only. No packages were installed in plan 02-01; installation belongs to the following setup plan. Vue, Playwright, Puppeteer, and `dom-accessibility-api` were not approved or added.
+
 ## Architecture Patterns
 
 ### System Architecture Diagram
