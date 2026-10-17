@@ -52,6 +52,7 @@ export class Session {
 
   #extensionConnected = false;
   #snapshotOrder: { tabId: number; version: number; capturedAt: number } | null = null;
+  #snapshotRevision = 0;
 
   constructor(brain: Brain, clock: () => number = Date.now) {
     this.brain = brain;
@@ -60,6 +61,11 @@ export class Session {
 
   get extensionConnected(): boolean {
     return this.#extensionConnected;
+  }
+
+  /** Monotonic process-local generation for rejecting repair work from replaced accepted snapshots. */
+  get snapshotRevision(): number {
+    return this.#snapshotRevision;
   }
 
   /** Age of the cached model, or null before the first accepted snapshot. */
@@ -117,6 +123,7 @@ export class Session {
     this.model = model;
     this.tabId = snapshot.tabId;
     this.modelAt = Date.now();
+    this.#snapshotRevision += 1;
     this.#snapshotOrder = { tabId: snapshot.tabId, version: snapshot.version, capturedAt: snapshot.capturedAt };
     this.stale = false;
     this.page = {
@@ -132,12 +139,13 @@ export class Session {
 
   /** Apply a descriptive repair only while the exact accepted page snapshot is still current. */
   applyRepair(
-    identity: { tabId: number; url: string; snapshotVersion: number; structuralHash: string },
+    identity: { tabId: number; url: string; snapshotVersion: number; structuralHash: string; snapshotRevision: number },
     model: FormModel,
   ): boolean {
     const current = this.model;
     if (
       this.stale || current === null || this.tabId !== identity.tabId ||
+      this.#snapshotRevision !== identity.snapshotRevision ||
       current.url !== identity.url || current.snapshotVersion !== identity.snapshotVersion ||
       current.structuralHash !== identity.structuralHash
     ) return false;

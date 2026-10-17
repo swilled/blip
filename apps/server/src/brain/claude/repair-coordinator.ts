@@ -2,6 +2,7 @@ import { isLowConfidenceLabel, type FormModel, type Snapshot } from "@blip/proto
 import type { Hub } from "../../hub/hub";
 import type { Session } from "../../session/session";
 import { projectPageForPrompt, serializeProjectionForPrompt } from "./projection";
+import { RepairCache } from "./repair-cache";
 import { mergeRepairPatch } from "./repair-merge";
 import { validateRepairPatch, type RepairPatch } from "./repair-schema";
 import type { ClaudeRole } from "./session";
@@ -12,8 +13,8 @@ export type RepairProvider = {
   recreateRole(role: ClaudeRole): Promise<void>;
 };
 
-type Candidate = { snapshot: Snapshot; model: FormModel; tabId: number };
-type Identity = { tabId: number; url: string; snapshotVersion: number; structuralHash: string };
+type Candidate = { snapshot: Snapshot; model: FormModel; tabId: number; snapshotRevision: number };
+type Identity = { tabId: number; url: string; snapshotVersion: number; structuralHash: string; snapshotRevision: number };
 
 const PLACEHOLDER_LABEL = /^(?:field|input|text field|textbox|select|checkbox|radio button|unknown)(?:\s+\d+)?$/i;
 const DEFAULT_REPAIR_TIMEOUT_MS = 15_000;
@@ -24,6 +25,7 @@ function identityOf(candidate: Candidate): Identity {
     url: candidate.model.url,
     snapshotVersion: candidate.model.snapshotVersion,
     structuralHash: candidate.model.structuralHash,
+    snapshotRevision: candidate.snapshotRevision,
   };
 }
 
@@ -63,12 +65,20 @@ export class RepairCoordinator {
   readonly #session: Session;
   readonly #hub: Hub;
   readonly #timeoutMs: number;
+  readonly #cache: RepairCache;
 
-  constructor(options: { provider: RepairProvider; session: Session; hub: Hub; timeoutMs?: number }) {
+  constructor(options: {
+    provider: RepairProvider;
+    session: Session;
+    hub: Hub;
+    cacheDirectory: string;
+    timeoutMs?: number;
+  }) {
     this.#provider = options.provider;
     this.#session = options.session;
     this.#hub = options.hub;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_REPAIR_TIMEOUT_MS;
+    this.#cache = new RepairCache({ directory: options.cacheDirectory });
   }
 
   /** Called only after Session.applySnapshot accepted the extension snapshot. */
@@ -77,7 +87,24 @@ export class RepairCoordinator {
     if (this.#closed || model === null || this.#session.stale ||
       model.snapshotVersion !== snapshot.version || model.structuralHash !== snapshot.structuralHash ||
       model.url !== snapshot.url || this.#session.tabId !== snapshot.tabId) return;
-    this.#pending = { snapshot, model, tabId: snapshot.tabId };
+    const candidate = { snapshot, model, tabId: snapshot.tabId, snapshotRevision: this.#session.snapshotRevision };
+    const eligible = eligibleFieldIds(model);
+    if (eligible.size === 0) {
+      this.#pending = null;
+      return;
+    }
+
+    // A cache hit is merged synchronously before the refresher lets the user turn continue.
+    const cached = this.#cache.load(model.url, model.structuralHash);
+    const patch = cached === null ? null : validateRepairPatch(cached, model, model);
+    if (patch !== null && patch.fields.every(({ id }) => eligible.has(id))) {
+      const repaired = { ...mergeRepairPatch(model, patch), repairStatus: "repaired" as const };
+      if (this.#session.applyRepair(identityOf(candidate), repaired)) {
+        this.#pending = null;
+        return;
+      }
+    }
+    this.#pending = candidate;
   }
 
   /** Starts at most one provider call for this accepted candidate and never waits for its result. */
@@ -90,7 +117,7 @@ export class RepairCoordinator {
     if (eligible.size === 0) return;
 
     const identity = identityOf(candidate);
-    const key = `${identity.tabId}\0${identity.url}\0${identity.snapshotVersion}\0${identity.structuralHash}`;
+    const key = `${identity.tabId}\0${identity.url}\0${identity.snapshotRevision}\0${identity.structuralHash}`;
     if (this.#active.has(key)) return;
     this.#active.add(key);
 
@@ -141,6 +168,7 @@ export class RepairCoordinator {
         return;
       }
       const repaired = { ...mergeRepairPatch(current, patch), repairStatus: "repaired" as const };
+      this.#cache.save(identity.url, identity.structuralHash, patch);
       if (this.#session.applyRepair(identity, repaired)) this.#hub.pushState();
     } catch {
       if (!this.#closed && this.#isIdentityCurrent(identity)) this.#markFailed(identity);
@@ -162,6 +190,7 @@ export class RepairCoordinator {
     const current = this.#session.model;
     return !this.#closed && !this.#session.stale && current !== null &&
       this.#session.tabId === identity.tabId && current.snapshotVersion === identity.snapshotVersion &&
+      this.#session.snapshotRevision === identity.snapshotRevision &&
       current.structuralHash === identity.structuralHash && samePageIdentity(current.url, identity.url);
   }
 

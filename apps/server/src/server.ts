@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { DEFAULT_PORT, EXTENSION_ID, LOOPBACK_HOST, WS_PATH } from "@blip/protocol";
 import { log } from "./log";
 import { createHub, type Handlers, type Hub } from "./hub/hub";
@@ -215,6 +217,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       provider: repairProvider,
       session,
       hub,
+      cacheDirectory: options.repairCacheDirectory ?? join(process.env.LOCALAPPDATA ?? homedir(), "Blip", "repair-cache"),
       ...(options.repairTimeoutMs !== undefined ? { timeoutMs: options.repairTimeoutMs } : {}),
     });
   }
