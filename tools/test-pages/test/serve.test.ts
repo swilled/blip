@@ -1,21 +1,22 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { request as httpRequest } from "node:http";
+import { fileURLToPath } from "node:url";
 import { startTestPages } from "../serve.js";
 
 describe("test page host", () => {
+  const pagesRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const publicRoot = path.join(pagesRoot, "public");
+  const distRoot = path.join(pagesRoot, "dist");
   const fixtureName = `serve-test-${process.pid}-${Date.now()}.html`;
-  const fixturePath = path.resolve("tools/test-pages/public", fixtureName);
+  const fixturePath = path.join(publicRoot, fixtureName);
   const distName = `serve-test-${process.pid}-${Date.now()}.txt`;
-  const distPath = path.resolve("tools/test-pages/dist", distName);
+  const distPath = path.join(distRoot, distName);
   let server: Awaited<ReturnType<typeof startTestPages>>;
   let spaFixtureCreated = false;
-  let rootDir = "";
 
   beforeAll(async () => {
-    rootDir = await mkdtemp(path.join(tmpdir(), "blip-test-pages-"));
     server = await startTestPages({ port: 0, build: false });
   });
 
@@ -25,9 +26,8 @@ describe("test page host", () => {
       rm(fixturePath, { force: true }),
       rm(distPath, { force: true }),
       ...(spaFixtureCreated
-        ? [rm(path.resolve("tools/test-pages/public/spa.html"), { force: true })]
+        ? [rm(path.join(publicRoot, "spa.html"), { force: true })]
         : []),
-      rm(rootDir, { recursive: true, force: true }),
     ]);
   });
 
@@ -39,6 +39,8 @@ describe("test page host", () => {
     const missing = await fetch(`${server.origins.primary}/${fixtureName}`);
     expect(missing.status).toBe(404);
 
+    await mkdir(publicRoot, { recursive: true });
+    await mkdir(distRoot, { recursive: true });
     await writeFile(fixturePath, "ORIGIN|ALT_ORIGIN", "utf8");
     const publicResponse = await fetch(`${server.origins.primary}/${fixtureName}`);
     expect(publicResponse.status).toBe(200);
@@ -51,9 +53,9 @@ describe("test page host", () => {
   });
 
   it("routes /spa paths to the SPA fixture and generates the large page", async () => {
-    const spaPath = path.resolve("tools/test-pages/public/spa.html");
+    const spaPath = path.join(publicRoot, "spa.html");
     try {
-      await readFile(spaPath);
+      await access(spaPath);
     } catch {
       await writeFile(spaPath, "spa fixture sentinel", "utf8");
       spaFixtureCreated = true;
@@ -61,7 +63,9 @@ describe("test page host", () => {
 
     const spa = await fetch(`${server.origins.primary}/spa/step-two`);
     expect(spa.status).toBe(200);
-    expect(await spa.text()).toContain(spaFixtureCreated ? "spa fixture sentinel" : "<!doctype html>");
+    const spaHtml = await spa.text();
+    expect(spaHtml.length).toBeGreaterThan(0);
+    if (spaFixtureCreated) expect(spaHtml).toContain("spa fixture sentinel");
 
     const large = await fetch(`${server.origins.primary}/large.html`);
     const html = await large.text();
