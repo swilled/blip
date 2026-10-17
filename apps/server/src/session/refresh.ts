@@ -11,8 +11,13 @@ export type RefreshResult =
 export type Refresher = { request(reason: RefreshReason): Promise<RefreshResult> };
 
 /** Fetch and apply a snapshot without speaking; used by page changes and read intents alike. */
-export function createRefresher(options: { hub: Hub; session: Session; timeoutMs: number }): Refresher {
-  const { hub, session, timeoutMs } = options;
+export function createRefresher(options: {
+  hub: Hub;
+  session: Session;
+  timeoutMs: number;
+  onAccepted?: (snapshot: Snapshot, reason: RefreshReason) => void;
+}): Refresher {
+  const { hub, session, timeoutMs, onAccepted } = options;
 
   const perform = async (reason: RefreshReason): Promise<RefreshResult> => {
     if (!session.extensionConnected) {
@@ -37,6 +42,7 @@ export function createRefresher(options: { hub: Hub; session: Session; timeoutMs
         session.stale = true;
         return { ok: false, kind: "stale-snapshot" };
       }
+      onAccepted?.(result.payload.snapshot, reason);
       hub.pushState();
       return { ok: true, applied: true, snapshot: result.payload.snapshot };
     } catch (error) {

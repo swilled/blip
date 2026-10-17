@@ -130,6 +130,23 @@ export class Session {
     return true;
   }
 
+  /** Apply a descriptive repair only while the exact accepted page snapshot is still current. */
+  applyRepair(
+    identity: { tabId: number; url: string; snapshotVersion: number; structuralHash: string },
+    model: FormModel,
+  ): boolean {
+    const current = this.model;
+    if (
+      this.stale || current === null || this.tabId !== identity.tabId ||
+      current.url !== identity.url || current.snapshotVersion !== identity.snapshotVersion ||
+      current.structuralHash !== identity.structuralHash
+    ) return false;
+
+    this.model = model;
+    if (this.page !== null) this.page = { ...this.page, title: model.title };
+    return true;
+  }
+
   statePayload(): StatePayload {
     return {
       dialogue: this.dialogue,

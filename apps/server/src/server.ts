@@ -9,6 +9,7 @@ import { Session, type Brain } from "./session/session";
 import { createRefresher, type Refresher } from "./session/refresh";
 import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
 import { createClaudeProvider, type ClaudeProvider } from "./brain/claude/provider";
+import { RepairCoordinator, type RepairProvider } from "./brain/claude/repair-coordinator";
 import type { ClaudeSdkAdapter } from "./brain/claude/session";
 import { handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
@@ -28,6 +29,12 @@ export type StartServerOptions = {
   fakeRequestActionPhrase?: string;
   /** Test-only: injects a scripted SDK boundary; production loads the SDK only in Claude mode. */
   claudeAdapter?: ClaudeSdkAdapter;
+  /** Test seam for repair flow; production uses the repair role of the Claude provider. */
+  repairProvider?: RepairProvider;
+  /** Optional repair cache path; temporary directories are used in tests. */
+  repairCacheDirectory?: string;
+  /** Bound on a repair role call. Default 15000 ms. */
+  repairTimeoutMs?: number;
   /** Message handlers by type; anything without one gets not-implemented (D-14). Plan 01-05 fills these. */
   handlers?: Handlers;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
@@ -107,6 +114,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const snapshotTimeoutMs = options.snapshotTimeoutMs ?? 5000;
   const freshnessMs = options.freshnessMs ?? 2000;
   let refresher: Refresher;
+  let repairCoordinator: RepairCoordinator | null = null;
 
   const fakeDelayMs = options.fakeDelayMs ?? 1500;
   let claudeProvider: ClaudeProvider | null = null;
@@ -128,20 +136,25 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   let turnQueue: Promise<void> = Promise.resolve();
   const defaultHandlers: Handlers = {
     utterance: ({ message, hub: h, session: s }) => {
-      const run = turnQueue.then(() =>
-        handleUtterance({
-          message,
-          hub: h,
-          session: s,
-          freshnessMs,
-          refresher,
-          brain,
-          ...(claudeProvider !== null ? { claudeProvider } : {}),
-          clock,
-          ...(schedule !== undefined ? { schedule } : {}),
-          ...(options.intentWatchdog !== undefined ? { intentWatchdog: options.intentWatchdog } : {}),
-        }),
-      );
+      const run = turnQueue.then(async () => {
+        try {
+          await handleUtterance({
+            message,
+            hub: h,
+            session: s,
+            freshnessMs,
+            refresher,
+            brain,
+            ...(claudeProvider !== null ? { claudeProvider } : {}),
+            clock,
+            ...(schedule !== undefined ? { schedule } : {}),
+            ...(options.intentWatchdog !== undefined ? { intentWatchdog: options.intentWatchdog } : {}),
+          });
+        } finally {
+          // `handleUtterance` has sent the deterministic reply and released busy before this starts.
+          repairCoordinator?.schedulePending();
+        }
+      });
       turnQueue = run.catch(() => {}); // a failed turn is logged by the hub and must not block the next one
       return run;
     },
@@ -179,7 +192,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       invalidateGatedAction(gatedContext, "page-changed", "page-changed");
       s.stale = true;
-      void refresher.request("refresh");
+      void refresher.request("refresh").then((result) => {
+        if (result.ok) repairCoordinator?.schedulePending();
+      });
     },
   };
 
@@ -194,7 +209,21 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     handlers: { ...defaultHandlers, ...options.handlers },
   });
 
-  refresher = createRefresher({ hub, session, timeoutMs: snapshotTimeoutMs });
+  const repairProvider = options.repairProvider ?? claudeProvider ?? undefined;
+  if (repairProvider !== undefined) {
+    repairCoordinator = new RepairCoordinator({
+      provider: repairProvider,
+      session,
+      hub,
+      ...(options.repairTimeoutMs !== undefined ? { timeoutMs: options.repairTimeoutMs } : {}),
+    });
+  }
+  refresher = createRefresher({
+    hub,
+    session,
+    timeoutMs: snapshotTimeoutMs,
+    onAccepted: (snapshot) => repairCoordinator?.accept(snapshot),
+  });
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -225,6 +254,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     session,
     hub,
     close: async () => {
+      repairCoordinator?.close();
       hub.close();
       const serverClosed = new Promise<void>((resolve) => {
         server.close(() => resolve());
