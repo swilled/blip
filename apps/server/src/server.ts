@@ -1,8 +1,8 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { DEFAULT_PORT, EXTENSION_ID, LOOPBACK_HOST, WS_PATH } from "@blip/protocol";
 import { log } from "./log";
-import { createHub, type Hub } from "./hub/hub";
+import { createHub, type Handlers, type Hub } from "./hub/hub";
 import { hostAllowed, parseAllowedOrigin } from "./hub/guard";
 import { Session, type Brain } from "./session/session";
 
@@ -15,12 +15,27 @@ export type StartServerOptions = {
   helloTimeoutMs?: number;
   extraVoiceOrigins?: string[];
   extensionId?: string;
+  /** Message handlers by type; anything without one gets not-implemented (D-14). Plan 01-05 fills these. */
+  handlers?: Handlers;
+  /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
+  snapshotTimeoutMs?: number;
+};
+
+/** Resolved settings the later plans read (fake brain delay, snapshot timeout). */
+export type ServerConfig = {
+  dev: boolean;
+  brain: Brain;
+  fakeDelayMs: number;
+  snapshotTimeoutMs: number;
+  extensionId: string;
 };
 
 export type RunningServer = {
   port: number;
   /** The WebSocket URL: ws://127.0.0.1:<port>/ws */
   url: string;
+  httpServer: Server;
+  config: ServerConfig;
   session: Session;
   hub: Hub;
   close(): Promise<void>;
@@ -60,6 +75,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     dev,
     extensionId: options.extensionId ?? EXTENSION_ID,
     extraVoiceOrigins,
+    ...(options.helloTimeoutMs !== undefined ? { helloTimeoutMs: options.helloTimeoutMs } : {}),
+    ...(options.handlers ? { handlers: options.handlers } : {}),
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -76,6 +93,14 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   return {
     port: boundPort,
     url: `ws://${LOOPBACK_HOST}:${boundPort}${WS_PATH}`,
+    httpServer: server,
+    config: {
+      dev,
+      brain: session.brain,
+      fakeDelayMs: options.fakeDelayMs ?? 1500,
+      snapshotTimeoutMs: options.snapshotTimeoutMs ?? 5000,
+      extensionId: options.extensionId ?? EXTENSION_ID,
+    },
     session,
     hub,
     close: () =>
