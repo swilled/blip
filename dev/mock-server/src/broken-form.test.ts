@@ -14,9 +14,11 @@ describe("broken survey form", () => {
   it("keeps the page deliberately broken, client-only, and empty on every load", () => {
     const forms = html.match(/<form\b[^>]*>/gi) ?? [];
     expect(forms).toHaveLength(1);
-    expect(forms[0]).not.toMatch(/\bmethod\s*=\s*["']?post\b/i);
-    expect(attribute(forms[0], "autocomplete")).toBe("off");
-    expect(forms[0]).toMatch(/\bnovalidate(?:\s|>|$)/i);
+    const form = forms[0];
+    if (form === undefined) throw new Error("Expected the broken form fixture to contain one form");
+    expect(form).not.toMatch(/\bmethod\s*=\s*["']?post\b/i);
+    expect(attribute(form, "autocomplete")).toBe("off");
+    expect(form).toMatch(/\bnovalidate(?:\s|>|$)/i);
 
     const roleButtons = html.match(/<div\b[^>]*\brole=["']button["'][^>]*>/gi) ?? [];
     expect(roleButtons).toHaveLength(2);
