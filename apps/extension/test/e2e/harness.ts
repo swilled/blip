@@ -7,7 +7,7 @@ import { buildExtension } from "../../build.js";
 import { resolveBrowser } from "../../../../scripts/browser.js";
 import { buildFrame, EXTENSION_ID, extensionOrigin, newId, parseFrame, type ActRequest, type FormModel, type Message, type Snapshot as SnapshotData, type StatePayload } from "@blip/protocol";
 import { WebSocket as VoiceWebSocket } from "ws";
-import type { RunningServer } from "../../../server/src/server.js";
+import type { RunningServer, StartServerOptions } from "../../../server/src/server.js";
 import { startTestPages, type TestPageReport, type TestPagesServer } from "../../../../tools/test-pages/serve.js";
 import { setLogSink } from "../../../server/src/log.js";
 
@@ -20,6 +20,8 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export type ModelObservation = {
   url: string;
   title: string;
+  snapshotVersion: number;
+  structuralHash: string;
   step?: string;
   fieldLabels: string[];
   pageErrors: string[];
@@ -36,6 +38,8 @@ function observeModel(model: FormModel | null): ModelObservation | null {
   return {
     url: model.url,
     title: model.title,
+    snapshotVersion: model.snapshotVersion,
+    structuralHash: model.structuralHash,
     ...(model.step !== undefined ? { step: model.step } : {}),
     fieldLabels: model.fields.map((field) => field.label),
     pageErrors: [...model.pageErrors],
@@ -78,6 +82,7 @@ async function stopOwnedBrowser(child: ChildProcess): Promise<void> {
 export interface BrowserFixtureSession {
   pages: TestPagesServer;
   browser: string;
+  extensionConnected(): boolean;
   voiceClient: VoiceClient;
   actResults(): ActResultObservation[];
   serverLogs(): string[];
@@ -112,6 +117,14 @@ export type OpenFixturePageOptions = {
   /** Test-only fake-brain trigger; when paired with an id, only this exact phrase requests an action. */
   fakeRequestActionId?: string;
   fakeRequestActionPhrase?: string;
+  /** Optional server brain used only by explicit local integration checks. */
+  brain?: StartServerOptions["brain"];
+  /** Narrow hooks for a bounded synthetic real-Claude integration check. */
+  claudeSessionHooks?: StartServerOptions["claudeSessionHooks"];
+  /** Avoid dispatching a page repair turn during an intent-only live check. */
+  disableRepairModel?: boolean;
+  /** Browser executable for the harness-owned profile. */
+  browserExecutable?: string;
   /** Withhold speech completion frames when testing the post-speech confirmation barrier. */
   autoCompleteSpeech?: boolean;
 };
@@ -279,11 +292,22 @@ export async function openFixturePage(
   const running: RunningServer = await serverModule.startServer({
     port: 0,
     dev: false,
+    ...(options.brain !== undefined ? { brain: options.brain } : {}),
+    ...(options.claudeSessionHooks !== undefined ? { claudeSessionHooks: options.claudeSessionHooks } : {}),
+    ...(options.disableRepairModel === true
+      ? {
+          repairProvider: {
+            repairFormModel: async () => ({ fields: [] }),
+            abortRole: async () => {},
+            recreateRole: async () => {},
+          },
+        }
+      : {}),
     ...(options.fakeRequestActionId !== undefined ? { fakeRequestActionId: options.fakeRequestActionId } : {}),
     ...(options.fakeRequestActionPhrase !== undefined ? { fakeRequestActionPhrase: options.fakeRequestActionPhrase } : {}),
   });
   const pages = await startTestPages({ port: 0, build: false });
-  const browser = resolveBrowser();
+  const browser = options.browserExecutable ?? resolveBrowser();
   const profileDir = path.join(profileRoot, `act-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const stateEvents: StateObservation[] = [];
   const voiceFrames: Message[] = [];
@@ -392,6 +416,7 @@ export async function openFixturePage(
     return {
       pages,
       browser,
+      extensionConnected: () => running.session.extensionConnected,
       voiceClient: client,
       actResults: () => actResultRecords.map((result) => ({ ...result })),
       serverLogs: () => serverLogLines.slice(),
