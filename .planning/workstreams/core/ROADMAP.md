@@ -88,17 +88,17 @@ Plans:
 - [x] 02-01-PLAN.md — Review exact dependency pins before installation
 - [x] 02-02-PLAN.md — Register approved workspaces and extension TypeScript/test configuration
 - [x] 02-03-PLAN.md — Build the MV3 identity and prove the production-Origin browser connection
-- [ ] 02-04-PLAN.md — Implement socket reconnect state and service-worker keepalive
+- [x] 02-04-PLAN.md — Implement socket reconnect state and service-worker keepalive
 - [ ] 02-05-PLAN.md — Add idempotent reinjection and typed early replies
 - [x] 02-06-PLAN.md — Add fail-closed action and field classification rules in `@blip/policy` (PAGE-03)
 - [x] 02-07-PLAN.md — Add ordered server refresh and ~2-second read-intent freshness (PAGE-05)
-- [ ] 02-08-PLAN.md — Add hash, identity, bounded text and shared readonly/visibility helpers
+- [x] 02-08-PLAN.md — Add hash, identity, bounded text and shared readonly/visibility helpers
 - [ ] 02-09-PLAN.md — Add label, required/error, sensitivity and option helpers, including Luhn detection
 - [ ] 02-10-PLAN.md — Implement the content DOM walker and per-frame 250-element snapshot
 - [ ] 02-11-PLAN.md — Route snapshots across frames, preserve ordering and prove baseline compatibility
 - [x] 02-12-PLAN.md — Add deterministic REPL field phrases and the allowlisted server act path
 - [x] 02-13-PLAN.md — Build the loopback-only fixture host and bounded report endpoint
-- [ ] 02-14-PLAN.md — Add React, vanilla, readonly and auto-submit form fixtures
+- [x] 02-14-PLAN.md — Add React, vanilla, readonly and auto-submit form fixtures
 - [ ] 02-15-PLAN.md — Add dynamic/iframe/CSP/shadow fixtures and the dedicated browser launcher
 - [ ] 02-16-PLAN.md — Implement live field writes, post-write sensitivity recheck and submit-event blocking
 - [ ] 02-17-PLAN.md — Route acts through frames and prove privacy/auto-submit behavior in a browser
