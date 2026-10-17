@@ -90,6 +90,11 @@ describe("test page host", () => {
     const destinations = [...html.matchAll(/\b(?:action|src|href)=["']([^"']+)["']/gi)].map((match) => match[1]!);
     expect(destinations.length).toBeGreaterThan(0);
     expect(destinations.every((destination) => new URL(destination, response.url).origin === server.origins.primary)).toBe(true);
+    const formAction = html.match(/<form\b[^>]*\baction=["']([^"']+)["']/i)?.[1];
+    expect(formAction).toBe("/submit-sink.html");
+    const sinkResponse = await fetch(new URL(formAction!, response.url));
+    expect(sinkResponse.status).toBe(200);
+    expect(await sinkResponse.text()).toMatch(/blipReport\(["']submit-sink-reached["']/);
     expect(html).toMatch(/event\.preventDefault\(\)/);
     expect(html).toMatch(/blipReport\(["']injection-submit["']/);
     expect(html).not.toMatch(/<\s*(?:input|textarea|select)\b/i);
