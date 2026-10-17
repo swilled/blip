@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Blip</title>
+<style>
+  body { font-family: sans-serif; margin: 8px; font-size: 14px; }
+  section { border: 1px solid #888; margin: 6px 0; padding: 6px; }
+  button { margin: 2px; padding: 6px; }
+  #out { white-space: pre-wrap; font-family: monospace; font-size: 11px; max-height: 200px; overflow: auto; background: #eee; }
+</style>
+</head>
+<body>
+<h1>Blip spike page</h1>
+<button id="start">Start spike</button>
+<span id="status">not started</span>
+
+<section>
+  <h2>Spike A: Web Speech recognition</h2>
+  <button id="hold">Hold to listen</button>
+  <label><input type="checkbox" id="auto"> auto-run 10 s</label>
+  <div><label>Spike D leak check: <input id="leak" type="text"></label></div>
+</section>
+
+<section>
+  <h2>Spike B: speechSynthesis</h2>
+  <button id="speak20">Speak 20 words</button>
+</section>
+
+<section>
+  <h2>Spike C2: live region</h2>
+  <button id="live">Run live region test (3 rounds, 5 s apart)</button>
+  <div id="liveRegion" aria-live="polite"></div>
+</section>
+
+<section>
+  <h2>Spike F: barge-in / echo</h2>
+  <button id="bargeOpen">Barge-in test (mic open during speech)</button>
+  <button id="bargeGated">Barge-in test (mic gated until onend + 400 ms)</button>
+</section>
+
+<pre id="out"></pre>
+
+<script>
+(function () {
+  var t0 = performance.now();
+  var out = document.getElementById("out");
+  var started = false;
+
+  function ctx() {
+    return "vis=" + document.visibilityState + " focus=" + document.hasFocus();
+  }
+  function log(spike, msg) {
+    var line = "+" + Math.round(performance.now() - t0) + "ms " + msg + " [" + ctx() + "]";
+    out.textContent += spike + ": " + line + "\n";
+    out.scrollTop = out.scrollHeight;
+    try {
+      fetch("/log", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spike: spike, line: line.slice(0, 3000) }),
+      });
+    } catch (e) {}
+  }
+  function norm(s) {
+    return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  }
+
+  document.getElementById("start").onclick = function () {
+    started = true;
+    document.getElementById("status").textContent = "started";
+    log("A", "spike started; SpeechRecognition=" + (typeof webkitSpeechRecognition));
+  };
+
+  // ---- Spike A
+  var rec = null;
+  function newRec(spike, onResult) {
+    var R = window.webkitSpeechRecognition;
+    if (!R) { log(spike, "webkitSpeechRecognition missing"); return null; }
+    var r = new R();
+    r.lang = "en-US";
+    r.continuous = false;
+    r.interimResults = true;
+    r.maxAlternatives = 3;
+    r.onstart = function () { log(spike, "recognition start"); };
+    r.onresult = function (e) {
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        var alts = [];
+        for (var j = 0; j < e.results[i].length; j++) alts.push(e.results[i][j].transcript);
+        log(spike, "result isFinal=" + e.results[i].isFinal + " text=" + JSON.stringify(alts));
+        if (onResult) onResult(alts[0] || "", e.results[i].isFinal);
+      }
+    };
+    r.onerror = function (e) { log(spike, "recognition error=" + e.error); };
+    r.onend = function () { log(spike, "recognition end"); };
+    return r;
+  }
+  function startA() {
+    rec = newRec("A");
+    if (!rec) return;
+    try { rec.start(); } catch (e) { log("A", "start threw " + e); }
+  }
+  var hold = document.getElementById("hold");
+  hold.onmousedown = function () { if (!started) return; startA(); };
+  hold.onmouseup = function () { if (rec) { log("A", "stop() called"); rec.stop(); } };
+  document.getElementById("auto").onchange = function (e) {
+    if (!e.target.checked || !started) return;
+    log("A", "auto-run: listening for 10 s");
+    startA();
+    setTimeout(function () { if (rec) { log("A", "auto-run stop()"); rec.stop(); } e.target.checked = false; }, 10000);
+  };
+
+  // ---- Spike B / F speech helpers
+  function pickVoice() {
+    var vs = speechSynthesis.getVoices();
+    for (var i = 0; i < vs.length; i++) {
+      if (vs[i].name.indexOf("Microsoft") === 0 && vs[i].localService) return vs[i];
+    }
+    for (var k = 0; k < vs.length; k++) if (vs[k].name.indexOf("Microsoft") === 0) return vs[k];
+    return null;
+  }
+  function speak(spike, text, done) {
+    var u = new SpeechSynthesisUtterance(text);
+    var v = pickVoice();
+    if (v) u.voice = v;
+    var s = performance.now();
+    var finished = false;
+    u.onstart = function () { log(spike, "tts onstart voice=" + (v ? v.name : "default")); };
+    u.onend = function () {
+      finished = true;
+      log(spike, "tts onend elapsed=" + Math.round(performance.now() - s) + "ms");
+      if (done) done();
+    };
+    u.onerror = function (e) { log(spike, "tts onerror=" + e.error + " elapsed=" + Math.round(performance.now() - s) + "ms"); };
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+    setTimeout(function () { if (!finished) log(spike, "tts no onend after 15 s"); }, 15000);
+  }
+
+  var TWENTY = "The quick brown fox jumps over the lazy dog while seven bright stars shine above the quiet river tonight.";
+  document.getElementById("speak20").onclick = function () {
+    if (!started) return;
+    log("B", "words=" + norm(TWENTY).length);
+    speak("B", TWENTY);
+  };
+
+  // ---- Spike C2
+  document.getElementById("live").onclick = function () {
+    if (!started) return;
+    var region = document.getElementById("liveRegion");
+    var n = 0;
+    var iv = setInterval(function () {
+      n++;
+      var p = document.createElement("p");
+      p.textContent = "Live region test sentence number " + n + ".";
+      region.appendChild(p);
+      log("C2", "appended sentence " + n);
+      if (n >= 3) clearInterval(iv);
+    }, 5000);
+    log("C2", "live region test begun; focus the form tab now");
+  };
+
+  // ---- Spike F
+  var THIRTY = "I found a form with four fields. The first field is your full name, the second is your email address, the third is your phone number, and the last is a message box.";
+  function barge(gated) {
+    if (!started) return;
+    var spoken = norm(THIRTY);
+    var spokenSet = spoken.join(" ");
+    var speaking = true;
+    var mode = gated ? "gated" : "open";
+    log("F", "barge-in test mode=" + mode + " words=" + spoken.length + "; say 'stop' during speech");
+    var r = null;
+    function listen() {
+      r = newRec("F", function (text, isFinal) {
+        var words = norm(text).join(" ");
+        var isEcho = words.length > 0 && spokenSet.indexOf(words) !== -1;
+        var isStop = /\bstop\b/.test(words);
+        log("F", "mode=" + mode + " duringSpeech=" + speaking + " final=" + isFinal + " echoSubstring=" + isEcho + " saidStop=" + isStop + " text=" + JSON.stringify(text));
+      });
+      if (r) { try { r.start(); } catch (e) { log("F", "start threw " + e); } }
+    }
+    if (!gated) listen();
+    speak("F", THIRTY, function () {
+      speaking = false;
+      if (gated) {
+        setTimeout(function () { log("F", "gate opened (onend + 400 ms)"); listen(); }, 400);
+      }
+      setTimeout(function () { if (r) { r.stop(); } }, gated ? 8000 : 3000);
+    });
+  }
+  document.getElementById("bargeOpen").onclick = function () { barge(false); };
+  document.getElementById("bargeGated").onclick = function () { barge(true); };
+
+  if (window.speechSynthesis) speechSynthesis.getVoices();
+})();
+</script>
+</body>
+</html>
