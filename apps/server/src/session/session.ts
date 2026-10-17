@@ -132,6 +132,7 @@ export class Session {
       ...(model.step !== undefined ? { step: model.step } : {}),
       fieldCount: summary.fieldCount,
       requiredEmpty: summary.requiredEmpty,
+      untrustedInstructionDetected: snapshot.untrustedInstructionDetected === true,
     };
     if (options.updateDialogue !== false || this.dialogue === "no-page") this.dialogue = "ready";
     return true;
