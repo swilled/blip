@@ -163,6 +163,7 @@ The wire field `error.code` is an open string so a code added later never breaks
 - **Checkbox.** Uses `checked`, with `value` null. **Select** uses `options` with `selected`, and `value` is the selected option value.
 - **Sensitive values.** When `sensitive` is not `none`, `value` is always null, in `Snapshot`, `FormModel`, and every frame. This is enforced by the schemas.
 - **Caps.** At most 250 elements per snapshot, 40 headings, 20 alerts. The roughly 8k-token cap is applied at the model-prompt boundary in Phase 4, not on the wire.
+- **Label provenance (D-05).** `RawElement.labelCandidates[].source` is deterministic extension evidence (`aria`, `label`, `nearby-text`, `placeholder`, `inferred`) and excludes `model`. Resolved `Field.labelSource` may additionally be `model` only after server code applies a validated repair. Baseline ranking accepts raw sources only; the protocol lock stores both lists independently.
 - **FormModel conventions** the baseline builder follows:
   - the best label is the highest-confidence candidate, ties broken by source order `aria`, `label`, `nearby-text`, `placeholder`, `inferred`;
   - `required` is true when `requiredSource` is not `none`;
@@ -179,7 +180,7 @@ The wire field `error.code` is an open string so a code added later never breaks
 - Enums are closed. Widening an enum needs both developers' agreement.
 - Never rename or remove a type, field or enum value.
 - Receivers ignore unknown keys (payload objects are non-strict), so an older peer tolerates an additive field.
-- The freeze is mechanical: `packages/protocol/protocol.lock.json` lists every message type with its senders and receivers, the Intent types, ActionKind members, DialogueStateName values and the fixture files. `packages/protocol/test/protocol-lock.test.ts` fails if any locked item is removed or a message's senders or receivers change. New types and members pass.
+- The freeze is mechanical: `packages/protocol/protocol.lock.json` lists every message type with its senders and receivers, the Intent types, ActionKind members, DialogueStateName values, separate raw and resolved label source lists, and the fixture files. `packages/protocol/test/protocol-lock.test.ts` fails if any locked item is removed or a message's senders or receivers change. New types and members pass.
 - Edits to the lock file and to this document ride in the same PR as the additive change they describe. `npm run protocol:lock` regenerates the lock and may be run only inside a protocol PR that both developers approve.
 
 ## M0 sign-off items

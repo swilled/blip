@@ -7,7 +7,7 @@
 // Run: npm run protocol:lock -- ONLY inside a protocol PR that both developers approve.
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { ActionKind, DialogueStateName, Intent, MESSAGES, PROTOCOL_VERSION } from "@blip/protocol";
+import { ActionKind, DialogueStateName, Intent, LabelSource, MESSAGES, PROTOCOL_VERSION, RawLabelSource } from "@blip/protocol";
 import type { MessageType } from "@blip/protocol";
 
 const lockPath = fileURLToPath(new URL("../packages/protocol/protocol.lock.json", import.meta.url));
@@ -27,6 +27,10 @@ const lock = {
   intents: Intent.options.map((o) => o.shape.type.value).sort(),
   actionKinds: [...ActionKind.options].sort(),
   dialogueStates: [...DialogueStateName.options].sort(),
+  labelSources: {
+    raw: [...RawLabelSource.options],
+    resolved: [...LabelSource.options],
+  },
   fixtures: [
     "booking.snapshot.json",
     "broken.snapshot.json",
