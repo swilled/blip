@@ -14,3 +14,4 @@ dist/
 tools/nvda-client
 fixtures/demo/profile.json
 .demo-pid
+.demo-ready

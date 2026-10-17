@@ -132,7 +132,19 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     const tabId = sender.tab?.id;
     if (!Number.isInteger(tabId) || !sender.tab?.url?.startsWith(FORM_URL)) return;
     activeFormTabId = tabId;
-    sendPageChanged(tabId, sender.tab.url, message.kind === "blip.page-ready" ? "navigation" : "mutation", message.structuralHash);
+    sendPageChanged(
+      tabId,
+      sender.tab.url,
+      message.kind === "blip.page-ready" ? "navigation" : (message.reason || "mutation"),
+      message.structuralHash,
+    );
+  }
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if ((changeInfo.status === "complete" || changeInfo.url) && tab.url?.startsWith(FORM_URL)) {
+    activeFormTabId = tabId;
+    notifyTab(tabId, "navigation");
   }
 });
 
