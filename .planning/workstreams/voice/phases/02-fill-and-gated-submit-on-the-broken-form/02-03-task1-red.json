@@ -1,0 +1,11 @@
+{
+    "command":  "npm.cmd run --silent test -- --reporter=tap --testNamePattern=\u0027shows the banner when a confirmation is armed\u0027 apps/voice/src/banner.test.ts",
+    "exitCode":  1,
+    "output":  "TAP version 13\n1..1\nnot ok 1 - src/banner.test.ts # time=7.78ms {\n    1..1\n    not ok 1 - blocked confirmation banner # time=6.91ms {\n        1..9\n        ok 1 - starts hidden with no phrase or grant # SKIP\n        not ok 2 - shows the banner when a confirmation is armed # time=6.33ms\n            ---\n            error:\n                name: \"AssertionError\"\n                message: \"expected false to be true // Object.is equality\"\n            at: \"C:/Users/befit/Documents/formvoice/apps/voice/src/banner.test.ts:91:27\"\n            actual: \"false\"\n            expected: \"true\"\n            ...\n        ok 3 - shows the exact confirmation phrase from the armed payload # SKIP\n        ok 4 - replaces an older grant when a second confirmation is armed # SKIP\n        ok 5 - ignores a cleared event for a different grant # SKIP\n        ok 6 - hides only when the cleared event matches the active grant # SKIP\n        ok 7 - clears on state changes away from awaiting-confirm and stays unchanged while awaiting # SKIP\n        ok 8 - clears on socket close # SKIP\n        ok 9 - renders one textContent-only blocked child and leaves the hidden slot empty # SKIP\n    }\n}",
+    "targetTest":  "shows the banner when a confirmation is armed",
+    "failing_test":  "shows the banner when a confirmation is armed",
+    "targetFile":  "apps/voice/src/banner.test.ts",
+    "expected":  "The model must be visible after confirm.armed.",
+    "actual":  "The assertion executed and received visible=false.",
+    "semanticAssessment":  "Vitest discovered the target test and executed its visibility assertion. It failed because the model stayed hidden after the armed payload; the other tests were skipped by the pattern filter. This is a semantic assertion failure, not a collection or load failure."
+}
