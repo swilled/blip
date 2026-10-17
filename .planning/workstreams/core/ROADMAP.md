@@ -85,13 +85,13 @@ Plans:
 **Plans:** 20 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Review exact dependency pins before installation
+- [x] 02-01-PLAN.md — Review exact dependency pins before installation
 - [ ] 02-02-PLAN.md — Register approved workspaces and extension TypeScript/test configuration
 - [ ] 02-03-PLAN.md — Build the MV3 identity and prove the production-Origin browser connection
 - [ ] 02-04-PLAN.md — Implement socket reconnect state and service-worker keepalive
 - [ ] 02-05-PLAN.md — Add idempotent reinjection and typed early replies
-- [ ] 02-06-PLAN.md — Add fail-closed action and field classification rules in `@blip/policy` (PAGE-03)
-- [ ] 02-07-PLAN.md — Add ordered server refresh and ~2-second read-intent freshness (PAGE-05)
+- [x] 02-06-PLAN.md — Add fail-closed action and field classification rules in `@blip/policy` (PAGE-03)
+- [x] 02-07-PLAN.md — Add ordered server refresh and ~2-second read-intent freshness (PAGE-05)
 - [ ] 02-08-PLAN.md — Add hash, identity, bounded text and shared readonly/visibility helpers
 - [ ] 02-09-PLAN.md — Add label, required/error, sensitivity and option helpers, including Luhn detection
 - [ ] 02-10-PLAN.md — Implement the content DOM walker and per-frame 250-element snapshot
