@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { resetDemo } from "./reset";
+import { DEMO_EXTENSION_ID } from "./extension-id";
+import { isInstalledBridge, resetDemo } from "./reset";
 
 type ResetFs = {
   copyFile(source: string, destination: string): Promise<void>;
@@ -16,13 +17,13 @@ type ResetDeps = {
   spawn(command: string, args: string[], options: SpawnOptions): { unref(): void };
   kill(pid: number): void;
   fetchReady(url: string): Promise<boolean>;
-  bridgeInstalled(): Promise<boolean>;
+  bridgeProfile(): Promise<"demo" | "default" | null>;
   chrome: string;
   repoRoot: string;
   log(line: string): void;
 };
 
-function fakeDeps(pidContents: string | null, readiness: boolean[] = [true], bridgeInstalled = false) {
+function fakeDeps(pidContents: string | null, readiness: boolean[] = [true], bridgeProfile: "demo" | "default" | null = null) {
   const repoRoot = "C:\\blip-demo";
   const events: string[] = [];
   const spawnCalls: Array<{ command: string; args: unknown; options: SpawnOptions }> = [];
@@ -69,9 +70,9 @@ function fakeDeps(pidContents: string | null, readiness: boolean[] = [true], bri
       readCount++;
       return result;
     },
-    async bridgeInstalled() {
+    async bridgeProfile() {
       events.push("check-bridge");
-      return bridgeInstalled;
+      return bridgeProfile;
     },
     chrome: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     repoRoot,
@@ -82,6 +83,28 @@ function fakeDeps(pidContents: string | null, readiness: boolean[] = [true], bri
 }
 
 describe("demo reset", () => {
+  it("recognizes the unpacked bridge from Secure Preferences when Chrome omits the state field", () => {
+    const extensionPath = join("C:\\blip-demo", "dev", "mock-server", "extension");
+    const prefs = JSON.stringify({
+      extensions: {
+        settings: {
+          [DEMO_EXTENSION_ID]: { path: extensionPath, location: 4 },
+        },
+      },
+    });
+
+    expect(isInstalledBridge(prefs, extensionPath)).toBe(true);
+  });
+
+  it("ignores a disabled bridge or one registered from another folder", () => {
+    const extensionPath = join("C:\\blip-demo", "dev", "mock-server", "extension");
+    const disabled = JSON.stringify({ extensions: { settings: { [DEMO_EXTENSION_ID]: { path: extensionPath, state: 0 } } } });
+    const elsewhere = JSON.stringify({ extensions: { settings: { [DEMO_EXTENSION_ID]: { path: "C:\\other\\extension" } } } });
+
+    expect(isInstalledBridge(disabled, extensionPath)).toBe(false);
+    expect(isInstalledBridge(elsewhere, extensionPath)).toBe(false);
+  });
+
   it("restores the profile, replaces the previous stack, waits for readiness, then opens Chrome safely", async () => {
     const fake = fakeDeps("31415", [false, true]);
 
@@ -126,13 +149,26 @@ describe("demo reset", () => {
   });
 
   it("opens only the form after the bridge has been installed in the demo profile", async () => {
-    const fake = fakeDeps(null, [true], true);
+    const fake = fakeDeps(null, [true], "demo");
 
     await resetDemo(fake.deps);
 
     const chrome = fake.spawnCalls[1]!;
     expect(chrome.args).toEqual([
       `--user-data-dir=${join(fake.repoRoot, ".chrome-profile-demo")}`,
+      "--new-window",
+      "http://127.0.0.1:7777/fixtures/forms/broken.html",
+    ]);
+    expect(fake.events.some((event) => event.includes("load the unpacked bridge"))).toBe(false);
+  });
+
+  it("opens the form in the regular Chrome profile if the bridge is installed there", async () => {
+    const fake = fakeDeps(null, [true], "default");
+
+    await resetDemo(fake.deps);
+
+    const chrome = fake.spawnCalls[1]!;
+    expect(chrome.args).toEqual([
       "--new-window",
       "http://127.0.0.1:7777/fixtures/forms/broken.html",
     ]);
