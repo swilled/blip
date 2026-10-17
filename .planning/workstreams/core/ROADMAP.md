@@ -141,7 +141,7 @@ Plans:
   4. On the broken demo form, unlabeled and placeholder-only fields get repaired labels in the background (marked model-sourced, with a confidence) without delaying the instant baseline answer; patches touch only existing ids and never kind, value or sensitivity; a second visit loads the repair from cache instantly.
 
 **Research**: A bounded local `outputFormat` + `startup()` spike reported one init tool for both roles, even with `tools: []` and `disallowedTools: ["*"]`; it stopped before any model prompt, so the structured-output path was not selected. Use the D-01 streaming/Zod fallback with explicit deny-all and a mandatory empty-tool init check; live streaming initialization remains unverified. Watch subscription quota (Haiku-class intents, Sonnet-class repair, disk cache). Apply the roughly 8k-token snapshot trim here, at the model-prompt boundary; Phase 2 only caps the extension wire snapshot at 250 elements.
-**Plans**: 7/7 complete; Phase 4 verification has live-provider gaps (see `04-VERIFICATION.md`)
+**Plans**: 7/8 complete; gap-closure Plan 04-08 passed plan-checker review. Phase 4 verification still has live-provider gaps (see `04-VERIFICATION.md`).
 
 Plans:
 - [x] 04-01-PLAN.md — Approve the exact SDK pin and add a bounded, gated SDK lifecycle spike
@@ -151,6 +151,7 @@ Plans:
 - [x] 04-05-PLAN.md — Separate deterministic label candidates from model-sourced resolved labels
 - [x] 04-06-PLAN.md — Route grammar misses through schema-checked intents and a recovering watchdog
 - [x] 04-07-PLAN.md — Repair labels asynchronously and cache validated value-free patches
+- [ ] 04-08-PLAN.md — Close Phase 4 live SDK verification gaps behind a fresh approval gate
 **UI hint**: no
 
 ### Phase 5: Hostile Pages, Real Web and Freeze
