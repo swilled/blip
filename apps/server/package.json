@@ -1,0 +1,11 @@
+{
+  "name": "@blip/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@blip/protocol": "*",
+    "sirv": "3.0.2",
+    "ws": "8.22.0"
+  }
+}
