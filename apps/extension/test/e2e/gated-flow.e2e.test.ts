@@ -158,6 +158,7 @@ describe("real voice-role gated submit and result flow", () => {
       const changedReadback = await requestReadback(fixture);
       const changedText = speakText(changedReadback.response).find((text) => text.includes("Current form read-back"));
       expect(changedText).toBeDefined();
+      if (!changedText) throw new Error("the changed-value result did not include a fresh read-back");
       expect(changedText).toContain("Number of guests: 3.");
       expect(changedText).toContain("Card number is present and has a value.");
       expect(changedText).not.toContain(cardNumber);
@@ -217,6 +218,7 @@ describe("real voice-role gated submit and result flow", () => {
       const successReadback = await requestReadback(fixture);
       const successReadbackText = speakText(successReadback.response).find((text) => text.includes("Current form read-back"));
       expect(successReadbackText).toBeDefined();
+      if (!successReadbackText) throw new Error("the successful result did not include a fresh read-back");
       expect(successReadbackText).toContain("Guest name: Ada Lovelace.");
       expect(successReadbackText).toContain("Email address: ada@gator.edu.");
       expect(successReadbackText).toContain("Number of guests: 4.");

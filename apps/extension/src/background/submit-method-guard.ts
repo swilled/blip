@@ -1,3 +1,5 @@
+/// <reference types="chrome" />
+
 const SUBMIT_METHOD_GUARD_SENTINEL = "blip-submit-method-guard-v1";
 
 type SubmitMethodGuardProbeGlobal = typeof globalThis & {
