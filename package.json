@@ -19,6 +19,7 @@
     "ext:typecheck": "npm run typecheck --workspace @blip/extension",
     "ext:test": "npm run test --workspace @blip/extension",
     "ext:smoke": "tsx scripts/ext-smoke.ts",
+    "ext:chrome": "tsx scripts/ext-chrome.ts",
     "pages:build": "npm run build --workspace @blip/test-pages",
     "pages:serve": "npm run serve --workspace @blip/test-pages",
     "gen:extension-key": "tsx scripts/gen-extension-key.ts",
