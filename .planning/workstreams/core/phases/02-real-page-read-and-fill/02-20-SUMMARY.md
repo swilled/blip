@@ -35,6 +35,7 @@ key-decisions:
   - "Keep the roughly 8k-token model prompt trim in Phase 4; Phase 2 wire truncation is only caused by the 250-element cap."
   - "Keep M1-M18 pending until the user records visible-browser results, browser versions, and M17 mode."
   - "Browser tests own and close only their uniquely spawned child process and profile."
+  - "The opt-in idle test matches the manual two-minute idle interval before testing outage reconnect."
 
 requirements-completed: []
 
@@ -57,7 +58,7 @@ completed: 2026-10-17
 - Extended the real-browser voice path to cover page description, text and select fill, maxlength read-back, and sensitive-field focus/write behavior.
 - Asserted that a card-shaped number typed into an ordinary name field is redacted after writing from the ActResult, refreshed page/session state, spoken/error frames, last-spoken value, and captured server logs. The password sentinel remains covered.
 - Added vanilla and React page-side evidence matrices for accessible metadata, readonly refusal, sensitive-value redaction, native field actions, gated actions, validation, no-submit behavior, frames, shadow DOM, CSP, freshness, and the 250-element wire cap.
-- Added an opt-in long browser test. It verified one extension connection through 75 seconds idle, then reconnect after a 40-second server outage.
+- Added an opt-in long browser test that holds one extension connection through the manual two-minute idle interval, then verifies reconnect after a 40-second server outage.
 - Added [the extension runbook and manual checklist](../../../../../apps/extension/README.md), including browser selection, build commands, known unsupported widgets, and M1-M18.
 
 ## Commits
@@ -73,7 +74,7 @@ completed: 2026-10-17
 - `npm run ext:typecheck` - passed.
 - `npm test` - passed: 61 files, 638 tests passed, 19 skipped.
 - `BLIP_E2E_BROWSER=1 npx vitest run apps/extension/test/e2e --no-file-parallelism` - passed: 10 files and 20 tests passed; the opt-in long test was skipped in this run.
-- `BLIP_E2E_BROWSER=1 BLIP_E2E_LONG=1 npx vitest run apps/extension/test/e2e/idle.e2e.test.ts --no-file-parallelism` - passed: 1 test in 120.78 seconds.
+- `BLIP_E2E_BROWSER=1 BLIP_E2E_LONG=1 npx vitest run apps/extension/test/e2e/idle.e2e.test.ts --no-file-parallelism` - passed: one connection held across two minutes idle, followed by reconnect after the 40-second outage; 166.19 seconds total.
 - `npm run ext:build` - passed.
 - `npm run pages:build` - passed.
 - `npm run ext:smoke` - passed and observed the production extension origin bind in Edge.
@@ -81,9 +82,35 @@ completed: 2026-10-17
 
 Automated E2E runs used unique child profiles and did not close or alter the user's existing Edge window.
 
+## Checklist Evidence Map
+
+These are automated results; they do not change the M1-M18 manual status rows.
+
+| Manual row | Automated evidence |
+| --- | --- |
+| M1 | `npm run ext:smoke` observed the production extension origin bind in Edge; extension load itself used the isolated E2E profile. |
+| M2 | React controlled-value and blur-validation assertions in `matrix-pages.e2e.test.ts`; OS focus behavior still needs a visible check. |
+| M3 | Maxlength read-back in `voice-path.e2e.test.ts`. |
+| M4 | Text/select/radio/checkbox writes and no-op/refusal checks in `matrix-vanilla.e2e.test.ts`. |
+| M5 | Implicit Enter and native select submit barriers in `matrix-pages.e2e.test.ts`. |
+| M6-M7 | Delayed reveal and SPA navigation freshness in `changes.e2e.test.ts`. |
+| M8 | Same-port restart in `reconnect.e2e.test.ts`; long outage reconnect in `idle.e2e.test.ts`. |
+| M9 | Two-minute bound-connection check in `idle.e2e.test.ts`. |
+| M10 | Visible extension reload with the page left open was not checked. |
+| M11 | Cross-origin snapshot plus same/cross-origin frame actions in `snapshot.e2e.test.ts` and `frames-shadow.e2e.test.ts`. |
+| M12 | Overlay behavior has unit coverage; the visible strict-CSP outline was not checked in a browser UI. |
+| M13 | Gated action refusal and unchanged page reports in `matrix-vanilla.e2e.test.ts`. |
+| M14 | Sensitive-field read/write privacy assertions in `voice-path.e2e.test.ts` and `react-fill.e2e.test.ts`. |
+| M15 | 250-element wire cap and `truncated` semantics in `matrix-vanilla.e2e.test.ts`. |
+| M16 | Focused-window target selection has unit coverage in `changes.test.ts`; the visible two-tab voice/form interaction was not checked. |
+| M17 | Real extension plus voice-role read/fill trace in `voice-path.e2e.test.ts`; it does not use a physical microphone or visible voice UI. |
+| M18 | Not run: Chrome is absent locally and the teammate repeat requires their Chrome environment. |
+
+The computer-use connector reported `apps: []` and `browsers: []`; attempts to create an Edge or in-app browser tab returned “Browser is not available.” The visible-only rows remain pending for that reason.
+
 ## Human Verification Required
 
-The README checklist remains entirely **Pending**. The local machine resolves Edge 155.0.4283.45; Chrome was absent from the searched locations. A person must run the visible developer flow, record M1-M18 with browser/version and M17 mode, and have a teammate repeat the connection/fill checks on Chrome for M18. Do not mark this plan, I1, or Phase 2 complete before that checkpoint is reported.
+The README checklist remains entirely **Pending**. The local machine resolves Edge 155.0.4283.45; Chrome was absent from the searched locations. The current computer-use connector cannot access any browser surface. The visible-only checks still need a controllable browser session, and M18 requires the teammate's Chrome environment. Do not mark this plan, I1, or Phase 2 complete before those checks are reported.
 
 ## Next Step
 

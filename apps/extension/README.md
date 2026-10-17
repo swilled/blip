@@ -23,7 +23,7 @@ npx vitest run apps/extension/test/e2e --no-file-parallelism
 Remove-Item Env:BLIP_E2E_BROWSER
 ```
 
-The longer idle/outage check takes at least 115 seconds and is opt-in:
+The longer idle/outage check takes at least 160 seconds and is opt-in:
 
 ```powershell
 $env:BLIP_E2E_BROWSER = '1'

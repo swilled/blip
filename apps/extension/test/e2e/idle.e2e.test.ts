@@ -58,7 +58,7 @@ async function stopOwnedBrowser(child: ChildProcess): Promise<void> {
 }
 
 describe("optional long MV3 idle and outage evidence", () => {
-  it.skipIf(!enabled)("keeps one connection through 75 seconds idle and reconnects after a 40-second outage", async () => {
+  it.skipIf(!enabled)("keeps one connection through two minutes idle and reconnects after a 40-second outage", async () => {
     const browser = resolveBrowser();
     const profileDir = path.join(profileRoot, `idle-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const logs: string[] = [];
@@ -97,8 +97,8 @@ describe("optional long MV3 idle and outage evidence", () => {
       expect(first.session.extensionConnected).toBe(true);
       await waitForBind(logs, firstBindOffset, first, child, browser);
 
-      // Verify one connected extension stays bound throughout a multi-minute-style idle slice.
-      for (let elapsed = 0; elapsed < 75_000; elapsed += 5_000) {
+      // Match manual M9's two-minute idle interval while checking that only one connection is bound.
+      for (let elapsed = 0; elapsed < 120_000; elapsed += 5_000) {
         await delay(5_000);
         expect(first.session.extensionConnected).toBe(true);
       }
@@ -127,5 +127,5 @@ describe("optional long MV3 idle and outage evidence", () => {
       setLogSink(previousLogSink);
       await rm(profileDir, { recursive: true, force: true });
     }
-  }, 210_000);
+  }, 270_000);
 });
