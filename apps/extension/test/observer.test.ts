@@ -1,16 +1,23 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StructuralChange } from "../src/content/observer.js";
-import { getHighlightOverlay } from "../src/content/overlay.js";
+import { getHighlightOverlay, openOverlayForContentTest } from "../src/content/overlay.js";
 import { observeStructuralChanges } from "../src/content/observer.js";
+
+let activeObservers: Array<() => void> = [];
 
 beforeEach(() => {
   vi.useFakeTimers();
+  activeObservers = [];
   document.documentElement.replaceChildren(document.createElement("head"), document.createElement("body"));
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+    x: 0, y: 0, left: 0, top: 0, right: 100, bottom: 20, width: 100, height: 20, toJSON: () => ({}),
+  } as DOMRect);
 });
 
 afterEach(() => {
-  getHighlightOverlay(document).dispose();
+  for (const stop of activeObservers) stop();
+  if (openOverlayForContentTest(document)) getHighlightOverlay(document).dispose();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -22,11 +29,17 @@ async function flushMutationTurn(ms = 0): Promise<void> {
   await Promise.resolve();
 }
 
+function startObserver(onChange: (change: StructuralChange) => void): () => void {
+  const stop = observeStructuralChanges(document, onChange);
+  activeObservers.push(stop);
+  return stop;
+}
+
 describe("structural page mutation observer", () => {
   it("keeps value-only input and checked changes silent", async () => {
     document.body.innerHTML = '<label for="name">Name</label><input id="name"><label><input id="check" type="checkbox">Agree</label>';
     const changes: StructuralChange[] = [];
-    const stop = observeStructuralChanges(document, (change) => changes.push(change));
+    const stop = startObserver((change) => changes.push(change));
 
     document.querySelector<HTMLInputElement>("#name")!.value = "private value";
     document.querySelector<HTMLInputElement>("#check")!.checked = true;
@@ -49,20 +62,26 @@ describe("structural page mutation observer", () => {
     `;
     const changes: StructuralChange[] = [];
     const stop = observeStructuralChanges(document, (change) => changes.push(change));
-    const changeCount = async (): Promise<void> => flushMutationTurn(0);
+    const changeCount = async (): Promise<void> => flushMutationTurn(500);
 
     document.querySelector<HTMLInputElement>("#revealed")!.hidden = false;
     await changeCount();
+    expect(changes).toHaveLength(1);
     document.querySelector<HTMLInputElement>("#locked")!.disabled = false;
     await changeCount();
+    expect(changes).toHaveLength(2);
     document.querySelector<HTMLInputElement>("#required")!.required = true;
     await changeCount();
+    expect(changes).toHaveLength(3);
     document.querySelector("#errors")!.innerHTML = '<span id="error" role="alert">Required</span>';
     await changeCount();
+    expect(changes).toHaveLength(4);
     document.querySelector("#alerts")!.innerHTML = '<div role="status">Saved</div>';
     await changeCount();
+    expect(changes).toHaveLength(5);
     document.querySelector("#removed")!.remove();
     await changeCount();
+    expect(changes).toHaveLength(6);
     document.querySelector("#required")!.remove();
     await changeCount();
 
@@ -79,9 +98,9 @@ describe("structural page mutation observer", () => {
     root.innerHTML = '<label>Inside<input id="shadow-field"></label>';
     document.body.append(host);
 
-    const overlay = getHighlightOverlay(document);
+    getHighlightOverlay(document);
     const changes: StructuralChange[] = [];
-    const stop = observeStructuralChanges(document, (change) => changes.push(change));
+    const stop = startObserver((change) => changes.push(change));
     const baseline = changes.length;
     root.querySelector("input")!.setAttribute("required", "");
     await flushMutationTurn(0);
@@ -89,7 +108,7 @@ describe("structural page mutation observer", () => {
 
     const field = document.querySelector("x-panel")!.shadowRoot!.querySelector("input")!;
     field.setAttribute("data-blip-id", "e999");
-    openOverlayForMutationTest(overlay).host.setAttribute("class", "decorative-change");
+    openOverlayForContentTest(document)!.host.setAttribute("class", "decorative-change");
     await flushMutationTurn(1000);
     expect(changes).toHaveLength(baseline + 1);
     expect(document.querySelectorAll("input")).toHaveLength(0);
@@ -100,7 +119,7 @@ describe("structural page mutation observer", () => {
     document.body.innerHTML = '<input id="required">';
     const changes: Array<{ change: StructuralChange; at: number }> = [];
     const start = Date.now();
-    const stop = observeStructuralChanges(document, (change) => changes.push({ change, at: Date.now() }));
+    const stop = startObserver((change) => changes.push({ change, at: Date.now() }));
     const required = document.querySelector<HTMLInputElement>("#required")!;
 
     for (let index = 0; index < 1000; index += 1) required.toggleAttribute("required", index % 2 === 1);
@@ -122,9 +141,3 @@ describe("structural page mutation observer", () => {
     expect(changes).toHaveLength(2);
   });
 });
-
-function openOverlayForMutationTest(overlay: ReturnType<typeof getHighlightOverlay>) {
-  const host = document.querySelector("[aria-hidden='true']") as HTMLElement | null;
-  if (!host) throw new Error("overlay host is not present");
-  return { overlay, host };
-}

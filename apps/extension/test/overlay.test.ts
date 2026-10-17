@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getHighlightOverlay, openOverlayForContentTest } from "../src/content/overlay.js";
+import { walkDocument } from "../src/content/walk.js";
 
 beforeEach(() => {
   document.documentElement.replaceChildren(document.createElement("head"), document.createElement("body"));
@@ -36,6 +37,15 @@ describe("closed-shadow highlight overlay", () => {
     expect(bridge!.box.textContent).toBe("");
     expect(getHighlightOverlay(document)).toBe(overlay);
     expect(styleAttributeWrite.mock.calls.some(([, name]) => name.toLowerCase() === "style")).toBe(false);
+  });
+
+  it("does not add overlay elements to the content walker output", () => {
+    document.body.innerHTML = '<label for="name">Name</label><input id="name">';
+    const before = walkDocument(document);
+
+    getHighlightOverlay(document);
+
+    expect(walkDocument(document)).toEqual(before);
   });
 
   it("moves on scroll and resize, and targetId null clears the box and removes listeners", () => {

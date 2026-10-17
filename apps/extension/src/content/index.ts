@@ -2,11 +2,16 @@ export {};
 
 import type { BackgroundToContentMessage, ContentResponse, ContentToBackgroundMessage } from "../shared/messages.js";
 import { executeAct } from "./act.js";
+import { observeStructuralChanges } from "./observer.js";
+import { getHighlightOverlay } from "./overlay.js";
 import { captureFrameSnapshot } from "./snapshot.js";
 export { captureFrameSnapshot } from "./snapshot.js";
 export { resolveElementId, walkDocument } from "./walk.js";
 
-type BlipContentGlobal = typeof globalThis & { __blipContentShellInstalled?: boolean };
+type BlipContentGlobal = typeof globalThis & {
+  __blipContentShellInstalled?: boolean;
+  __blipContentDispose?: () => void;
+};
 
 const isolatedWorld = globalThis as BlipContentGlobal;
 
@@ -17,9 +22,16 @@ function targetFrameId(targetId: string, fallback: number): number {
   return Number.isSafeInteger(frameId) ? frameId : fallback;
 }
 
-if (isolatedWorld.__blipContentShellInstalled !== true) {
-  isolatedWorld.__blipContentShellInstalled = true;
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+function installContentShell(): void {
+  const overlay = getHighlightOverlay(document);
+  const stopObserving = observeStructuralChanges(document, (change) => {
+    const message: ContentToBackgroundMessage = { t: "mutated", ...change };
+    if (typeof chrome.runtime.sendMessage === "function") {
+      void chrome.runtime.sendMessage(message).catch(() => undefined);
+    }
+  });
+
+  const listener: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (message, sender, sendResponse) => {
     if (sender.id !== chrome.runtime.id || typeof message !== "object" || message === null) return;
     if ("type" in message && message.type === "blip.ping") {
       sendResponse({ ok: true });
@@ -55,10 +67,35 @@ if (isolatedWorld.__blipContentShellInstalled !== true) {
       });
       return true;
     }
-  });
+  };
+  chrome.runtime.onMessage.addListener(listener);
+
+  let disposed = false;
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    stopObserving();
+    overlay.dispose();
+    if (typeof chrome.runtime.onMessage.removeListener === "function") {
+      chrome.runtime.onMessage.removeListener(listener);
+    }
+    delete isolatedWorld.__blipContentShellInstalled;
+    delete isolatedWorld.__blipContentDispose;
+  };
+  isolatedWorld.__blipContentDispose = dispose;
 
   const ready: ContentToBackgroundMessage = { t: "ready" };
   if (typeof chrome.runtime.sendMessage === "function") {
     void chrome.runtime.sendMessage(ready).catch(() => undefined);
   }
+}
+
+if (isolatedWorld.__blipContentShellInstalled !== true) {
+  isolatedWorld.__blipContentShellInstalled = true;
+  installContentShell();
+}
+
+/** Extension-side test and lifecycle hook; not visible to page scripts. */
+export function disposeContentScript(): void {
+  isolatedWorld.__blipContentDispose?.();
 }

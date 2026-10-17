@@ -74,12 +74,18 @@ describe("content message listener installation", () => {
   beforeEach(() => {
     vi.resetModules();
     listeners = [];
+    (globalThis as Record<string, unknown>).__blipContentDispose &&
+      ((globalThis as Record<string, unknown>).__blipContentDispose as () => void)();
     Object.defineProperty(globalThis, "chrome", {
       configurable: true,
       value: {
         runtime: {
           id: "blip-extension-id",
-          onMessage: { addListener: (listener: RuntimeMessageListener) => listeners.push(listener) },
+          onMessage: {
+            addListener: (listener: RuntimeMessageListener) => listeners.push(listener),
+            removeListener: vi.fn(),
+          },
+          sendMessage: vi.fn().mockResolvedValue(undefined),
         },
       },
     });
@@ -130,5 +136,39 @@ describe("content message listener installation", () => {
 
     expect(response).toMatchObject({ t: "act.result", result: { actId: "content-act", ok: true, observedValue: "Ada" } });
     expect(document.querySelector<HTMLInputElement>("#name")?.value).toBe("Ada");
+  });
+
+  it("sends value-free structural changes and disposes the observer and overlay", async () => {
+    document.body.innerHTML = '<label for="name">Name</label><input id="name">';
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(globalThis, "chrome", {
+      configurable: true,
+      value: {
+        runtime: {
+          id: "blip-extension-id",
+          onMessage: { addListener: (listener: RuntimeMessageListener) => listeners.push(listener), removeListener: vi.fn() },
+          sendMessage,
+        },
+      },
+    });
+    await import("../src/content/index.js");
+    sendMessage.mockClear();
+
+    document.querySelector<HTMLInputElement>("#name")!.required = true;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      t: "mutated",
+      structuralHash: expect.any(String),
+      changeSignature: expect.any(String),
+    }));
+    expect(JSON.stringify(sendMessage.mock.calls)).not.toContain("private value");
+
+    const dispose = (globalThis as Record<string, unknown>).__blipContentDispose as (() => void) | undefined;
+    expect(dispose).toBeTypeOf("function");
+    dispose?.();
+    expect(document.querySelector("[aria-hidden='true']")).toBeNull();
+    expect((globalThis as Record<string, unknown>).__blipContentShellInstalled).toBeUndefined();
   });
 });
