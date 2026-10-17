@@ -2,7 +2,10 @@
 //   --port <n>            default 7777 (0 = ephemeral)
 //   --dev                 allow no-Origin clients and the dev voice origins
 //   --brain=fake|claude   default fake; claude arrives in Phase 4
-//   --fake-delay <ms>     default 1500 (behavior lands in plan 01-05)
+//   --fake-delay <ms>     default 1500: how long a model-routed turn waits (the fake brain "thinking")
+//   --fake-request-action <actionId>
+//                         TEST ONLY: the fake brain answers model-routed turns with request_action for
+//                         this id. The server still refuses it (no act.request, no confirm.armed).
 //   --allow-origin <o>    repeatable; requires --dev; loopback http origins; grants voice only
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -10,7 +13,7 @@ import { parseArgs } from "node:util";
 import { DEFAULT_PORT, WS_PATH, LOOPBACK_HOST } from "@blip/protocol";
 import { parseAllowedOrigin } from "./hub/guard";
 import type { StaticRoot } from "./hub/static";
-import { startServer } from "./server";
+import { BrainUnavailableError, CLAUDE_BRAIN_UNAVAILABLE, startServer } from "./server";
 
 function die(message: string, code: number): never {
   process.stderr.write(`${message}\n`);
@@ -35,19 +38,20 @@ async function main(): Promise<void> {
         dev: { type: "boolean", default: false },
         brain: { type: "string", default: "fake" },
         "fake-delay": { type: "string" },
+        "fake-request-action": { type: "string" },
         "allow-origin": { type: "string", multiple: true },
       },
       strict: true,
       allowPositionals: false,
     }));
   } catch (err) {
-    die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake] [--fake-delay <ms>] [--allow-origin <origin>]...`, 2);
+    die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
   }
 
   const dev = values.dev === true;
   const brain = values.brain;
   if (brain === "claude") {
-    die("--brain=claude is not available yet: the Claude brain arrives in Phase 4. Use --brain=fake.", 2);
+    die(CLAUDE_BRAIN_UNAVAILABLE, 2);
   }
   if (brain !== "fake") die(`--brain must be fake (claude arrives in Phase 4), got "${brain}"`, 2);
 
@@ -76,8 +80,17 @@ async function main(): Promise<void> {
 
   let running;
   try {
-    running = await startServer({ port, dev, brain, fakeDelayMs, extraVoiceOrigins, staticRoots });
+    running = await startServer({
+      port,
+      dev,
+      brain,
+      fakeDelayMs,
+      extraVoiceOrigins,
+      staticRoots,
+      ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
+    });
   } catch (err) {
+    if (err instanceof BrainUnavailableError) die(err.message, 2);
     if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
       die(`port ${port} is already in use; stop the other process or pick another with --port <n>`, 1);
     }

@@ -160,10 +160,10 @@ describe("malformed and hostile frames after binding", () => {
     expect(e.payload).toMatchObject({ code: "invalid-payload", fatal: false });
     expect(e.replyTo).toBe(badId);
 
-    // The connection is still alive: a valid utterance is routed (no handler -> not-implemented).
+    // The connection is still alive: a valid utterance is routed to the turn handler (transcript first).
     c.send("utterance", EXAMPLES.utterance);
     e = await c.nextMessage();
-    expect(e.payload.code).toBe("not-implemented");
+    expect(e.type).toBe("transcript");
   });
 
   it("an invalid-payload error never contains the rejected value", async () => {
@@ -236,9 +236,10 @@ describe("per-role permissions (D-04)", () => {
 
   it("an allowed type with no handler gets not-implemented with replyTo", async () => {
     const s = await start();
-    const v = await bind(s, "voice");
-    const id = v.send("ptt", { state: "start" });
-    const e = await v.nextMessage();
+    // ptt.hotkey is allowed from the extension but nothing handles it before Phase 2.
+    const x = await bind(s, "extension");
+    const id = x.send("ptt.hotkey", { source: "global-hotkey" });
+    const e = await x.nextMessage();
     expect(e.payload).toMatchObject({ code: "not-implemented", fatal: false });
     expect(e.replyTo).toBe(id);
   });
@@ -267,10 +268,11 @@ describe("per-role permissions (D-04)", () => {
       },
     });
     const v = await bind(s, "voice");
+    const x = await bind(s, "extension");
     v.send("utterance", EXAMPLES.utterance);
     await sleep(30);
-    v.send("ptt", { state: "end" });
-    expect((await v.nextMessage()).payload.code).toBe("not-implemented");
+    x.send("ptt.hotkey", { source: "global-hotkey" });
+    expect((await x.nextMessage()).payload.code).toBe("not-implemented");
   });
 
   it("an extension ping gets a pong with replyTo", async () => {

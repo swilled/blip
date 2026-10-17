@@ -6,6 +6,8 @@ import { createHub, type Handlers, type Hub } from "./hub/hub";
 import { hostAllowed, parseAllowedOrigin } from "./hub/guard";
 import { createStaticHandler, type StaticRoot } from "./hub/static";
 import { Session, type Brain } from "./session/session";
+import { createFakeBrain } from "./brain/fake-brain";
+import { handleUtterance, sayRepeat, sayStop } from "./turn";
 
 export type StartServerOptions = {
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
@@ -16,6 +18,8 @@ export type StartServerOptions = {
   helloTimeoutMs?: number;
   extraVoiceOrigins?: string[];
   extensionId?: string;
+  /** Test-only: the fake brain answers every model-routed utterance with request_action for this id. */
+  fakeRequestActionId?: string;
   /** Message handlers by type; anything without one gets not-implemented (D-14). Plan 01-05 fills these. */
   handlers?: Handlers;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
@@ -50,7 +54,19 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(text);
 }
 
+/** Shared by startServer, the server CLI and the dev runner (D-21). All of them map it to exit code 2. */
+export const CLAUDE_BRAIN_UNAVAILABLE =
+  "--brain=claude is not available yet: the Claude brain arrives in Phase 4. Use --brain=fake.";
+
+export class BrainUnavailableError extends Error {
+  constructor() {
+    super(CLAUDE_BRAIN_UNAVAILABLE);
+    this.name = "BrainUnavailableError";
+  }
+}
+
 export async function startServer(options: StartServerOptions = {}): Promise<RunningServer> {
+  if (options.brain === "claude") throw new BrainUnavailableError();
   const dev = options.dev ?? false;
   const extraVoiceOrigins = (options.extraVoiceOrigins ?? []).map(parseAllowedOrigin);
   const session = new Session(options.brain ?? "fake");
@@ -82,6 +98,44 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       });
   });
 
+  const snapshotTimeoutMs = options.snapshotTimeoutMs ?? 5000;
+
+  const fakeDelayMs = options.fakeDelayMs ?? 1500;
+  const brain = createFakeBrain({
+    delayMs: fakeDelayMs,
+    ...(options.fakeRequestActionId !== undefined ? { requestActionId: options.fakeRequestActionId } : {}),
+  });
+
+  // Turns run one at a time so busy/state pushes and reply order stay coherent.
+  let turnQueue: Promise<void> = Promise.resolve();
+  const defaultHandlers: Handlers = {
+    utterance: ({ message, hub: h, session: s }) => {
+      const run = turnQueue.then(() => handleUtterance({ message, hub: h, session: s, snapshotTimeoutMs, brain }));
+      turnQueue = run.catch(() => {}); // a failed turn is logged by the hub and must not block the next one
+      return run;
+    },
+    // Voice-side messages Phase 1 only needs to accept (D-14): speech completion is not sequenced yet,
+    // push-to-talk and settings have no effect on the offline loop.
+    "speak.done": () => {},
+    settings: () => {},
+    ptt: () => {},
+    control: ({ message, hub: h, session: s }) => {
+      if (message.type !== "control") return;
+      if (message.payload.cmd === "stop") return sayStop(h, s);
+      if (message.payload.cmd === "repeat") return sayRepeat(h, s);
+      // reconnect-browser has nothing to reconnect yet.
+      h.send(
+        "voice",
+        "error",
+        { code: "not-implemented", message: "the server has no handler for that command yet", fatal: false },
+        { replyTo: message.id },
+      );
+    },
+    "page.changed": ({ session: s }) => {
+      s.stale = true;
+    },
+  };
+
   const hub = createHub({
     server,
     session,
@@ -90,7 +144,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     extensionId: options.extensionId ?? EXTENSION_ID,
     extraVoiceOrigins,
     ...(options.helloTimeoutMs !== undefined ? { helloTimeoutMs: options.helloTimeoutMs } : {}),
-    ...(options.handlers ? { handlers: options.handlers } : {}),
+    handlers: { ...defaultHandlers, ...options.handlers },
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -111,8 +165,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     config: {
       dev,
       brain: session.brain,
-      fakeDelayMs: options.fakeDelayMs ?? 1500,
-      snapshotTimeoutMs: options.snapshotTimeoutMs ?? 5000,
+      fakeDelayMs,
+      snapshotTimeoutMs,
       extensionId: options.extensionId ?? EXTENSION_ID,
     },
     session,
