@@ -15,6 +15,7 @@ export type ContentSnapshot = Pick<
   | "stepHint"
   | "elements"
   | "truncated"
+  | "untrustedInstructionDetected"
   | "structuralHash"
   | "capturedAt"
 >;

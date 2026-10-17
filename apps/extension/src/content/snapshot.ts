@@ -1,6 +1,7 @@
 import type { ContentSnapshot } from "../shared/messages.js";
 import { computeStructuralHash } from "../shared/signature.js";
 import { rememberSnapshotFingerprints } from "./act.js";
+import { detectUntrustedInstruction } from "./injection-signal.js";
 import { boundedText } from "./text.js";
 import { isVisible } from "./visibility.js";
 import { elementsInComposedDocument, walkDocument, type WalkOptions } from "./walk.js";
@@ -97,6 +98,12 @@ export function captureFrameSnapshot(options: CaptureFrameSnapshotOptions = {}):
   const headings = pageHeadings(elements);
   const alerts = pageAlerts(elements);
   const stepHint = pageStepHint(elements);
+  let untrustedInstructionDetected = false;
+  try {
+    untrustedInstructionDetected = detectUntrustedInstruction(ownerDocument);
+  } catch {
+    // Warning detection must never interfere with page capture or action classification.
+  }
   const result: ContentSnapshot = {
     title: boundedText(ownerDocument.title, 200, 200),
     url: safeUrl(ownerDocument),
@@ -110,6 +117,7 @@ export function captureFrameSnapshot(options: CaptureFrameSnapshotOptions = {}):
     capturedAt: Date.now(),
   };
   if (stepHint) result.stepHint = stepHint;
+  if (untrustedInstructionDetected) result.untrustedInstructionDetected = true;
   rememberSnapshotFingerprints(ownerDocument, selected);
   return result;
 }
