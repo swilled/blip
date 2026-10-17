@@ -1,6 +1,6 @@
 const RECONNECT_DELAYS_MS = [500, 1_000, 2_000, 4_000, 8_000, 10_000] as const;
 const REPLACEMENT_HOLDOFF_MS = 30_000;
-const PONG_TIMEOUT_MS = 10_000;
+export const SOCKET_PONG_TIMEOUT_MS = 10_000;
 
 export interface SocketStateOptions {
   now?: () => number;
@@ -54,6 +54,6 @@ export class SocketState {
   }
 
   isPongOverdue(): boolean {
-    return this.pingSentAt !== undefined && this.now() - this.pingSentAt >= PONG_TIMEOUT_MS;
+    return this.pingSentAt !== undefined && this.now() - this.pingSentAt >= SOCKET_PONG_TIMEOUT_MS;
   }
 }

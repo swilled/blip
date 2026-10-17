@@ -1,18 +1,18 @@
-import { buildFrame, DEFAULT_PORT, LOOPBACK_HOST, PING_INTERVAL_MS, WS_PATH, parseFrame } from "@blip/protocol";
+import { buildFrame, CLOSE_CODES, DEFAULT_PORT, LOOPBACK_HOST, PING_INTERVAL_MS, WS_PATH, parseFrame } from "@blip/protocol";
 import type { Message } from "@blip/protocol";
+import { SOCKET_PONG_TIMEOUT_MS, SocketState } from "./socket-state.js";
 
 declare const __BLIP_WS_URL__: string;
 
 const DEFAULT_SOCKET_URL = `ws://${LOOPBACK_HOST}:${DEFAULT_PORT}${WS_PATH}`;
 const SOCKET_URL = typeof __BLIP_WS_URL__ === "string" ? __BLIP_WS_URL__ : DEFAULT_SOCKET_URL;
-const RECONNECT_DELAYS_MS = [500, 1_000, 2_000, 5_000, 10_000] as const;
-
 let socket: WebSocket | undefined;
 let welcomeId: string | undefined;
 let welcomed = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 let pingTimer: ReturnType<typeof setInterval> | undefined;
-let reconnectAttempt = 0;
+let pongTimer: ReturnType<typeof setTimeout> | undefined;
+const socketState = new SocketState();
 
 export function isAllowedSocketUrl(value: string): boolean {
   try {
@@ -42,18 +42,20 @@ function send(socketForSend: WebSocket, frame: unknown): void {
 
 function stopKeepalive(): void {
   if (pingTimer !== undefined) clearInterval(pingTimer);
+  if (pongTimer !== undefined) clearTimeout(pongTimer);
   pingTimer = undefined;
+  pongTimer = undefined;
+  socketState.onPong();
   welcomed = false;
   welcomeId = undefined;
 }
 
 function scheduleReconnect(): void {
   if (reconnectTimer !== undefined) return;
-  const delay = RECONNECT_DELAYS_MS[Math.min(reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)] ?? 10_000;
-  reconnectAttempt += 1;
+  const delay = socketState.reconnectHoldoffMs() || socketState.nextReconnectDelay();
   reconnectTimer = setTimeout(() => {
     reconnectTimer = undefined;
-    connect();
+    ensureConnected();
   }, delay);
 }
 
@@ -86,14 +88,15 @@ function dispatch(message: Message, socketForReply: WebSocket): void {
   // Remaining server-to-extension messages are intentionally inert in this first shell.
 }
 
-export function connect(): void {
+export function ensureConnected(): void {
   if (!isAllowedSocketUrl(SOCKET_URL)) return;
+  if (!socketState.canReconnect()) return;
   if (socket !== undefined && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) return;
 
   const current = new WebSocket(SOCKET_URL);
   socket = current;
   current.addEventListener("open", () => {
-    reconnectAttempt = 0;
+    socketState.onOpen();
     const hello = buildFrame("hello", { role: "extension", clientVersion: "0.0.0", protocolVersion: 1 });
     welcomeId = hello.id;
     send(current, hello);
@@ -103,18 +106,40 @@ export function connect(): void {
     if (!parsed.ok) return;
     const message = parsed.message;
     if (!welcomed) {
-      if (message.type !== "welcome" || message.replyTo !== welcomeId) return;
-      welcomed = true;
-      pingTimer = setInterval(() => send(current, buildFrame("ping", {})), PING_INTERVAL_MS);
+      if (message.type === "welcome" && message.replyTo === welcomeId) {
+        welcomed = true;
+        pingTimer = setInterval(() => {
+          if (current.readyState !== WebSocket.OPEN) return;
+          socketState.onPing();
+          send(current, buildFrame("ping", {}));
+          if (pongTimer !== undefined) clearTimeout(pongTimer);
+          pongTimer = setTimeout(() => {
+            pongTimer = undefined;
+            if (socketState.isPongOverdue() && socket === current && current.readyState === WebSocket.OPEN) {
+              current.close();
+            }
+          }, SOCKET_PONG_TIMEOUT_MS);
+        }, PING_INTERVAL_MS);
+        return;
+      }
+      if (message.type === "snapshot.request") return notReady(message, current);
+      if (message.type === "act.request") return notImplemented(message, current);
       return;
     }
-    if (message.type === "pong") return;
+    if (message.type === "pong") {
+      socketState.onPong();
+      if (pongTimer !== undefined) clearTimeout(pongTimer);
+      pongTimer = undefined;
+      return;
+    }
     dispatch(message, current);
   });
   current.addEventListener("error", () => current.close());
-  current.addEventListener("close", () => {
-    if (socket === current) socket = undefined;
+  current.addEventListener("close", (event) => {
+    if (socket !== current) return;
+    socket = undefined;
     stopKeepalive();
+    if (event.code === CLOSE_CODES.replaced) socketState.onReplaced();
     scheduleReconnect();
   });
 }

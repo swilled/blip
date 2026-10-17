@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { connect } from '../src/background/socket.js';
+import { ensureConnected } from '../src/background/socket.js';
 
-vi.mock('../src/background/socket.js', () => ({ connect: vi.fn() }));
+vi.mock('../src/background/socket.js', () => ({ ensureConnected: vi.fn() }));
 
 describe('background service-worker listeners', () => {
   let startupListeners: Array<() => void>;
@@ -40,7 +40,7 @@ describe('background service-worker listeners', () => {
     expect(installedListeners).toHaveLength(1);
     expect(alarmListeners).toHaveLength(1);
     expect(createAlarm).toHaveBeenCalledWith('blip-reconnect', { periodInMinutes: 0.5 });
-    expect(connect).toHaveBeenCalledTimes(1);
+    expect(ensureConnected).toHaveBeenCalledTimes(1);
   });
 
   it('recreates the alarm and ensures a connection on startup and install', () => {
@@ -50,14 +50,14 @@ describe('background service-worker listeners', () => {
     expect(createAlarm).toHaveBeenCalledTimes(3);
     expect(createAlarm).toHaveBeenNthCalledWith(2, 'blip-reconnect', { periodInMinutes: 0.5 });
     expect(createAlarm).toHaveBeenNthCalledWith(3, 'blip-reconnect', { periodInMinutes: 0.5 });
-    expect(connect).toHaveBeenCalledTimes(3);
+    expect(ensureConnected).toHaveBeenCalledTimes(3);
   });
 
   it('reconnects only for the service-worker keepalive alarm', () => {
     alarmListeners[0]?.({ name: 'unrelated' });
-    expect(connect).toHaveBeenCalledTimes(1);
+    expect(ensureConnected).toHaveBeenCalledTimes(1);
 
     alarmListeners[0]?.({ name: 'blip-reconnect' });
-    expect(connect).toHaveBeenCalledTimes(2);
+    expect(ensureConnected).toHaveBeenCalledTimes(2);
   });
 });
