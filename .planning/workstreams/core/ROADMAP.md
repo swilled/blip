@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Contract and Walking Skeleton** - Frozen `@blip/protocol`, a loopback-only server hub, and fakes (extension, brain, REPL) so the whole loop runs offline
 - [x] **Phase 2: Real Page Read and Fill** - The Chrome extension snapshots a live form, classifies every action by rule, and fills fields with DOM-verified values (completed 2026-10-17)
 - [x] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2) (completed 2026-10-17)
-- [ ] **Phase 4: Claude Brain and Label Repair** - Locked-down, pre-warmed Claude turns free-form speech into Intents and repairs unlabeled fields in the background
+- [x] **Phase 4: Claude Brain and Label Repair** - Locked-down, pre-warmed Claude turns free-form speech into Intents and repairs unlabeled fields in the background (completed 2026-10-17)
 - [ ] **Phase 5: Hostile Pages, Real Web and Freeze** - Injection page blocked and flagged, real public form works (I3), one-command startup, `demo-safe` freeze
 
 ## Shared Milestones
@@ -151,7 +151,7 @@ Plans:
 - [x] 04-05-PLAN.md — Separate deterministic label candidates from model-sourced resolved labels
 - [x] 04-06-PLAN.md — Route grammar misses through schema-checked intents and a recovering watchdog
 - [x] 04-07-PLAN.md — Repair labels asynchronously and cache validated value-free patches
-- [ ] 04-08-PLAN.md — Close Phase 4 live SDK verification gaps behind a fresh approval gate
+- [x] 04-08-PLAN.md — Close Phase 4 live SDK verification gaps behind a fresh approval gate
 **UI hint**: no
 
 ### Phase 5: Hostile Pages, Real Web and Freeze
@@ -183,7 +183,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
-| 4. Claude Brain and Label Repair | 6/7 | In Progress |  |
+| 4. Claude Brain and Label Repair | 8/8 | Complete   | 2026-10-17 |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
