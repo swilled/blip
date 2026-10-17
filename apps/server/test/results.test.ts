@@ -42,6 +42,19 @@ describe("interpretResult", () => {
     expect(interpretResult(snapshot, buildBaselineFormModel(snapshot)).status).toBe("unverified");
   });
 
+  it("does not combine a fresh page with a model from a different snapshot", () => {
+    const snapshot = loadSnapshot("result-errors");
+    const model = buildBaselineFormModel(snapshot);
+    snapshot.version += 1;
+
+    expect(interpretResult(snapshot, model)).toEqual({
+      status: "unverified",
+      confirmationNumber: null,
+      fieldErrors: [],
+      pageErrors: [],
+    });
+  });
+
   it("reports every labeled field error in document order and page errors separately", () => {
     const { result } = interpretFixture("result-errors");
 
