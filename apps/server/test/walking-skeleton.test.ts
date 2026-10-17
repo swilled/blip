@@ -234,12 +234,13 @@ describe("grammar commands", () => {
 });
 
 describe("fail-closed brain (T-01-26, GATE-05 foundation)", () => {
-  it("a requested action is refused: no act.request reaches the extension and nothing is armed", async () => {
+  it("a requested gated action reads back but is not dispatched or armed before speech completes", async () => {
     const r = await rig({ server: { fakeRequestActionId: "e10" } });
     try {
       const frames = await turn(r.voice, "go ahead and book it");
-      const spoken = speaks(frames).map((f) => f.payload.text);
-      expect(spoken).toContain("I can't do that yet.");
+      const confirmationPrompt = speaks(frames).find((frame) => frame.payload.category === "confirm-prompt");
+      expect(confirmationPrompt?.payload.text).toContain("Page: Hotel booking.");
+      expect(confirmationPrompt?.payload.text).toContain("To continue, say: submit booking.");
       await sleep(100);
       expect(r.extension!.received().filter((m) => m.type === "act.request")).toHaveLength(0);
       expect(r.voice.frames.some((f) => f.type === "confirm.armed")).toBe(false);
