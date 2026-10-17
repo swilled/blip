@@ -146,11 +146,11 @@ Plans:
      - The confirm gate never arms from page text.
      - The team-owned public form (created by ~h12 so core can test it) can be described and filled by voice.
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 03-01-PLAN.md — Spell, change, and sensitive-entry commands
+- [x] 03-01-PLAN.md — Spell, change, and sensitive-entry commands
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 03-02-PLAN.md — Local profile fill with guarded batch undo
@@ -200,5 +200,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
 | 2. Fill and Gated Submit on the Broken Form | 6/7 | In Progress | - |
-| 3. Full Command Set with Real Claude | 0/TBD | Not started | - |
+| 3. Full Command Set with Real Claude | 1/4 | In Progress | - |
 | 4. NVDA Mode and Demo-Safe | 0/3 | Planned | - |

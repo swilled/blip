@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 3
 current_phase_name: Full Command Set with Real Claude
 status: executing
-stopped_at: Phase 3 planned; Phase 2 I2 human run pending before Phase 3 execution
-last_updated: "2026-10-17T07:32:41.227Z"
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-10-17T19:08:26.386Z"
 last_activity: 2026-10-17
-last_activity_desc: Phase 3 planning complete; 4 plans ready; Phase 2 I2 run remains the execution prerequisite
-state_head: f697dc743a72dbb3a02bfc878a20fd71ae9ef0b2
+last_activity_desc: Completed Phase 3 Plan 03-01; spell, change, and sensitive handoff behaviors are verified
+state_head: 5132756526e1811e609a03fe22b988a42d637a6f
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 22
-  completed_plans: 17
+  total_plans: 25
+  completed_plans: 19
 milestone_name: milestone
 ---
 
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 02 — Finish the pending I2 human run before executing the Phase 03 plans
+**Current focus:** Phase 03 — Continue with Plan 2 of 4
 
 ## Current Position
 
 Phase: 3 (Full Command Set with Real Claude) — READY TO EXECUTE
-Plan: 1 of 4
-Status: Phase 03 plans ready; execution waits for the Phase 02 I2 human run
-Last activity: 2026-10-17 — Phase 3 planning complete; Phase 2 I2 prerequisite remains
+Plan: 2 of 4
+Status: Plan 1 of 4 complete; Plan 2 is ready
+Last activity: 2026-10-17 — Completed 03-01: spell, change, and sensitive handoff behavior
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -71,6 +71,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P04 | 18min | 3 tasks | 13 files |
 | Phase 02 P05 | 12min | 3 tasks | 6 files |
 | Phase 02 P06 | 14min | 3 tasks | 10 files |
+| Phase 03 P01 | 8min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -89,10 +90,12 @@ Recent decisions affecting the voice track:
 - [Phase 02]: Spoken echo and read-back use observed page values and hide sensitive fields. — The user hears what the page holds while password and card values remain undisclosed.
 - [Phase 02]: Keep kind: armConfirm as the Effect discriminant and name its ActionKind payload actionKind. — An Effect object cannot carry two different kind properties; this keeps the type contract unambiguous and aligned with Plans 02-05 and 02-06.
 - [Phase 02]: Keep the development GatePort fail-closed until core supplies a grant-bound Executor. — The voice runner can verify the confirmation path without allowing an unconnected gate to submit.
+- [Phase 03]: Spell only non-sensitive values from the current FormModel, naming punctuation between characters.
+- [Phase 03]: Confirm a named change from the prior safe value and act.result.observedValue, never from the requested value.
+- [Phase 03]: Redact utterances that trigger sensitive-field focus before sending transcript frames.
 
 ### Pending Todos
 
-- Complete Phase 2 Plan 02-07 and its human I2 run before starting Phase 3 execution.
 - Keep the “only ‘submit survey’ submits” criterion `human_needed` until HO-8's core Gate/Executor handoff and the separate I2 run pass.
 
 ### Blockers/Concerns
@@ -111,6 +114,6 @@ Recent decisions affecting the voice track:
 
 ## Session Continuity
 
-Last session: 2026-10-17T07:08:02.318Z
-Stopped at: Phase 3 plans ready; Phase 2 I2 human run pending before Phase 3 execution
-Resume file: .planning/workstreams/voice/phases/02-fill-and-gated-submit-on-the-broken-form/02-07-PLAN.md
+Last session: 2026-10-17T19:08:25.973Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None
