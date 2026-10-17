@@ -12,7 +12,7 @@ import { createRefresher, type Refresher } from "./session/refresh";
 import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
 import { createClaudeProvider, type ClaudeProvider } from "./brain/claude/provider";
 import { RepairCoordinator, type RepairProvider } from "./brain/claude/repair-coordinator";
-import type { ClaudeSdkAdapter } from "./brain/claude/session";
+import type { ClaudeSdkAdapter, ClaudeSessionOptions } from "./brain/claude/session";
 import { handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
 
@@ -31,6 +31,10 @@ export type StartServerOptions = {
   fakeRequestActionPhrase?: string;
   /** Test-only: injects a scripted SDK boundary; production loads the SDK only in Claude mode. */
   claudeAdapter?: ClaudeSdkAdapter;
+  /** Narrow opt-in hooks for bounded local Claude checks; normal startup has no dispatch hooks. */
+  claudeSessionHooks?: Pick<ClaudeSessionOptions,
+    "beforeBootstrapDispatch" | "beforePromptDispatch" | "onStartupDiagnostic" | "startupSignal"
+  >;
   /** Test seam for repair flow; production uses the repair role of the Claude provider. */
   repairProvider?: RepairProvider;
   /** Optional repair cache path; temporary directories are used in tests. */
@@ -122,7 +126,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   let claudeProvider: ClaudeProvider | null = null;
   let brain: IntentBrain | ClaudeProvider;
   if (brainMode === "claude") {
-    claudeProvider = await createClaudeProvider({ ...(options.claudeAdapter !== undefined ? { adapter: options.claudeAdapter } : {}) });
+    claudeProvider = await createClaudeProvider({
+      ...(options.claudeAdapter !== undefined ? { adapter: options.claudeAdapter } : {}),
+      ...(options.claudeSessionHooks !== undefined ? options.claudeSessionHooks : {}),
+    });
     brain = claudeProvider;
   } else {
     brain = createFakeBrain({

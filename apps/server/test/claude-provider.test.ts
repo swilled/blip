@@ -12,6 +12,7 @@ import type {
   ClaudeRoleSession,
   ClaudeSdkAdapter,
 } from "../src/brain/claude/session";
+import { classifyClaudeSdkEvent } from "../src/brain/claude/session";
 
 type Deferred<T> = { promise: Promise<T>; resolve(value: T): void };
 function deferred<T>(): Deferred<T> {
@@ -24,6 +25,7 @@ function scriptedAdapter(options: {
   toolsFor?: (config: ClaudeRoleConfig) => unknown;
   answer?: (config: ClaudeRoleConfig, prompt: string) => Promise<string>;
   bootstrapAnswer?: (config: ClaudeRoleConfig, prompt: string) => Promise<string>;
+  onCall?: (config: ClaudeRoleConfig, prompt: string) => void;
   onClose?: (config: ClaudeRoleConfig) => void;
 } = {}) {
   const configs: ClaudeRoleConfig[] = [];
@@ -40,6 +42,7 @@ function scriptedAdapter(options: {
           return { tools: options.toolsFor === undefined ? [] : options.toolsFor(config) };
         },
         call(prompt) {
+          options.onCall?.(config, prompt);
           calls.push({ role: config.role, prompt });
           callNumber += 1;
           if (callNumber === 1) {
@@ -132,39 +135,61 @@ describe("Claude role provider", () => {
     expect(tempDirs).toHaveLength(2);
   });
 
-  it("requires a strict, harmless schema-valid synthetic result for each role bootstrap", async () => {
-    const intent = scriptedAdapter({
-      bootstrapAnswer: (config) => Promise.resolve(config.role === "intent"
-        ? '{"type":"describe","text":"must be rejected"}'
-        : '{"fields":[{"id":"bootstrap-field","label":"Synthetic field","confidence":0.5}]}'),
+  it("emits only allowlisted SDK startup categories and milestones", async () => {
+    const f = scriptedAdapter();
+    const diagnostics: unknown[] = [];
+    provider = await createClaudeProvider({
+      adapter: f.adapter,
+      onStartupDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     });
-    const intentOutcome = await createClaudeProvider({ adapter: intent.adapter }).then(() => null, (error: unknown) => error);
-    expect(intentOutcome).toMatchObject({ name: "Error", message: "Claude synthetic intent bootstrap result was rejected." });
-    expect(intent.closed).toContain("intent");
-    expect(intent.calls).toHaveLength(1);
 
-    const repair = scriptedAdapter({
-      bootstrapAnswer: (config) => Promise.resolve(config.role === "repair"
-        ? '{"fields":[{"id":"not-the-synthetic-id","label":"Synthetic field"}]}'
-        : '{"type":"describe"}'),
-    });
-    const repairOutcome = await createClaudeProvider({ adapter: repair.adapter }).then(() => null, (error: unknown) => error);
-    expect(repairOutcome).toMatchObject({ name: "Error", message: "Claude synthetic repair bootstrap result was rejected." });
-    expect(repair.closed.sort()).toEqual(["intent", "repair"]);
-    expect(repair.calls.map(({ role }) => role)).toEqual(["intent", "repair"]);
-    expect((repairOutcome as Error).message).not.toContain("not-the-synthetic-id");
+    expect(diagnostics).toEqual([
+      { kind: "milestone", role: "intent", milestone: "init_received" },
+      { kind: "milestone", role: "intent", milestone: "empty_tools_accepted" },
+      { kind: "milestone", role: "intent", milestone: "bootstrap_completed" },
+      { kind: "milestone", role: "repair", milestone: "init_received" },
+      { kind: "milestone", role: "repair", milestone: "empty_tools_accepted" },
+      { kind: "milestone", role: "repair", milestone: "bootstrap_completed" },
+    ]);
+
+    const secret = "sdk-payload-secret-sentinel";
+    expect(classifyClaudeSdkEvent({ type: "system", subtype: "init", tools: [secret], account: secret }))
+      .toBe("system_init");
+    expect(classifyClaudeSdkEvent({ type: "system", subtype: secret, message: secret })).toBe("system_other");
+    expect(classifyClaudeSdkEvent({ type: secret, message: secret })).toBe("other");
+    expect(JSON.stringify(diagnostics)).not.toContain(secret);
   });
 
-  it("requires repair bootstrap output to validate the exact eligible synthetic field", async () => {
-    const f = scriptedAdapter({
-      bootstrapAnswer: (config) => Promise.resolve(config.role === "repair"
-        ? '{"title":"Synthetic title only","fields":[]}'
-        : '{"type":"describe"}'),
+  it("keeps startup diagnostic callback failures observational", async () => {
+    const f = scriptedAdapter();
+    provider = await createClaudeProvider({
+      adapter: f.adapter,
+      onStartupDiagnostic: () => { throw new Error("diagnostic callback sentinel"); },
     });
-    await expect(createClaudeProvider({ adapter: f.adapter })).rejects.toThrow(
-      "Claude synthetic repair bootstrap result was rejected.",
-    );
+
+    expect(f.started).toEqual(["intent", "repair"]);
+    expect(f.calls).toHaveLength(2);
+  });
+
+  it("discards arbitrary prewarm output and still waits for both successful SDK turns", async () => {
+    const secret = "raw-prewarm-output-secret-sentinel";
+    const f = scriptedAdapter({ bootstrapAnswer: async () => secret });
+    const diagnostics: unknown[] = [];
+    provider = await createClaudeProvider({
+      adapter: f.adapter,
+      onStartupDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+
+    expect(f.started).toEqual(["intent", "repair"]);
     expect(f.calls.map(({ role }) => role)).toEqual(["intent", "repair"]);
+    expect(diagnostics).toContainEqual({
+      kind: "milestone", role: "intent", milestone: "bootstrap_completed",
+    });
+    expect(diagnostics).toContainEqual({
+      kind: "milestone", role: "repair", milestone: "bootstrap_completed",
+    });
+    expect(JSON.stringify(diagnostics)).not.toContain(secret);
+    expect(await provider.parseIntent("actual application prompt")).toEqual({ type: "describe" });
   });
 
   it("waits for both bootstrap terminal results before returning the provider", async () => {
@@ -347,6 +372,50 @@ describe("Claude role provider", () => {
     expect(f.closed).toContain("intent");
   });
 
+  it("checks every ordinary prompt synchronously before the SDK receives it and fails closed at the shared cap", async () => {
+    const events: string[] = [];
+    const sdkCalls: Record<string, number> = { intent: 0, repair: 0 };
+    const f = scriptedAdapter({
+      onCall: (config) => {
+        sdkCalls[config.role] = (sdkCalls[config.role] ?? 0) + 1;
+        events.push(`sdk:${config.role}:${sdkCalls[config.role] === 1 ? "bootstrap" : "intent"}`);
+      },
+    });
+    let dispatches = 0;
+    provider = await createClaudeProvider({
+      adapter: f.adapter,
+      beforeBootstrapDispatch: (role) => {
+        dispatches += 1;
+        events.push(`bootstrap-hook:${role}`);
+      },
+      beforePromptDispatch: (role) => {
+        dispatches += 1;
+        events.push(`prompt-hook:${role}`);
+        if (dispatches > 8) throw new Error("dispatch cap reached");
+      },
+    });
+
+    expect(events.slice(0, 4)).toEqual([
+      "bootstrap-hook:intent",
+      "sdk:intent:bootstrap",
+      "bootstrap-hook:repair",
+      "sdk:repair:bootstrap",
+    ]);
+
+    for (let call = 0; call < 6; call += 1) {
+      await provider.parseIntent(`synthetic request ${call}`);
+    }
+    expect(events.slice(4, 16)).toEqual(Array.from({ length: 6 }, () => [
+      "prompt-hook:intent",
+      "sdk:intent:intent",
+    ]).flat());
+    const countBeforeRejectedDispatch = f.calls.length;
+    await expect(provider.parseIntent("must fail closed")).rejects.toThrow("dispatch cap reached");
+    expect(dispatches).toBe(9);
+    expect(f.calls).toHaveLength(countBeforeRejectedDispatch);
+    expect(events.at(-1)).toBe("prompt-hook:intent");
+  });
+
   it("aborts and recreates a role before accepting calls; late old-generation output is rejected", async () => {
     const calls: Array<Deferred<string>> = [];
     const bootstrapDispatches: string[] = [];
@@ -384,15 +453,45 @@ describe("Claude role provider", () => {
     expect(bootstrapDispatches).toEqual(["intent", "repair", "intent"]);
   });
 
-  it("returns only parsed Intent or strict repair patch data", async () => {
-    const f = scriptedAdapter({
-      answer: (config) => Promise.resolve(config.role === "intent"
-        ? '{"type":"request_action","actionId":"act1","approve":true}'
-        : '{"fields":[],"snapshot":{"value":"forbidden"}}'),
-    });
-    provider = await createClaudeProvider({ adapter: f.adapter });
+  it("classifies local output rejection without exposing model content", async () => {
+    const intentCases = [
+      ["invalid-json-private-sentinel", "invalid_json"],
+      ['{"type":"not-an-intent","private":"intent-schema-sentinel"}', "intent_schema_rejected"],
+      ['{"type":"describe","private":"intent-shape-sentinel"}', "intent_shape_rejected"],
+    ] as const;
 
-    await expect(provider.parseIntent("safe prompt")).rejects.toBeInstanceOf(InvalidClaudeOutputError);
-    await expect(provider.repairFormModel("safe prompt")).rejects.toBeInstanceOf(InvalidClaudeOutputError);
+    for (const [raw, category] of intentCases) {
+      const f = scriptedAdapter({ answer: () => Promise.resolve(raw) });
+      provider = await createClaudeProvider({ adapter: f.adapter });
+      let failure: unknown;
+      try {
+        await provider.parseIntent("safe synthetic prompt");
+      } catch (error) {
+        failure = error;
+      }
+
+      expect(failure).toBeInstanceOf(InvalidClaudeOutputError);
+      expect(failure).toMatchObject({ role: "intent", category });
+      expect((failure as Error).message).toBe("Claude output was rejected by local validation.");
+      expect(JSON.stringify(failure)).not.toContain("private");
+      expect((failure as Error).message).not.toContain("sentinel");
+      await provider.close();
+      provider = undefined;
+    }
+
+    const repairRaw = '{"fields":[{"id":"repair-sentinel","unexpected":"private"}]}';
+    const repair = scriptedAdapter({
+      answer: (config) => Promise.resolve(config.role === "repair" ? repairRaw : '{"type":"describe"}'),
+    });
+    provider = await createClaudeProvider({ adapter: repair.adapter });
+    let repairFailure: unknown;
+    try {
+      await provider.repairFormModel("safe synthetic repair prompt");
+    } catch (error) {
+      repairFailure = error;
+    }
+    expect(repairFailure).toBeInstanceOf(InvalidClaudeOutputError);
+    expect(repairFailure).toMatchObject({ role: "repair", category: "repair_schema_rejected" });
+    expect((repairFailure as Error).message).not.toContain("repair-sentinel");
   });
 });

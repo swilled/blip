@@ -67,8 +67,18 @@ describe("server brain mode", () => {
 
   it("Claude startup initializes and validates both roles before the server listens", async () => {
     const events: string[] = [];
+    const bootstrapDispatches: string[] = [];
     const f = adapterWithInit({ events });
-    const server = await startServer({ port: 0, dev: true, brain: "claude", claudeAdapter: f.adapter });
+    const server = await startServer({
+      port: 0,
+      dev: true,
+      brain: "claude",
+      claudeAdapter: f.adapter,
+      claudeSessionHooks: {
+        beforeBootstrapDispatch: (role) => bootstrapDispatches.push(role),
+        beforePromptDispatch: () => { throw new Error("ordinary prompt hook must not run for bootstrap"); },
+      },
+    });
     try {
       expect(events).toEqual(["create:intent", "init:intent", "create:repair", "init:repair"]);
       expect(server.config.brain).toBe("claude");
@@ -77,6 +87,7 @@ describe("server brain mode", () => {
       await server.close();
     }
     expect(f.close).toHaveBeenCalledTimes(2);
+    expect(bootstrapDispatches).toEqual(["intent", "repair"]);
   });
 
   it("fails startup and closes partial roles if init reports an unexpected tool", async () => {
