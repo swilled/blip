@@ -82,7 +82,15 @@ Plans:
   5. I1 (~h6-8): the voice developer's UI sends an utterance that travels through the server to the extension (real one preferred, fake acceptable) and comes back as a spoken reply.
 
 **Research**: Spike needed: React/Vue-safe fills (native value setter + bubbling `input`/`change`), MV3 service-worker keepalive and reconnect, shadow DOM and iframes. Check `--silent-debugger-extension-api` only if CDP gets used.
-**Plans**: TBD
+**Plans:** 6 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Dependency-pin gate, `@blip/extension` esbuild build and MV3 manifest, service-worker socket with keepalive/backoff/alarm, real-browser connect and reconnect harness (`npm run ext:smoke`)
+- [ ] 02-02-PLAN.md — Server freshness (single-flight refresh on `page.changed`, snapshot ordering) and the fail-closed `classifyAction`/`classifyField` rules in `@blip/policy` (PAGE-03)
+- [ ] 02-03-PLAN.md — Extension read path: content-script DOM walk, label/required/error/sensitive heuristics, fail-closed kinds, shadow DOM, frames, caps, versions (PAGE-01, PAGE-03)
+- [ ] 02-04-PLAN.md — Developer rig: REPL act path (`fill <label> with <value>`, `--no-fake-extension`), test pages server, `ext:chrome` launcher (ACT-01, ACT-02, ACT-04 server half)
+- [ ] 02-05-PLAN.md — React-safe fills with DOM read-back, gated-click and sensitive-write refusals, highlight overlay, page-change detection (ACT-01..ACT-04, PAGE-05)
+- [ ] 02-06-PLAN.md — Real-browser verification matrix, I1 voice-path check, manual Chrome/Edge checklist
 **UI hint**: no
 
 ### Phase 3: Gated Submit and Result Reading
@@ -149,7 +157,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
-| 2. Real Page Read and Fill | 0/TBD | Not started | - |
+| 2. Real Page Read and Fill | 0/6 | Planned | - |
 | 3. Gated Submit and Result Reading | 0/TBD | Not started | - |
 | 4. Claude Brain and Label Repair | 0/TBD | Not started | - |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
