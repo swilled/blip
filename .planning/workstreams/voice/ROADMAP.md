@@ -65,7 +65,7 @@ Decimal phases appear between their surrounding integers in numeric order.
      - Global push-to-talk: uiohook-napi hold-to-talk or `chrome.commands` toggle?
      - The voice-window layout chosen from those results.
   3. With the Chrome form tab focused, the user holds the push-to-talk key, speaks and releases. The voice window's live transcript shows what they said and what Blip replied. Typing the same command into the text box gives the same reply.
-  4. Blip replies in its own voice and plays earcons (listening on key-down, thinking while waiting, blocked). It says "one moment" once when a reply takes over ~1.5 s. The mic is never open while Blip is speaking. Saying "stop" (or pressing push-to-talk) cuts Blip off right away.
+  4. Blip replies in its own voice and plays earcons (listening on key-down, thinking while waiting, blocked). It says "one moment" once when a reply takes over ~1.5 s. The user can interrupt Blip by speaking or by holding push-to-talk; the server never accepts a confirm phrase while Blip speaks or within 1 s after (core GATE-08). Saying "stop" (or pressing push-to-talk) cuts Blip off right away.
   5. **I1 (~h6–8):** With the real server in place of the mock, the user says "what's here" on a page served through the fake or real extension. They hear a short counts-first summary from the reducer, such as "Survey form. 6 fields, 3 required."
 
 **Notes**:

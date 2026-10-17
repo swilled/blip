@@ -382,25 +382,29 @@ function onReply() { clearTimeout(timer); }
 - `--load-extension` in launchers (removed from branded Chrome 137, CLAUDE.md). Not relevant to Phase 1 beyond the launch command.
 - `chrome.commands` as primary PTT: toggle only, no keyup. Fallback only.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does "stop" by voice work while Blip speaks? (decision needed, blocks Spike F)**
    - What we know: D-03 says saying "stop" cuts Blip off. D-03's second clause and VOX-05 say the mic never opens while Blip speaks.
    - What's unclear: these cannot both hold with the mic closed during speech.
    - Options: (a) "stop" by voice works only between turns, and the interrupt during speech is the PTT hold plus typed "stop" in the box; (b) open the mic during speech for a short "stop" listen window, which violates VOX-05 and needs echo handling; (c) use a keyboard key for interrupt (not voice). Recommendation: option (a) for Phase 1 and ask the user to amend D-03 and VOX-05 wording. The planner should not write a task that opens the mic during speech until this is decided.
    - Recommendation: pick (a) in the plan and flag it at the M0 review.
+   - RESOLVED: user decision D-03 and the amended VOX-05. Built as mic-open barge-in whose mode is chosen by Spike F (BARGE_IN_MODE voice | ptt-only). The recommendation (a) mic-closed is superseded and is not to be followed. The confirm guard is core GATE-08.
 
 2. **Does NVDA announce a live region in a non-focused app window?**
    - What we know: nothing found in documentation; NVDA focus behavior makes it unlikely to be reliable.
    - What's unclear: the actual behavior with this window layout.
    - Recommendation: test in Spike C2. Do not depend on it. Screen-reader output in Phase 4 uses the controller DLL (C1).
+   - RESOLVED: spike C2 results are recorded in 01-SPIKE-DECISIONS.md (LIVE_REGION).
 
 3. **Does Chrome set `visibilityState` to `hidden` when a foreground window is occluded on Windows?**
    - What we know: Chromium tracks native occlusion on Windows; the Visibility API and occlusion interaction is not clear from sources found.
    - Recommendation: Spike A case 3 measures it directly. The topmost pin avoids the question.
+   - RESOLVED: spike A results (case 3, STT_UNFOCUSED) are recorded in 01-SPIKE-DECISIONS.md.
 
 4. **Does the Ctrl+Space keystroke suppression in the content script need core's agreement?**
    - Yes. The content script is core's. Needs a one-line agreement at M0.
+   - RESOLVED: handed off as HO-1 in M0-SIGNOFF.md.
 
 ## Environment Availability
 
