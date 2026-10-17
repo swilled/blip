@@ -51,6 +51,34 @@ describe("persistent submit event guard", () => {
     expect(seenSubmitters).toEqual([first]);
   });
 
+  it("blocks a missing submitter and a different form during a pending allowance", () => {
+    const page = createDocument();
+    page.body.innerHTML = `
+      <form id="allowed"><button id="allowed-submit" type="submit">Allowed</button></form>
+      <form id="other"><button id="other-submit" type="submit">Other</button></form>
+    `;
+    const allowedForm = page.querySelector<HTMLFormElement>("#allowed")!;
+    const allowedSubmitter = page.querySelector<HTMLButtonElement>("#allowed-submit")!;
+    const otherForm = page.querySelector<HTMLFormElement>("#other")!;
+    const otherSubmitter = page.querySelector<HTMLButtonElement>("#other-submit")!;
+    const seenSubmitters: Array<HTMLElement | null> = [];
+    for (const form of [allowedForm, otherForm]) {
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        seenSubmitters.push((event as SubmitEvent).submitter as HTMLElement | null);
+      });
+    }
+
+    installPersistentSubmitGuard(page);
+    const cleanup = beginOneSubmitAllowance(allowedForm, allowedSubmitter);
+    allowedForm.requestSubmit();
+    otherForm.requestSubmit(otherSubmitter);
+    allowedForm.requestSubmit(allowedSubmitter);
+    cleanup();
+
+    expect(seenSubmitters).toEqual([allowedSubmitter]);
+  });
+
   it("clears an unused allowance when its dispatch cleanup runs", () => {
     const page = createDocument();
     page.body.innerHTML = '<form><button type="submit">Send</button></form>';

@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActRequest } from "@blip/protocol";
 import { executeAct } from "../src/content/act.js";
 import { captureFrameSnapshot } from "../src/content/snapshot.js";
+import { installPersistentSubmitGuard, isPersistentSubmitGuardInstalled } from "../src/content/submit-guard.js";
 
 beforeEach(() => {
   document.body.replaceChildren();
+  installPersistentSubmitGuard(document);
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
     x: 0, y: 0, top: 0, left: 0, right: 80, bottom: 20, width: 80, height: 20, toJSON: () => ({}),
   } as DOMRect);
@@ -19,13 +21,22 @@ function capture(frameId = 0): ReturnType<typeof captureFrameSnapshot> {
   return captureFrameSnapshot({ document, topOrigin: "https://forms.example", frameId, timeBudgetMs: 1000 });
 }
 
+function captureIn(page: Document, frameId = 0): ReturnType<typeof captureFrameSnapshot> {
+  return captureFrameSnapshot({ document: page, topOrigin: "https://forms.example", frameId, timeBudgetMs: 1000 });
+}
+
 function request(
   targetId: string,
   action: ActRequest["action"],
   expectedKind: ActRequest["expectedKind"] = "fill",
   frameId = 0,
+  gate?: ActRequest["gate"],
 ): ActRequest {
-  return { actId: "act-1", tabId: 1, snapshotVersion: 1, action: { ...action, targetId } as ActRequest["action"], expectedKind };
+  return {
+    actId: "act-1", tabId: 1, snapshotVersion: 1,
+    action: { ...action, targetId } as ActRequest["action"], expectedKind,
+    ...(gate !== undefined ? { gate } : {}),
+  };
 }
 
 describe("executeAct live safety checks", () => {
@@ -141,6 +152,132 @@ describe("executeAct live safety checks", () => {
       ok: false, error: "gate-required", liveKind: "submit",
     });
     expect(click).not.toHaveBeenCalled();
+  });
+
+  it("refuses a granted click when the live kind no longer matches the grant", async () => {
+    document.body.innerHTML = '<form><button id="save">Continue</button></form>';
+    const frame = capture();
+    const button = frame.elements[0]!;
+    const click = vi.fn();
+    document.querySelector("#save")!.addEventListener("click", click);
+
+    await expect(executeAct(request(
+      button.id,
+      { op: "click", targetId: button.id },
+      "pay",
+      0,
+      { grantId: "grant-1", kind: "pay" },
+    ))).resolves.toMatchObject({ ok: false, error: "kind-mismatch", liveKind: "submit" });
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it("refuses a grant whose kind does not match the request", async () => {
+    document.body.innerHTML = '<form><button id="save">Continue</button></form>';
+    const frame = capture();
+    const button = frame.elements[0]!;
+    const click = vi.fn();
+    document.querySelector("#save")!.addEventListener("click", click);
+
+    await expect(executeAct(request(
+      button.id,
+      { op: "click", targetId: button.id },
+      "submit",
+      0,
+      { grantId: "grant-1", kind: "pay" },
+    ))).resolves.toMatchObject({ ok: false, error: "gate-required", liveKind: "submit" });
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it("refuses a gate attached to a click-safe action", async () => {
+    document.body.innerHTML = '<button id="close" type="button">Close</button>';
+    const frame = capture();
+    const button = frame.elements[0]!;
+    const click = vi.fn();
+    document.querySelector("#close")!.addEventListener("click", click);
+
+    await expect(executeAct(request(
+      button.id,
+      { op: "click", targetId: button.id },
+      "click-safe",
+      0,
+      { grantId: "grant-1", kind: "click-safe" },
+    ))).resolves.toMatchObject({ ok: false, error: "gate-required", liveKind: "click-safe" });
+    expect(click).not.toHaveBeenCalled();
+  });
+
+  it("allows exactly one submit from the clicked form and submitter during a valid gated click", async () => {
+    document.body.innerHTML = `
+      <form id="target"><button id="submit">Submit</button></form>
+      <form id="other"><button id="other-submit">Other</button></form>
+    `;
+    const frame = capture();
+    const button = frame.elements.find((item) => item.category === "action")!;
+    const form = document.querySelector<HTMLFormElement>("#target")!;
+    const submitter = document.querySelector<HTMLButtonElement>("#submit")!;
+    const otherForm = document.querySelector<HTMLFormElement>("#other")!;
+    const otherSubmitter = document.querySelector<HTMLButtonElement>("#other-submit")!;
+    const seenSubmitters: Array<HTMLElement | null> = [];
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      seenSubmitters.push((event as SubmitEvent).submitter as HTMLElement | null);
+      form.requestSubmit();
+      otherForm.requestSubmit(otherSubmitter);
+    });
+    otherForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      seenSubmitters.push((event as SubmitEvent).submitter as HTMLElement | null);
+    });
+
+    await expect(executeAct(request(
+      button.id,
+      { op: "click", targetId: button.id },
+      "submit",
+      0,
+      { grantId: "grant-1", kind: "submit" },
+    ))).resolves.toMatchObject({ ok: true, liveKind: "submit" });
+
+    form.requestSubmit(submitter);
+    expect(seenSubmitters).toEqual([submitter]);
+    expect(isPersistentSubmitGuardInstalled(document)).toBe(true);
+  });
+
+  it("does not authorize a submit from an ungated select change", async () => {
+    document.body.innerHTML = `
+      <form id="target">
+        <label for="choice">Choice</label>
+        <select id="choice"><option value="">Choose</option><option value="yes">Yes</option></select>
+        <button id="submit">Submit</button>
+      </form>
+    `;
+    const frame = capture();
+    const select = frame.elements.find((item) => item.category === "field")!;
+    const form = document.querySelector<HTMLFormElement>("#target")!;
+    const submitter = document.querySelector<HTMLButtonElement>("#submit")!;
+    const submit = vi.fn((event: Event) => event.preventDefault());
+    form.addEventListener("submit", submit);
+    document.querySelector("#choice")!.addEventListener("change", () => form.requestSubmit(submitter));
+
+    await expect(executeAct(request(
+      select.id,
+      { op: "select", targetId: select.id, optionValue: "yes" },
+      "select",
+    ))).resolves.toMatchObject({ ok: true, observedValue: "yes" });
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(isPersistentSubmitGuardInstalled(document)).toBe(true);
+  });
+
+  it("refuses every act when the document-start persistent guard is absent", async () => {
+    const page = document.implementation.createHTMLDocument("unguarded page");
+    page.body.innerHTML = '<label for="name">Name</label><input id="name">';
+    const frame = captureIn(page);
+    const field = frame.elements[0]!;
+
+    await expect(executeAct(
+      request(field.id, { op: "fill", targetId: field.id, value: "Ada" }),
+      { document: page },
+    )).resolves.toMatchObject({ ok: false, error: "exception" });
+    expect(page.querySelector<HTMLInputElement>("#name")?.value).toBe("");
   });
 
   it("routes a frame-qualified id only to the matching frame", async () => {
