@@ -18,7 +18,7 @@ Core builds Blip's trust machinery from the contract outward. Phase 1 freezes th
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Contract and Walking Skeleton** - Frozen `@blip/protocol`, a loopback-only server hub, and fakes (extension, brain, REPL) so the whole loop runs offline
-- [ ] **Phase 2: Real Page Read and Fill** - The Chrome extension snapshots a live form, classifies every action by rule, and fills fields with DOM-verified values
+- [x] **Phase 2: Real Page Read and Fill** - The Chrome extension snapshots a live form, classifies every action by rule, and fills fields with DOM-verified values (completed 2026-10-17)
 - [ ] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2)
 - [ ] **Phase 4: Claude Brain and Label Repair** - Locked-down, pre-warmed Claude turns free-form speech into Intents and repairs unlabeled fields in the background
 - [ ] **Phase 5: Hostile Pages, Real Web and Freeze** - Injection page blocked and flagged, real public form works (I3), one-command startup, `demo-safe` freeze
@@ -82,7 +82,7 @@ Plans:
   5. I1 (~h6-8): the voice developer's UI sends an utterance that travels through the server to the extension (real one preferred, fake acceptable) and comes back as a spoken reply.
 
 **Research**: Spike needed: React/Vue-safe fills (native value setter + bubbling `input`/`change`), MV3 service-worker keepalive and reconnect, shadow DOM and iframes. Check `--silent-debugger-extension-api` only if CDP gets used.
-**Plans:** 20 plans
+**Plans:** 20/20 plans complete
 
 Plans:
 - [x] 02-01-PLAN.md — Review exact dependency pins before installation
@@ -171,7 +171,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
-| 2. Real Page Read and Fill | 0/20 | Planned | - |
+| 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 0/TBD | Not started | - |
 | 4. Claude Brain and Label Repair | 0/TBD | Not started | - |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |

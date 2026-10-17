@@ -100,6 +100,10 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 | GSD workstreams `core` and `voice`, one per developer | Separate STATE/ROADMAP per machine avoids planning merge conflicts | — Pending |
 | Project and agent named "Blip" | Humanizes the agent | ✓ Good |
 
+| Bound Phase 2 snapshots at 250 elements; defer the roughly 8k-token trim to Phase 4's model prompt | Keeps the extension wire snapshot bounded while preserving the distinction between capture and model context | Good |
+| Recheck value shape after every write and redact sensitive-like results before read-back | A card-shaped value must not cross into replies or server state just because the destination field was not classified beforehand | Good |
+| Block submit events throughout every extension act; treat readonly fields as disabled and check gated text in labels and link targets | Prevents autofill-triggered submission and unsafe click classification before Phase 3 grants are implemented | Good |
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
@@ -118,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-16 after initialization*
+*Last updated: 2026-10-17 after Phase 2*
