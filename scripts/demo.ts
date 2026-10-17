@@ -255,11 +255,38 @@ async function runDemo(options: DemoOptions): Promise<number> {
     let launchError: Error | undefined;
     browserChild.once("error", (error) => { launchError = error; });
 
-    const ready = await waitForExtensionReady(async () => {
+    const dedicatedExtensionPresent = await hasExtensionInProfile(profileDirectory);
+    if (!dedicatedExtensionPresent && !options.smoke) {
+      process.stdout.write(
+        `DEMO_SETUP_REQUIRED: Load unpacked at chrome://extensions or edge://extensions in this dedicated profile using ${extensionDist}; this command will keep waiting for readiness.\n`,
+      );
+    }
+    let finishSignal!: () => void;
+    let stopped = false;
+    const stopPromise = new Promise<void>((resolve) => { finishSignal = resolve; });
+    const onStop = () => {
+      stopped = true;
+      finishSignal();
+    };
+    process.once("SIGINT", onStop);
+    process.once("SIGTERM", onStop);
+
+    const readiness = waitForExtensionReady(async () => {
       if (launchError !== undefined) throw launchError;
       if (browserChild.exitCode !== null) throw new Error(`browser exited before extension readiness (code ${browserChild.exitCode})`);
       return server!.session.extensionConnected && await hasExtensionInProfile(profileDirectory);
-    }, { timeoutMs: READY_TIMEOUT_MS, intervalMs: READY_POLL_MS });
+    }, { timeoutMs: options.smoke ? READY_TIMEOUT_MS : Number.POSITIVE_INFINITY, intervalMs: READY_POLL_MS });
+    const ready = await Promise.race([
+      readiness,
+      stopPromise.then(() => false),
+    ]);
+    process.off("SIGINT", onStop);
+    process.off("SIGTERM", onStop);
+
+    if (stopped) {
+      await cleanup();
+      return 0;
+    }
 
     if (!ready) {
       const installed = await hasExtensionInProfile(profileDirectory);
