@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 04-06; 04-05 awaits voice-owner sign-off; 04-07 depends on 04-05
-last_updated: "2026-10-17T08:37:28.379Z"
+stopped_at: Completed 04-05; 04-07 is next
+last_updated: "2026-10-17T10:06:31.485Z"
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 38
-  completed_plans: 36
+  completed_plans: 37
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 4 (Claude Brain and Label Repair) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Plan: 5 of 7
 | Phase 03 P05 | 9m | 2 tasks | 11 files |
 | Phase 03 P06 | 22m | 3 tasks | 11 files |
 | Phase 04 P01 | 13m | 3 tasks | 4 files |
+| Phase 04 P05 | 6 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,7 @@ Recent decisions affecting current work:
 - [Phase 03]: The fake request-action phrase is an optional exact-match test hook; omission preserves static fake behavior.
 - [Phase 03]: Report submit outcomes only from fresh page evidence, keeping labeled field errors separate from page errors and sensitive values presence-only.
 - [Phase 04]: Keep the D-01 fallback provisional; no live spike ran because active eligible local subscription and usage allocation were not confirmed.
+- [Phase 04]: Voice-owner approval was reported in the 2026-10-17 checkpoint response; Core proceeded with the exact deterministic-raw/model-resolved label source split.
 
 ### Pending Todos
 
@@ -111,11 +113,11 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; voice's `Effect` union remains a cross-track integration item
-- [Phase 4] Live `outputFormat` + `startup()` composition remains unverified. The owner response did not confirm an eligible local subscription or usage allocation, so no live call was made; keep the D-01 fallback provisional and preserve the live spike as a follow-up checkpoint.
+- [Phase 4] Live `outputFormat` + `startup()` composition remains unverified. The owner authorized one bounded local spike; keep the D-01 fallback provisional until the orchestrator records its result.
 - [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
-- Phase 4 Plan 04-05 shared protocol label-source split awaits explicit voice-owner sign-off; protocol files remain untouched.
+- [Phase 4] Plan 04-05's approved label-source split is complete; Plan 04-07 is now unblocked and next.
 
 ## Deferred Items
 
@@ -127,6 +129,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T08:37:28.374Z
-Stopped at: Completed 04-06; 04-05 awaits voice-owner sign-off; 04-07 depends on 04-05
-Resume file: .planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-05-PLAN.md
+Last session: 2026-10-17T10:06:31.478Z
+Stopped at: Completed 04-05; 04-07 is next
+Resume file: None
