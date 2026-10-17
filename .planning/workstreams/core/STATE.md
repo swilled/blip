@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-10-17T06:44:04.067Z"
+stopped_at: Completed 03-05-PLAN.md
+last_updated: "2026-10-17T06:55:28.400Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 31
-  completed_plans: 29
+  completed_plans: 30
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 03 (gated-submit-and-result-reading) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Plan: 4 of 6
 | Phase 03 P03 | 6 min | 2 tasks | 9 files |
 | Phase 03 P02 | 14m | 3 tasks | 8 files |
 | Phase 03 P04 | 8m | 3 tasks | 10 files |
+| Phase 03 P05 | 9m | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Model gated Intents enter the same deterministic Executor for read-back; model output cannot authorize dispatch.
 - [Phase 03]: Require a nonempty, kind-matching grant and verified guard in the exact target frame before forwarding gated clicks.
 - [Phase 03]: Permit only one exact-form and submitter event synchronously during a valid gated click; keep persistent barriers installed.
+- [Phase 03]: Result classification requires the model to match the accepted snapshot version, URL, and structural hash.
+- [Phase 03]: Successful refreshes return the exact Snapshot accepted by Session.applySnapshot so post-action interpretation needs no duplicate fetch.
+- [Phase 03]: The exact normalized what-went-wrong local command refreshes and reports current errors only.
 
 ### Pending Todos
 
@@ -118,6 +122,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T06:44:04.060Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-10-17T06:55:28.394Z
+Stopped at: Completed 03-05-PLAN.md
 Resume file: None

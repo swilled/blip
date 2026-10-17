@@ -49,8 +49,8 @@
 
 ### Results
 
-- [ ] **RES-01**: After a gated submit, Blip reads the result page: a confirmation (with any confirmation number) or each error tied to its field; it never claims success the page doesn't confirm
-- [ ] **RES-02**: User can ask "what went wrong" and hear each validation error tied to its field label
+- [x] **RES-01**: After a gated submit, Blip reads the result page: a confirmation (with any confirmation number) or each error tied to its field; it never claims success the page doesn't confirm
+- [x] **RES-02**: User can ask "what went wrong" and hear each validation error tied to its field label
 
 ## Cross-Track Dependencies
 

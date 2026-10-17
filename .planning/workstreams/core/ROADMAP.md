@@ -123,7 +123,7 @@ Plans:
   5. I2 (~h12): on the local broken demo form with the fake brain, a user goes describe -> fill -> read back -> says the phrase -> submitted, then hears the confirmation (with any confirmation number) or each error tied to its field label; "what went wrong" repeats the errors, and Blip never claims a success the page doesn't show.
 
 **Research**: No research; needs adversarial tests in `packages/policy/test` ("yes", injected labels, typeless buttons, Enter, value change after read-back, phrase from the wrong socket).
-**Plans**: 3/6 plans executed
+**Plans**: 5/6 plans executed
 **UI hint**: no
 
 ### Phase 4: Claude Brain and Label Repair
