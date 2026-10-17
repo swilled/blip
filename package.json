@@ -13,7 +13,8 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "gen:extension-key": "tsx scripts/gen-extension-key.ts"
+    "gen:extension-key": "tsx scripts/gen-extension-key.ts",
+    "fixtures:update": "tsx scripts/gen-golden.ts"
   },
   "devDependencies": {
     "@types/node": "^24",
