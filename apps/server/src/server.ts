@@ -9,6 +9,7 @@ import { Session, type Brain } from "./session/session";
 import { createRefresher, type Refresher } from "./session/refresh";
 import { createFakeBrain } from "./brain/fake-brain";
 import { handleUtterance, sayRepeat, sayStop } from "./turn";
+import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
 
 export type StartServerOptions = {
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
@@ -27,6 +28,9 @@ export type StartServerOptions = {
   snapshotTimeoutMs?: number;
   /** Maximum model age for read_form and what's_required. Default 2000. */
   freshnessMs?: number;
+  /** Clock and timer seams keep the confirmation barrier deterministic in server tests. */
+  clock?: () => number;
+  schedule?: (callback: () => void, delayMs: number) => unknown;
   /** Optional static roots (voice build, form fixtures). Behind the same Host check as everything else. */
   staticRoots?: StaticRoot[];
 };
@@ -73,7 +77,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   if (options.brain === "claude") throw new BrainUnavailableError();
   const dev = options.dev ?? false;
   const extraVoiceOrigins = (options.extraVoiceOrigins ?? []).map(parseAllowedOrigin);
-  const session = new Session(options.brain ?? "fake");
+  const clock = options.clock ?? Date.now;
+  const schedule = options.schedule;
+  const session = new Session(options.brain ?? "fake", clock);
   let boundPort = options.port ?? DEFAULT_PORT;
   const serveStatic =
     options.staticRoots && options.staticRoots.length > 0 ? createStaticHandler(options.staticRoots) : undefined;
@@ -117,20 +123,42 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const defaultHandlers: Handlers = {
     utterance: ({ message, hub: h, session: s }) => {
       const run = turnQueue.then(() =>
-        handleUtterance({ message, hub: h, session: s, freshnessMs, refresher, brain }),
+        handleUtterance({
+          message,
+          hub: h,
+          session: s,
+          freshnessMs,
+          refresher,
+          brain,
+          clock,
+          ...(schedule !== undefined ? { schedule } : {}),
+        }),
       );
       turnQueue = run.catch(() => {}); // a failed turn is logged by the hub and must not block the next one
       return run;
     },
-    // Voice-side messages Phase 1 only needs to accept (D-14): speech completion is not sequenced yet,
-    // push-to-talk and settings have no effect on the offline loop.
-    "speak.done": () => {},
+    "speak.done": ({ message, hub: h, session: s }) => {
+      if (message.type !== "speak.done") return;
+      const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
+      handleGatedSpeakDone(gatedContext, message.payload);
+    },
     settings: () => {},
-    ptt: () => {},
+    ptt: ({ message, hub: h, session: s }) => {
+      if (message.type !== "ptt" || message.payload.state !== "start") return;
+      const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
+      invalidateGatedAction(gatedContext, "cancelled", "push-to-talk-interrupted");
+    },
     control: ({ message, hub: h, session: s }) => {
       if (message.type !== "control") return;
-      if (message.payload.cmd === "stop") return sayStop(h, s);
-      if (message.payload.cmd === "repeat") return sayRepeat(h, s);
+      const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
+      if (message.payload.cmd === "stop") {
+        invalidateGatedAction(gatedContext, "cancelled", "stop-command");
+        return sayStop(h, s);
+      }
+      if (message.payload.cmd === "repeat") {
+        invalidateGatedAction(gatedContext, "cancelled", "repeat-command");
+        return sayRepeat(h, s);
+      }
       // reconnect-browser has nothing to reconnect yet.
       h.send(
         "voice",
@@ -139,7 +167,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         { replyTo: message.id },
       );
     },
-    "page.changed": ({ session: s }) => {
+    "page.changed": ({ hub: h, session: s }) => {
+      const gatedContext: GatedContext = { hub: h, session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
+      invalidateGatedAction(gatedContext, "page-changed", "page-changed");
       s.stale = true;
       void refresher.request("refresh");
     },

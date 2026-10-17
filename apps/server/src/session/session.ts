@@ -21,6 +21,7 @@ export type PendingGatedAction = {
   binding: GrantBinding;
   grantId?: string;
   expiresAt?: number;
+  dispatching?: boolean;
 };
 
 /**

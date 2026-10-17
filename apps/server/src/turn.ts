@@ -7,6 +7,7 @@ import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
 import { executeUngated } from "./act/ungated";
+import { executeGatedAction, type GatedCommand } from "./act/gated";
 import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
 import type { Refresher } from "./session/refresh";
@@ -22,6 +23,9 @@ export type TurnContext = {
   refresher: Refresher;
   /** Resolves model-routed utterances to an Intent (the fake brain in Phase 1). */
   brain: IntentBrain;
+  /** Injected only for deterministic cooldown/grant tests; production uses the process clock. */
+  clock?: () => number;
+  schedule?: (callback: () => void, delayMs: number) => unknown;
 };
 
 type SpeakCategory = PayloadOf<"speak">["category"];
@@ -118,8 +122,11 @@ async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promi
       const result = await executeUngated(ctx, intent);
       return speak(hub, session, result.text, result.category);
     }
+    case "request_action":
+    case "click_safe":
+      return executeGatedAction(ctx, intent);
     default:
-      // request_action, click_safe, set_fields, fill_profile, ...: nothing acts in Phase 1 (T-01-26).
+      // No Intent approves an action; request_action and click_safe only enter the Executor above.
       return speak(hub, session, MSG_NOT_YET, "answer");
   }
 }
@@ -129,18 +136,25 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
   if (message.type !== "utterance") return;
   const { utteranceId, text } = message.payload;
 
-  const command = matchGrammar(text);
-  const fieldPhrase = matchFieldPhrase(text);
+  const hasPendingConfirmation = session.pendingGatedAction !== null;
+  const command = hasPendingConfirmation ? null : matchGrammar(text);
+  const fieldPhrase = hasPendingConfirmation ? null : matchFieldPhrase(text);
   hub.send("voice", "transcript", {
     utteranceId,
-    heardAs: fieldPhrase === null ? text : safePhraseForTranscript(fieldPhrase),
-    routedTo: command !== null || fieldPhrase !== null ? "grammar" : "model",
+    heardAs: hasPendingConfirmation ? text : fieldPhrase === null ? text : safePhraseForTranscript(fieldPhrase),
+    routedTo: hasPendingConfirmation || command !== null || fieldPhrase !== null ? "grammar" : "model",
   });
 
   session.busy = true;
-  session.dialogue = "describing";
+  session.dialogue = hasPendingConfirmation ? "awaiting-confirm" : "describing";
   hub.pushState();
   try {
+    if (hasPendingConfirmation) {
+      const confirmation: GatedCommand = { type: "confirmation", text };
+      await executeGatedAction(ctx, confirmation);
+      return;
+    }
+
     if (command !== null) {
       await runIntent(ctx, command);
     } else if (fieldPhrase !== null) {
@@ -185,7 +199,9 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
     }
   } finally {
     session.busy = false;
-    session.dialogue = session.model !== null && session.extensionConnected ? "ready" : "no-page";
+    session.dialogue = session.pendingGatedAction !== null
+      ? session.pendingGatedAction.grantId === undefined ? "reading-back" : "awaiting-confirm"
+      : session.model !== null && session.extensionConnected ? "ready" : "no-page";
     hub.pushState();
   }
 }

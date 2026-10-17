@@ -1,35 +1,83 @@
 import { describe, expect, it, vi } from "vitest";
 import { isGatedKind } from "@blip/protocol";
+import { phraseForKind } from "@blip/policy/confirmation";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 import { buildBaselineFormModel } from "../src/baseline";
 import { executeGatedAction, handleGatedSpeakDone } from "../src/act/gated";
 import type { Hub } from "../src/hub/hub";
 import { Session } from "../src/session/session";
+import { startServer } from "../src/server";
+import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
+import { bindClient, sleep, type Frame } from "./helpers";
+import { LOG_KEYS, setLogSink } from "../src/log";
 
-function preparationRig() {
+async function nextMatching(
+  client: Awaited<ReturnType<typeof bindClient>>,
+  predicate: (frame: Frame) => boolean,
+): Promise<Frame> {
+  for (let attempts = 0; attempts < 40; attempts++) {
+    const frame = await client.nextMessage(2_000);
+    if (predicate(frame)) return frame;
+  }
+  throw new Error("expected server frame was not received");
+}
+
+function preparationRig(options: { actResult?: { ok: boolean; error?: string; liveKind?: string } } = {}) {
   const snapshot = loadSnapshot("booking");
-  const session = new Session("fake");
+  const fakeTime = { now: 10_000 };
+  const clock = () => fakeTime.now;
+  const session = new Session("fake", clock);
   session.extensionConnected = true;
   session.applySnapshot(snapshot);
   const order: string[] = [];
   const outgoing: Array<{ type: string; payload: any }> = [];
+  const requests: Array<{ type: string; payload: any }> = [];
+  const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+  let nextSnapshot: ReturnType<typeof loadSnapshot> | null = null;
+  const action = session.model!.actions.find((candidate) => isGatedKind(candidate.kind))!;
   const hub = {
     send: vi.fn((_role: string, type: string, payload: any) => {
       order.push(type);
       outgoing.push({ type, payload });
       return true;
     }),
+    request: vi.fn(async (_role: string, type: string, payload: any) => {
+      requests.push({ type, payload });
+      return {
+        payload: {
+          actId: payload.actId,
+          ok: options.actResult?.ok ?? true,
+          ...(options.actResult?.error !== undefined ? { error: options.actResult.error } : {}),
+          ...(options.actResult?.liveKind !== undefined ? { liveKind: options.actResult.liveKind } : { liveKind: action.kind }),
+        },
+      };
+    }),
     pushState: vi.fn(),
   } as unknown as Hub;
   const refresher = {
     request: vi.fn(async () => {
       order.push("fresh-snapshot");
-      session.applySnapshot(snapshot);
+      session.applySnapshot(nextSnapshot ?? snapshot);
+      nextSnapshot = null;
       return { ok: true, applied: true } as const;
     }),
   };
-  const action = session.model!.actions.find((candidate) => isGatedKind(candidate.kind))!;
-  return { snapshot, session, order, outgoing, hub, refresher, action };
+  const schedule = (callback: () => void, delayMs: number) => scheduled.push({ callback, delayMs });
+  return {
+    snapshot,
+    session,
+    order,
+    outgoing,
+    requests,
+    scheduled,
+    fakeTime,
+    clock,
+    schedule,
+    hub,
+    refresher,
+    action,
+    setNextSnapshot(snapshot: ReturnType<typeof loadSnapshot>) { nextSnapshot = snapshot; },
+  };
 }
 
 describe("gated Executor read-back preparation", () => {
@@ -74,6 +122,7 @@ describe("gated Executor read-back preparation", () => {
       expect(spoken).toContain(`${field.label} is present and ${field.hasValue ? "has a value" : "has no value"}`);
       expect(spoken).not.toContain(field.value ?? "sensitive-value-sentinel");
     }
+    expect(spoken).toContain("Breakfast included: unchecked.");
     expect(spoken).toContain(rig.action.label);
     expect(spoken.length).toBeLessThanOrEqual(20_000);
   });
@@ -85,9 +134,9 @@ describe("gated Executor read-back preparation", () => {
     await executeGatedAction(ctx, { type: "request_action", actionId: rig.action.id });
     const speakId = rig.session.pendingGatedAction!.speakId;
 
-    handleGatedSpeakDone(rig.session, { speakId: "wrong-id", interrupted: false }, clock);
+    handleGatedSpeakDone(ctx, { speakId: "wrong-id", interrupted: false });
     expect(rig.session.pendingGatedAction?.speechCompletedAt).toBeNull();
-    handleGatedSpeakDone(rig.session, { speakId, interrupted: true }, clock);
+    handleGatedSpeakDone(ctx, { speakId, interrupted: true });
     expect(rig.session.pendingGatedAction).toBeNull();
     expect(rig.outgoing.some((message) => message.type === "confirm.armed")).toBe(false);
   });
@@ -113,5 +162,190 @@ describe("gated Executor read-back preparation", () => {
     disconnected.session.extensionConnected = false;
     expect(disconnected.session.pendingGatedAction).toBeNull();
     expect(disconnected.outgoing.some((message) => message.type === "act.request")).toBe(false);
+  });
+
+  it("requires the tracked uninterrupted completion and a full one-second cooldown before one dispatch", async () => {
+    const rig = preparationRig();
+    const ctx = { hub: rig.hub, session: rig.session, refresher: rig.refresher, clock: rig.clock, schedule: rig.schedule };
+    await executeGatedAction(ctx, { type: "request_action", actionId: rig.action.id });
+    const speakId = rig.session.pendingGatedAction!.speakId;
+
+    expect(handleGatedSpeakDone(ctx, { speakId: "older-speech", interrupted: false })).toBe(false);
+    expect(rig.scheduled).toHaveLength(0);
+    expect(handleGatedSpeakDone(ctx, { speakId, interrupted: false })).toBe(true);
+    expect(rig.scheduled[0]?.delayMs).toBe(1_000);
+
+    rig.fakeTime.now += 999;
+    rig.scheduled.shift()!.callback();
+    expect(rig.outgoing.some((message) => message.type === "confirm.armed")).toBe(false);
+    expect(rig.scheduled[0]?.delayMs).toBe(1);
+
+    rig.fakeTime.now += 1;
+    rig.scheduled.shift()!.callback();
+    expect(rig.outgoing.find((message) => message.type === "confirm.armed")?.payload).toMatchObject({
+      phrase: phraseForKind(rig.action.kind),
+      kind: rig.action.kind,
+    });
+
+    await executeGatedAction(ctx, { type: "confirmation", text: phraseForKind(rig.action.kind)! });
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(1);
+    expect(rig.requests.find((request) => request.type === "act.request")?.payload).toMatchObject({
+      action: { op: "click", targetId: rig.action.id },
+      expectedKind: rig.action.kind,
+      gate: { grantId: expect.any(String), kind: rig.action.kind },
+    });
+    expect(rig.session.pendingGatedAction).toBeNull();
+
+    await executeGatedAction(ctx, { type: "confirmation", text: phraseForKind(rig.action.kind)! });
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(1);
+  });
+
+  it("rejects an early phrase, changed field values, and an expired grant without dispatch", async () => {
+    const early = preparationRig();
+    const earlyCtx = { hub: early.hub, session: early.session, refresher: early.refresher, clock: early.clock, schedule: early.schedule };
+    await executeGatedAction(earlyCtx, { type: "request_action", actionId: early.action.id });
+    await executeGatedAction(earlyCtx, { type: "confirmation", text: phraseForKind(early.action.kind)! });
+    expect(early.requests.filter((request) => request.type === "act.request")).toHaveLength(0);
+
+    const changed = preparationRig();
+    const changedCtx = { hub: changed.hub, session: changed.session, refresher: changed.refresher, clock: changed.clock, schedule: changed.schedule };
+    await executeGatedAction(changedCtx, { type: "request_action", actionId: changed.action.id });
+    handleGatedSpeakDone(changedCtx, { speakId: changed.session.pendingGatedAction!.speakId, interrupted: false });
+    changed.fakeTime.now += 1_000;
+    changed.scheduled.shift()!.callback();
+    const changedSnapshot = structuredClone(changed.snapshot);
+    changedSnapshot.elements[0]!.value = "changed after read-back";
+    changedSnapshot.elements[0]!.hasValue = true;
+    changedSnapshot.capturedAt += 1;
+    changed.setNextSnapshot(changedSnapshot);
+    await executeGatedAction(changedCtx, { type: "confirmation", text: phraseForKind(changed.action.kind)! });
+    expect(changed.requests.filter((request) => request.type === "act.request")).toHaveLength(0);
+    expect(changed.session.pendingGatedAction).toBeNull();
+
+    const expired = preparationRig();
+    const expiredCtx = { hub: expired.hub, session: expired.session, refresher: expired.refresher, clock: expired.clock, schedule: expired.schedule };
+    await executeGatedAction(expiredCtx, { type: "request_action", actionId: expired.action.id });
+    handleGatedSpeakDone(expiredCtx, { speakId: expired.session.pendingGatedAction!.speakId, interrupted: false });
+    expired.fakeTime.now += 1_000;
+    expired.scheduled.shift()!.callback();
+    expect(expired.scheduled[0]?.delayMs).toBe(30_000);
+    expired.fakeTime.now += 30_000;
+    expired.scheduled.shift()!.callback();
+    expect(expired.session.pendingGatedAction).toBeNull();
+    await executeGatedAction(expiredCtx, { type: "confirmation", text: phraseForKind(expired.action.kind)! });
+    expect(expired.requests.filter((request) => request.type === "act.request")).toHaveLength(0);
+  });
+
+  it("clears a rejected one-use grant and never retries an extension refusal", async () => {
+    const rig = preparationRig({ actResult: { ok: false, error: "gate-required" } });
+    const ctx = { hub: rig.hub, session: rig.session, refresher: rig.refresher, clock: rig.clock, schedule: rig.schedule };
+    await executeGatedAction(ctx, { type: "click_safe", actionId: rig.action.id });
+    handleGatedSpeakDone(ctx, { speakId: rig.session.pendingGatedAction!.speakId, interrupted: false });
+    rig.fakeTime.now += 1_000;
+    rig.scheduled.shift()!.callback();
+    await executeGatedAction(ctx, { type: "confirmation", text: phraseForKind(rig.action.kind)! });
+    await executeGatedAction(ctx, { type: "confirmation", text: phraseForKind(rig.action.kind)! });
+
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(1);
+    expect(rig.session.pendingGatedAction).toBeNull();
+    expect(rig.outgoing.some((message) => message.type === "speak" && message.payload.text.includes("page refused"))).toBe(true);
+  });
+
+  it("rejects yes, aliases, and a phrase for a different action kind", async () => {
+    for (const text of ["yes", "submit", "book this room", "confirm payment"]) {
+      const rig = preparationRig();
+      const ctx = { hub: rig.hub, session: rig.session, refresher: rig.refresher, clock: rig.clock, schedule: rig.schedule };
+      await executeGatedAction(ctx, { type: "request_action", actionId: rig.action.id });
+      handleGatedSpeakDone(ctx, { speakId: rig.session.pendingGatedAction!.speakId, interrupted: false });
+      rig.fakeTime.now += 1_000;
+      rig.scheduled.shift()!.callback();
+      await executeGatedAction(ctx, { type: "confirmation", text });
+
+      expect(rig.requests.filter((request) => request.type === "act.request"), text).toHaveLength(0);
+      expect(rig.session.pendingGatedAction, text).toBeNull();
+    }
+  });
+
+  it("audits a dispatched action without writing page text, values, or the phrase", async () => {
+    const rig = preparationRig();
+    const ctx = { hub: rig.hub, session: rig.session, refresher: rig.refresher, clock: rig.clock, schedule: rig.schedule };
+    const lines: string[] = [];
+    const previous = setLogSink((line) => lines.push(line));
+    try {
+      await executeGatedAction(ctx, { type: "request_action", actionId: rig.action.id });
+      handleGatedSpeakDone(ctx, { speakId: rig.session.pendingGatedAction!.speakId, interrupted: false });
+      rig.fakeTime.now += 1_000;
+      rig.scheduled.shift()!.callback();
+      await executeGatedAction(ctx, { type: "confirmation", text: phraseForKind(rig.action.kind)! });
+    } finally {
+      setLogSink(previous);
+    }
+
+    const entry = JSON.parse(lines.at(-1)!) as Record<string, string>;
+    expect(entry).toMatchObject({ msg: "gated action allowed", id: rig.action.id, type: rig.action.kind, code: "dispatched" });
+    expect(Object.keys(entry).every((key) => (LOG_KEYS as readonly string[]).includes(key))).toBe(true);
+    const serialized = JSON.stringify(entry);
+    expect(serialized).not.toContain(rig.session.model!.url);
+    expect(serialized).not.toContain("Hotel booking");
+    expect(serialized).not.toContain("Book room");
+    expect(serialized).not.toContain("submit booking");
+  });
+
+  it("routes a voice-role typed phrase through the cooldown and one gated extension dispatch", async () => {
+    const fakeTime = { now: 50_000 };
+    const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+    const server = await startServer({
+      port: 0,
+      dev: true,
+      fakeDelayMs: 0,
+      fakeRequestActionId: "e10",
+      clock: () => fakeTime.now,
+      schedule: (callback, delayMs) => scheduled.push({ callback, delayMs }),
+    });
+    const extension = startFakeExtension({ url: server.url });
+    await extension.connected;
+    const voice = await bindClient(server.port, "voice", { origin: undefined });
+    try {
+      voice.send("utterance", { utteranceId: "request-1", text: "please submit the booking", source: "typed" });
+      const firstPrompt = await nextMatching(voice, (frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt");
+      voice.send("utterance", { utteranceId: "early-1", text: "submit booking", source: "typed" });
+      await nextMatching(voice, (frame) => frame.type === "speak" && frame.payload.category === "error" && frame.payload.text.includes("not accepted"));
+      expect(extension.received().filter((message) => message.type === "act.request")).toHaveLength(0);
+      expect(server.session.pendingGatedAction).toBeNull();
+
+      voice.send("utterance", { utteranceId: "request-2", text: "please submit the booking", source: "typed" });
+      const prompt = await nextMatching(voice, (frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt");
+      expect(prompt.payload.speakId).not.toBe(firstPrompt.payload.speakId);
+      voice.send("speak.done", { speakId: "wrong-speak-id", interrupted: false });
+      await sleep(10);
+      expect(scheduled).toHaveLength(0);
+
+      voice.send("speak.done", { speakId: prompt.payload.speakId, interrupted: false });
+      await nextMatching(voice, (frame) => frame.type === "state" && frame.payload.dialogue === "awaiting-confirm");
+      expect(scheduled[0]?.delayMs).toBe(1_000);
+      fakeTime.now += 999;
+      scheduled.shift()!.callback();
+      expect(voice.frames.some((frame) => frame.type === "confirm.armed")).toBe(false);
+      fakeTime.now += 1;
+      scheduled.shift()!.callback();
+      await nextMatching(voice, (frame) => frame.type === "confirm.armed");
+
+      voice.send("utterance", { utteranceId: "confirm-1", text: "Submit booking!", source: "typed" });
+      await nextMatching(voice, (frame) => frame.type === "speak" && frame.payload.category === "error" && frame.payload.text.includes("page refused"));
+      const acts = extension.received().filter((message) => message.type === "act.request");
+      expect(acts).toHaveLength(1);
+      expect(acts[0]!.payload).toMatchObject({
+        action: { op: "click", targetId: "e10" },
+        expectedKind: "submit",
+        gate: { grantId: expect.any(String), kind: "submit" },
+      });
+      expect(voice.frames.find((frame) => frame.type === "transcript" && frame.payload.utteranceId === "confirm-1")?.payload.routedTo)
+        .toBe("grammar");
+      expect(server.session.pendingGatedAction).toBeNull();
+    } finally {
+      voice.ws.terminate();
+      extension.close();
+      await server.close();
+    }
   });
 });

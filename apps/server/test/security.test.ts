@@ -2,6 +2,12 @@
 import { request } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EXTENSION_ID, extensionOrigin } from "@blip/protocol";
+import { loadSnapshot } from "@blip/protocol/fixtures-loader";
+import { buildBaselineFormModel } from "../src/baseline";
+import { executeGatedAction } from "../src/act/gated";
+import { LOG_KEYS, setLogSink } from "../src/log";
+import type { Hub } from "../src/hub/hub";
+import { Session } from "../src/session/session";
 import { startServer, type RunningServer, type StartServerOptions } from "../src/server";
 import { bindClient, connect, originFor, sleep, type TestClient } from "./helpers";
 
@@ -90,6 +96,10 @@ describe("PROT-04 origin and role guard", () => {
     const err = await ext.nextMessage();
     expect(err.payload).toMatchObject({ code: "role-violation", fatal: false });
     expect(err.replyTo).toBe(id);
+    const doneId = ext.send("speak.done", { speakId: "untrusted-completion", interrupted: false });
+    const doneErr = await ext.nextMessage();
+    expect(doneErr.payload).toMatchObject({ code: "role-violation", fatal: false });
+    expect(doneErr.replyTo).toBe(doneId);
     await sleep(50);
     expect(handler).not.toHaveBeenCalled();
 
@@ -186,5 +196,38 @@ describe("path, dev origins and extra origins", () => {
     const c = await open(s, "https://evil.example");
     expect(c.status).toBe(403);
     expect(c.frames).toEqual([]);
+  });
+});
+
+describe("gated audit privacy", () => {
+  it("records a refusal with only sanitized kind, target, outcome, and reason fields", async () => {
+    const snapshot = loadSnapshot("booking");
+    const session = new Session("fake", () => 10_000);
+    session.extensionConnected = true;
+    session.applySnapshot(snapshot);
+    const lines: string[] = [];
+    const previous = setLogSink((line) => lines.push(line));
+    const hub = {
+      send: vi.fn(() => true),
+      pushState: vi.fn(),
+    } as unknown as Hub;
+    const refresher = { request: vi.fn(async () => ({ ok: true, applied: true } as const)) };
+    try {
+      await executeGatedAction(
+        { hub, session, refresher, clock: () => 10_000 },
+        { type: "request_action", actionId: "missing-target" },
+      );
+
+      const entry = JSON.parse(lines.at(-1)!) as Record<string, string>;
+      expect(entry).toMatchObject({ msg: "gated action refused", id: "missing-target", code: "target-not-found" });
+      expect(Object.keys(entry).every((key) => (LOG_KEYS as readonly string[]).includes(key))).toBe(true);
+      const serialized = JSON.stringify(entry);
+      expect(serialized).not.toContain(snapshot.url);
+      expect(serialized).not.toContain(buildBaselineFormModel(snapshot).title);
+      expect(serialized).not.toContain("Full name");
+      expect(serialized).not.toContain("submit booking");
+    } finally {
+      setLogSink(previous);
+    }
   });
 });
