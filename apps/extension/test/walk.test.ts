@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveElementId, walkDocument } from "../src/content/walk.js";
+import { actionFactsOf, resolveElementId, walkDocument } from "../src/content/walk.js";
 
 const rect = {
   x: 0,
@@ -41,7 +41,8 @@ describe("walkDocument", () => {
         <div role="combobox" aria-label="Custom choice">Unsupported control</div>
         <button type="button">Close</button>
         <a href="/help?campaign=pay" target="_blank">Help</a>
-        <a href="/dialog" target="close and confirm">Dismiss dialog</a>
+        <a href="/dialog" target="pay-confirm">Close</a>
+        <a href="/dialog">Close and confirm</a>
       </form>
     `;
     Object.defineProperty(document.getElementById("secret"), "value", { get: () => { throw new Error("hidden value read"); } });
@@ -81,7 +82,10 @@ describe("walkDocument", () => {
 
     const help = elements.find((element) => element.text === "Help");
     expect(help).toMatchObject({ category: "action", kind: "pay", href: "http://localhost:3000/help" });
-    expect(elements.find((element) => element.text === "Dismiss dialog")).toMatchObject({ category: "action", kind: "submit" });
+    const rawFacts = actionFactsOf(document.querySelector('a[href^="/help"]')!, document.location.href);
+    expect(rawFacts).toMatchObject({ href: "http://localhost:3000/help?campaign=pay", target: "_blank" });
+    expect(elements.find((element) => element.text === "Close" && element.href === "http://localhost:3000/dialog")).toMatchObject({ category: "action", kind: "pay" });
+    expect(elements.find((element) => element.text === "Close and confirm")).toMatchObject({ category: "action", kind: "submit" });
   });
 
   it("discovers controls in open and Chrome-exposed closed shadow roots", () => {

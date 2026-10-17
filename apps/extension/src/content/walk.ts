@@ -1,5 +1,5 @@
 import type { RawElement } from "@blip/protocol";
-import { classifyAction, classifyField } from "@blip/policy/classify";
+import { classifyAction, classifyField, type ActionFacts } from "@blip/policy/classify";
 import { errorStateOf } from "./errors.js";
 import { fingerprintOf } from "./fingerprint.js";
 import { createIdRegistry, type ElementIdRegistry } from "./ids.js";
@@ -183,11 +183,11 @@ function sanitizedHref(rawHref: string, pageUrl: string): string | undefined {
   }
 }
 
-function actionRaw(element: Element, order: number, frameId: number, pageUrl: string): RawElement {
+/** Capture live classifier facts before the outgoing href is stripped of query and fragment data. */
+export function actionFactsOf(element: Element, pageUrl: string): ActionFacts {
   const tag = element.localName;
   const inputType = inputTypeOf(element);
   const role = roleOf(element, inputType);
-  const labels = labelCandidatesOf(element);
   const text = boundedText(element.textContent, 200, 200);
   const rawHref = element.localName === "a"
     ? (element as HTMLAnchorElement).href || element.getAttribute("href") || ""
@@ -197,7 +197,7 @@ function actionRaw(element: Element, order: number, frameId: number, pageUrl: st
     ? Boolean((element as HTMLButtonElement | HTMLInputElement).form)
     : element.closest("form") !== null;
   const buttonType = effectiveButtonType(element);
-  const classification = classifyAction({
+  return {
     tag,
     role,
     text,
@@ -207,15 +207,25 @@ function actionRaw(element: Element, order: number, frameId: number, pageUrl: st
     ...(buttonType ? { buttonType } : {}),
     ...(inputType ? { inputType } : {}),
     inForm,
-  });
+  };
+}
+
+function actionRaw(element: Element, order: number, frameId: number, pageUrl: string): RawElement {
+  const facts = actionFactsOf(element, pageUrl);
+  const labels = labelCandidatesOf(element);
+  const text = facts.text ?? "";
+  const rawHref = facts.href ?? "";
+  const buttonType = facts.buttonType;
+  const inputType = facts.inputType;
+  const classification = classifyAction(facts);
   const id = "";
   const value: RawElement = {
     id,
     frameId,
     category: "action",
-    tag,
+    tag: facts.tag ?? element.localName,
     ...(inputType ? { inputType } : {}),
-    role,
+    role: facts.role ?? roleOf(element),
     labelCandidates: labels,
     required: false,
     requiredSource: "none",
@@ -229,7 +239,7 @@ function actionRaw(element: Element, order: number, frameId: number, pageUrl: st
     ...(element.getAttribute("name") ? { name: boundedText(element.getAttribute("name"), 200, 200) } : {}),
     ...(text ? { text } : {}),
     ...(buttonType ? { buttonType: buttonType as "submit" | "button" | "reset" } : {}),
-    inForm,
+    ...(facts.inForm === undefined ? {} : { inForm: facts.inForm }),
     ...(sanitizedHref(rawHref, pageUrl) ? { href: sanitizedHref(rawHref, pageUrl)! } : {}),
     kind: classification.kind,
     kindReasons: classification.reasons,
