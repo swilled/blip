@@ -4,7 +4,7 @@ import type { DialogueState } from "./state";
 import { cancelEffect, speakEffect } from "./state";
 import { fillableFields, matchOption, optionLabelFor, optionList, resolveField, spokenLabel } from "./fields";
 import { cleanValue, normalizeCommand, normalizeEmail, normalizeNumberish } from "./normalize";
-import { echoText, readBatchText } from "./templates";
+import { echoText, readBatchText, requiredEmptyText } from "./templates";
 import type { DialogueEvent } from "./events";
 
 type DialogueResult = { state: DialogueState; effects: Effect[] };
@@ -18,6 +18,12 @@ const REQUIRED = new Set([
   "what is required",
   "which fields are required",
   "what fields are required",
+]);
+const MISSING = new Set([
+  "whats missing",
+  "what is missing",
+  "what do i still need",
+  "what do i need to fill",
 ]);
 
 const NUMBER_WORDS = ["one", "two", "three", "four", "five", "six", "seven", "eight"] as const;
@@ -305,6 +311,10 @@ export function handleReadUtterance(
   }
 
   if (REPEAT.has(norm)) return answer(state, state.lastSpoken ?? "There's nothing to repeat.");
+
+  if (MISSING.has(norm)) {
+    return answer(state, ctx.form === null ? "I can't see a page yet." : requiredEmptyText(ctx.form));
+  }
 
   if (REQUIRED.has(norm)) {
     return answer(state, ctx.form === null ? "I can't see a page yet." : requiredText(ctx.form));
