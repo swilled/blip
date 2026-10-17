@@ -12,6 +12,7 @@
   },
   "scripts": {
     "claude:spike": "tsx scripts/claude-sdk-spike.ts",
+    "claude:live-check": "tsx scripts/claude-sdk-live-check.ts",
     "start": "tsx src/main.ts"
   }
 }

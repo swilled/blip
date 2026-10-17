@@ -19,8 +19,8 @@ export type ClaudeRoleConfig = {
 };
 
 export type ClaudeRoleSession = {
-  /** Starts the SDK process and resolves with the `system/init` tool list. */
-  start(): Promise<{ tools: string[] }>;
+  /** Starts the SDK process and resolves with the untrusted `system/init` tool list. */
+  start(): Promise<{ tools: unknown }>;
   /** Sends one JSON-only user prompt on the role's persistent streaming session. */
   call(prompt: string, signal?: AbortSignal): Promise<string>;
   /** Aborts the active turn and its subprocess/session. */
@@ -37,6 +37,8 @@ export type ClaudeSessionOptions = {
   adapter?: ClaudeSdkAdapter;
   hostEnv?: Record<string, string | undefined>;
   createEmptyCwd?: () => Promise<string>;
+  /** Optional owner signal used to stop SDK startup before a bounded check's deadline. */
+  startupSignal?: AbortSignal;
 };
 
 export const INTENT_MODEL = "claude-haiku-5-5";
@@ -70,9 +72,18 @@ export function buildRoleConfig(
 }
 
 export class UnexpectedClaudeToolsError extends Error {
-  constructor(tools: string[]) {
-    super(`Claude SDK startup refused: expected no tools, received ${tools.length ? tools.join(", ") : "an invalid tool list"}.`);
+  readonly role: ClaudeRole;
+  readonly toolCount: number | null;
+  readonly invalidToolList: boolean;
+
+  constructor(role: ClaudeRole, toolCount: number | null, invalidToolList = false) {
+    super(invalidToolList
+      ? `Claude SDK startup refused for ${role}: init tool list was invalid.`
+      : `Claude SDK startup refused for ${role}: expected no tools, received ${toolCount ?? 0}.`);
     this.name = "UnexpectedClaudeToolsError";
+    this.role = role;
+    this.toolCount = toolCount;
+    this.invalidToolList = invalidToolList;
   }
 }
 
@@ -80,6 +91,7 @@ export class ClaudeRoleSessionManager {
   #adapter: ClaudeSdkAdapter;
   #hostEnv: Record<string, string | undefined>;
   #createCwd: () => Promise<string>;
+  #startupSignal: AbortSignal | undefined;
   #roles = new Map<ClaudeRole, RoleGeneration>();
   #generationCounter = 0;
   #closed = false;
@@ -88,6 +100,7 @@ export class ClaudeRoleSessionManager {
     this.#adapter = options.adapter ?? createSdkAdapter();
     this.#hostEnv = options.hostEnv ?? process.env;
     this.#createCwd = options.createEmptyCwd ?? createEmptyCwd;
+    this.#startupSignal = options.startupSignal;
   }
 
   async start(): Promise<void> {
@@ -165,11 +178,19 @@ export class ClaudeRoleSessionManager {
       active: null,
     };
     this.#roles.set(role, generation);
+    const startupSignal = this.#startupSignal;
+    const abortStartup = (): void => session.abort();
+    if (startupSignal?.aborted) {
+      generation.valid = false;
+      await this.#disposeGeneration(generation);
+      if (this.#roles.get(role) === generation) this.#roles.delete(role);
+      throw startupSignal.reason ?? new Error("Claude SDK startup was aborted.");
+    }
+    startupSignal?.addEventListener("abort", abortStartup, { once: true });
     try {
       const init = await session.start();
-      if (!Array.isArray(init.tools) || init.tools.length !== 0) {
-        throw new UnexpectedClaudeToolsError(Array.isArray(init.tools) ? init.tools : []);
-      }
+      if (!Array.isArray(init.tools)) throw new UnexpectedClaudeToolsError(role, null, true);
+      if (init.tools.length !== 0) throw new UnexpectedClaudeToolsError(role, init.tools.length);
       // The SDK must not inherit a repo/profile working directory or leave config files in its cwd.
       const entries = await readdir(cwd);
       if (entries.length !== 0) throw new Error("Claude SDK working directory was not empty at startup.");
@@ -178,6 +199,8 @@ export class ClaudeRoleSessionManager {
       await this.#disposeGeneration(generation);
       if (this.#roles.get(role) === generation) this.#roles.delete(role);
       throw error;
+    } finally {
+      startupSignal?.removeEventListener("abort", abortStartup);
     }
   }
 
@@ -253,7 +276,7 @@ function createSdkAdapter(): ClaudeSdkAdapter {
       const sdk = await import("@anthropic-ai/claude-agent-sdk");
       const input = new AsyncQueue<SdkUserMessage>();
       const controller = new AbortController();
-      const init = deferred<{ tools: string[] }>();
+      const init = deferred<{ tools: unknown }>();
       const pendingState: { current: Deferred<string> | null } = { current: null };
       let closed = false;
       const query = sdk.query({
@@ -276,7 +299,7 @@ function createSdkAdapter(): ClaudeSdkAdapter {
         try {
           for await (const message of query as AsyncIterable<SdkOutputMessage>) {
             if (message.type === "system" && message.subtype === "init") {
-              init.resolve({ tools: message.tools as string[] });
+              init.resolve({ tools: message.tools });
             } else if (message.type === "result") {
               const call = pendingState.current;
               pendingState.current = null;

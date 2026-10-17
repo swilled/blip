@@ -21,7 +21,7 @@ function deferred<T>(): Deferred<T> {
 }
 
 function scriptedAdapter(options: {
-  toolsFor?: (config: ClaudeRoleConfig) => string[];
+  toolsFor?: (config: ClaudeRoleConfig) => unknown;
   answer?: (config: ClaudeRoleConfig, prompt: string) => Promise<string>;
   onClose?: (config: ClaudeRoleConfig) => void;
 } = {}) {
@@ -34,7 +34,7 @@ function scriptedAdapter(options: {
       return {
         async start() {
           started.push(config.role);
-          return { tools: options.toolsFor?.(config) ?? [] };
+          return { tools: options.toolsFor === undefined ? [] : options.toolsFor(config) };
         },
         call(prompt) {
           return options.answer?.(config, prompt) ?? Promise.resolve(
@@ -112,9 +112,69 @@ describe("Claude role provider", () => {
 
   it("rejects unexpected init tools and closes partial sessions before startup can complete", async () => {
     const f = scriptedAdapter({ toolsFor: (config) => config.role === "repair" ? ["Bash"] : [] });
-    await expect(createClaudeProvider({ adapter: f.adapter })).rejects.toThrow(/expected no tools.*Bash/);
+    const outcome = await createClaudeProvider({ adapter: f.adapter }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(outcome).toMatchObject({
+      name: "UnexpectedClaudeToolsError",
+      role: "repair",
+      toolCount: 1,
+      invalidToolList: false,
+    });
+    expect(outcome).toHaveProperty("message", "Claude SDK startup refused for repair: expected no tools, received 1.");
+    expect((outcome as Error).message).not.toContain("Bash");
     expect(f.started).toEqual(["intent", "repair"]);
     expect(f.closed.sort()).toEqual(["intent", "repair"]);
+  });
+
+  it("rejects a malformed init tool list without exposing its contents", async () => {
+    const f = scriptedAdapter({ toolsFor: () => ({ candidate: "sensitive-tool-name" }) });
+    const outcome = await createClaudeProvider({ adapter: f.adapter }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(outcome).toMatchObject({
+      name: "UnexpectedClaudeToolsError",
+      role: "intent",
+      toolCount: null,
+      invalidToolList: true,
+    });
+    expect((outcome as Error).message).toBe("Claude SDK startup refused for intent: init tool list was invalid.");
+    expect((outcome as Error).message).not.toContain("sensitive-tool-name");
+    expect(f.closed).toContain("intent");
+  });
+
+  it("aborts and closes an SDK role whose startup reaches the deadline", async () => {
+    const controller = new AbortController();
+    const started = deferred<void>();
+    let rejectInit!: (error: Error) => void;
+    let aborted = false;
+    let closed = false;
+    const adapter: ClaudeSdkAdapter = {
+      createSession(): ClaudeRoleSession {
+        return {
+          start() {
+            started.resolve();
+            return new Promise((_, reject) => { rejectInit = reject; });
+          },
+          async call() { return "{}"; },
+          abort() {
+            aborted = true;
+            rejectInit(new Error("startup aborted"));
+          },
+          async close() { closed = true; },
+        };
+      },
+    };
+    const creating = createClaudeProvider({ adapter, startupSignal: controller.signal });
+
+    await started.promise;
+    controller.abort(new Error("startup deadline"));
+    await expect(creating).rejects.toThrow("startup aborted");
+    expect(aborted).toBe(true);
+    expect(closed).toBe(true);
   });
 
   it("aborts and recreates a role before accepting calls; late old-generation output is rejected", async () => {
