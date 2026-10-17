@@ -8,6 +8,11 @@ function booking(): FormModel {
   return buildBaselineFormModel(loadSnapshot("booking"));
 }
 
+function ordinaryBooking(): FormModel {
+  const model = booking();
+  return { ...model, fields: model.fields.filter((field) => field.sensitive === "none" && field.type !== "password") };
+}
+
 function withField(model: FormModel, changes: Partial<Field> & Pick<Field, "id" | "label" | "type" | "sensitive">): FormModel {
   const template = model.fields[0]!;
   return {
@@ -39,7 +44,7 @@ describe("pre-provider utterance privacy", () => {
       expect(decideUtteranceForBrain(utterance, booking()).kind).toBe("withhold-and-handoff");
     }
 
-    const cardField = withField(booking(), {
+    const cardField = withField(ordinaryBooking(), {
       id: "card-number",
       label: "Credit card number",
       type: "text",
@@ -52,11 +57,11 @@ describe("pre-provider utterance privacy", () => {
   });
 
   it.each([
-    "my password is offline-password-sentinel-947",
-    "password: offline-password-sentinel-947",
-    "password=offline-password-sentinel-947",
-  ])("withholds clearly labeled password input: %s", (utterance) => {
-    const model = withField(booking(), {
+    ["my password is", "my password is offline-password-sentinel-947"],
+    ["password colon", "password: offline-password-sentinel-947"],
+    ["password equals", "password=offline-password-sentinel-947"],
+  ])("withholds clearly labeled password input (%s)", (_pattern, utterance) => {
+    const model = withField(ordinaryBooking(), {
       id: "account-password",
       label: "Account password",
       type: "password",
@@ -76,7 +81,7 @@ describe("pre-provider utterance privacy", () => {
 
   it("keeps a unique secret sentinel out of provider, diagnostics, speech, and repair-cache bytes", async () => {
     const sentinel = "offline-password-sentinel-947";
-    const model = withField(booking(), {
+    const model = withField(ordinaryBooking(), {
       id: "account-password",
       label: "Account password",
       type: "password",
@@ -116,16 +121,22 @@ describe("pre-provider utterance privacy", () => {
   });
 
   it("returns a value-free clarification when no unique target field can be resolved", () => {
-    const noPasswordField = booking();
+    const noPasswordField = ordinaryBooking();
     const noMatch = decideUtteranceForBrain("my password is private-value-11", noPasswordField);
     expect(noMatch).toEqual({
       kind: "withhold-and-handoff",
       handoff: { kind: "clarify", spokenText: "Please restate the field label without its value." },
     });
 
-    const ambiguous = withField(noPasswordField, {
+    const onePassword = withField(noPasswordField, {
       id: "another-password",
       label: "Other password",
+      type: "password",
+      sensitive: "password",
+    });
+    const ambiguous = withField(onePassword, {
+      id: "third-password",
+      label: "Backup password",
       type: "password",
       sensitive: "password",
     });
