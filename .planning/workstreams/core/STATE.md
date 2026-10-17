@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 04 plans complete; live verification gaps remain
-stopped_at: Phase 04 re-verification found live-provider evidence gaps
-last_updated: "2026-10-17T11:15:26Z"
+status: Phase 04 plans complete; approved live check timed out during initialization
+stopped_at: Approved Phase 04 live check timed out at the initialization stage
+last_updated: "2026-10-17T12:25:07Z"
 progress:
   total_phases: 5
   completed_phases: 3
@@ -108,7 +108,7 @@ Recent decisions affecting current work:
 - [Phase 04]: The owner authorized one bounded local SDK spike. Both startup()+outputFormat attempts still reported one init tool even with `tools: []` and `disallowedTools: ["*"]`; neither sent a model prompt. Keep the streaming/Zod path fail-closed and do not claim live provider success.
 - [Phase 04]: Voice-owner approval was reported in the 2026-10-17 checkpoint response; Core proceeded with the exact deterministic-raw/model-resolved label source split.
 - [Phase 04]: Deferred 04-08 live SDK use under delegated instruction; user did not provide the exact token
-- [Phase 04]: Approved-mode verifier accepts only one exact plan-specific marker line; the deferred report remains blocked.
+- [Phase 04]: Approved-mode verifier accepts only one exact plan-specific marker line; the single fresh approval was consumed after one initialization timeout.
 - [Phase 04]: All probes use injected fakes and synthetic data; requirements remain pending until separate approved live evidence exists.
 
 ### Pending Todos
@@ -122,8 +122,8 @@ None yet.
 - [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
-- [Phase 4] Plans 04-01 through 04-09 are complete. Re-verification closed the approved-mode harness stub with synthetic offline probes, but the live check remains deferred with zero SDK initialization or prompts. Keep BRAIN-01/02/03/PAGE-04 pending until separately approved live evidence is obtained.
-- Phase 04 live SDK verification deferred for lack of fresh approval; zero SDK initialization and prompts; BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04 remain pending.
+- [Phase 4] Plans 04-01 through 04-09 are complete. The approved synthetic live check timed out during provider initialization after 900 seconds, before any role result or prompt; its one-time approval is consumed. Keep BRAIN-01/02/03/PAGE-04 pending until separately approved live evidence is obtained.
+- Phase 04 live SDK verification timed out during initialization; zero prompts; no role tool counts observed; BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04 remain pending.
 
 ## Deferred Items
 
@@ -135,6 +135,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T11:15:26Z
-Stopped at: Phase 04 re-verification; live-provider evidence remains pending
+Last session: 2026-10-17T12:25:07Z
+Stopped at: Approved Phase 04 live check timed out during initialization
 Resume file: None

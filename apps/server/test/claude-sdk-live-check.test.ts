@@ -251,7 +251,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     }
   });
 
-  it("does not pass the actual deferred report to provider creation or prompt dispatch", async () => {
+  it("does not reuse the actual consumed approval for provider creation or prompt dispatch", async () => {
     const report = await readFile(resolve(
       process.cwd(),
       ".planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-08-LIVE-CHECK.md",

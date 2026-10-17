@@ -1,6 +1,6 @@
 ---
 phase: 04-claude-brain-and-label-repair
-verified: 2026-10-17T11:15:06Z
+verified: 2026-10-17T12:25:07Z
 status: gaps_found
 score: 5/10 must-haves verified
 re_verification:
@@ -9,7 +9,7 @@ re_verification:
   gaps_closed:
     - "The approved-mode verifier stub is closed: synthetic intent routing, cancellation/recreation, recovery, repair validation, and cache reload now run through an injected provider and pass offline tests."
   gaps_remaining:
-    - "The production streaming SDK has not been initialized in this follow-up, so zero-tool subscription startup remains unverified."
+    - "One approved provider-creation attempt timed out during initialization after 900 seconds; no role init result or tool count was observed."
     - "No live grammar-miss Intent or production latency measurement exists."
     - "The pinned Windows SDK cancellation and role-recreation path remains untested against the production provider."
     - "No live repair output or real-model cache reuse has been observed."
@@ -17,12 +17,12 @@ re_verification:
 gaps:
   - truth: "The production Claude provider initializes on the developer subscription with zero tools for both roles."
     status: partial
-    reason: "The 04-08 follow-up remains deferred with zero SDK initializations. The earlier startup()+outputFormat spike reported one init tool for each role; it does not establish the streaming provider's production behavior."
+    reason: "The user approved one bounded follow-up. Its single createClaudeProvider attempt timed out during initialization at 900 seconds, before either role's init result was observed; no prompts were dispatched. The earlier startup()+outputFormat spike reported one init tool for each role."
     artifacts:
       - path: "apps/server/src/brain/claude/session.ts"
         issue: "Fail-closed empty-tool configuration and refusal are covered offline, but the production streaming init has no live evidence."
     missing:
-      - "A separately authorized production streaming initialization showing zero tools for both roles."
+      - "A future separately authorized attempt that completes production streaming initialization and observes zero tools for both roles."
   - truth: "A grammar miss produces a schema-valid Intent for a current target within the intended latency."
     status: partial
     reason: "The route and synthetic current-ID checks pass with injected providers; no production prompt, Intent, or latency was recorded."
@@ -41,7 +41,7 @@ gaps:
       - "A bounded production cancellation, role recreation, and recovery check."
   - truth: "Claude repairs eligible labels asynchronously and a later visit reuses a validated cache entry."
     status: partial
-    reason: "Offline repair validation, cache persistence, and reload pass. The deferred report has no live repair output or real-model cache hit."
+    reason: "Offline repair validation, cache persistence, and reload pass. The approved run timed out before any prompt, so there is no live repair output or real-model cache hit."
     artifacts:
       - path: "apps/server/src/brain/claude/repair-coordinator.ts"
         issue: "The production repair path is wired, but no real-model patch has been observed."
@@ -53,7 +53,7 @@ gaps:
 
 **Phase Goal:** Real Claude, running locked down on the developer's own subscription, understands free-form requests and repairs a broken form's labels in the background, with no way to act on the page.
 
-**Verified:** 2026-10-17T11:15:06Z
+**Verified:** 2026-10-17T12:25:07Z
 **Status:** gaps_found
 **Re-verification:** Yes — after Plan 04-09 offline harness gap closure.
 
@@ -63,7 +63,7 @@ gaps:
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | Claude runs on the developer subscription with isolated, tool-less roles and refuses startup if init reports tools. | PARTIAL | session.ts retains deny-all settings and the mandatory empty-init check; provider tests pass. The prior startup()+outputFormat spike reported one tool per role, and the 04-08 report records zero streaming SDK initializations. |
+| 1 | Claude runs on the developer subscription with isolated, tool-less roles and refuses startup if init reports tools. | PARTIAL | session.ts retains deny-all settings and the mandatory empty-init check; provider tests pass. The prior startup()+outputFormat spike reported one tool per role. The one approved streaming provider-creation attempt timed out before a role init result; no prompt was sent. |
 | 2 | A grammar miss yields a schema-valid Intent using only current page IDs, typically within about two seconds. | PARTIAL | routeIntent schema/current-ID checks pass with injected fake providers. No live prompt, result, or latency is recorded. |
 | 3 | A hung or invalid Claude call speaks the fallback, releases the next turn, and recovers. | PARTIAL | Watchdog and recovery tests pass with an injected provider. The pinned SDK's Windows cancellation and recreation behavior is unverified. |
 | 4 | Eligible labels are repaired asynchronously and a later visit reuses a validated cache entry. | PARTIAL | Fake-provider repair validation, cache write, and cache reload pass. No real-model repair or live cache hit exists. |
@@ -76,10 +76,10 @@ gaps:
 | # | Truth | Status | Evidence |
 |---|---|---|---|
 | 1 | Offline diagnosis preserves locked tool settings and does not contact Claude or inspect credentials. | VERIFIED | Offline CLI exits at not_started with zero prompts; source returns before report reads and provider creation. |
-| 2 | Fresh exact approval is required before live initialization; the earlier spike approval cannot unlock it. | VERIFIED | Tests reject missing, stale, deferred, duplicate, and non-exact approval lines. The actual report remains deferred. |
+| 2 | Fresh exact approval is required before live initialization; the earlier spike approval cannot unlock it. | VERIFIED | Tests reject missing, stale, deferred, duplicate, and non-exact approval lines. The report records the exact fresh approval as consumed after one invocation. |
 | 3 | The production provider sends no prompt until both roles pass the zero-tool init check. | VERIFIED OFFLINE | session.ts fails closed on nonempty init; injected provider tests cover rejection and zero later prompts. No live init is claimed. |
-| 4 | If the tool gate passes, bounded intent, cancellation/recreation, and repair/cache probes run without exposing provider output. | PARTIAL | Plan 04-09 closes the code gap: the approved CLI callback is wired through routeIntent, patch validation, and RepairCache; fake tests exercise sanitized evidence and bounded dispatch. The real provider path was not run, so production latency and Windows behavior remain unobserved. |
-| 5 | Unexpected initial or recreated-role tools block later prompts, preserve counts, and leave requirements pending. | VERIFIED OFFLINE | Fake tests cover initial/recreated-role refusal, cumulative counts, and zero post-block prompts. The deferred report records zero init/prompts and all four requirements pending. |
+| 4 | If the tool gate passes, bounded intent, cancellation/recreation, and repair/cache probes run without exposing provider output. | PARTIAL | Plan 04-09 closes the code gap: the approved CLI callback is wired through routeIntent, patch validation, and RepairCache; fake tests exercise sanitized evidence and bounded dispatch. The single provider-creation attempt timed out before reaching these probes, so production latency and Windows behavior remain unobserved. |
+| 5 | Unexpected initial or recreated-role tools block later prompts, preserve counts, and leave requirements pending. | VERIFIED OFFLINE | Fake tests cover initial/recreated-role refusal, cumulative counts, and zero post-block prompts. The approved report records zero prompts, no observed tool count, and all four requirements pending. |
 
 ### Plan 04-09 Gap-Closure Acceptance
 
@@ -89,7 +89,7 @@ All five new Plan 04-09 must-haves are VERIFIED offline:
 - Tests use synthetic page data and fake providers; the production SDK is not imported or started by those tests.
 - Missing, deferred, stale, duplicate, or non-exact approval lines return before provider creation and prompt dispatch.
 - Counts stay cumulative; a recreated role that reports tools gets no recovery prompt; the overall deadline aborts and closes the provider.
-- Serialized results whitelist sanitized counts, statuses, booleans, and elapsed time. The deferred 04-08 report is unchanged and the four requirements remain Pending.
+- Serialized results whitelist sanitized counts, statuses, booleans, and elapsed time. The 04-08 report records one initialization-stage timeout, a consumed approval, zero prompts, and all four requirements Pending.
 
 This closes the prior harness implementation gap. It does not provide the missing production SDK evidence needed to satisfy Phase 4's goal.
 
@@ -101,9 +101,9 @@ This closes the prior harness implementation gap. It does not provide the missin
 | apps/server/src/brain/claude/provider.ts | Typed intent/repair calls and role lifecycle | VERIFIED OFFLINE | Wired from Claude server mode; offline tests exercise injected responses. No live model output passed through it. |
 | apps/server/src/brain/claude/intent-router.ts, projection.ts, privacy.ts | Grammar-first privacy gate, bounded value-free projection, current-ID validation | VERIFIED OFFLINE | Connected to turn routing; fake-provider, privacy, schema, and current-ID regression suites pass. |
 | apps/server/src/brain/claude/repair-schema.ts, repair-merge.ts, repair-coordinator.ts, repair-cache.ts | Validated descriptive patch, asynchronous merge, identity-bound cache | VERIFIED OFFLINE | Connected to accepted snapshots and baseline completion; fake-provider patch and cache behavior pass. Live repair remains unobserved. |
-| apps/server/scripts/claude-sdk-live-check.ts | Offline-first, approval-gated production verifier | VERIFIED OFFLINE | The former unconfigured callback is replaced by the injected probe sequence. Production provider creation is dynamically imported only after the exact report gate. No live run occurred. |
+| apps/server/scripts/claude-sdk-live-check.ts | Offline-first, approval-gated production verifier | VERIFIED | The former unconfigured callback is replaced by the injected probe sequence. Production provider creation is dynamically imported only after the exact report gate. One authorized attempt timed out before a role init result or prompt. |
 | apps/server/test/claude-sdk-live-check.test.ts | Offline proof of approval, limits, probe behavior, and fail-closed handling | VERIFIED | 12 tests pass, covering routeIntent, cancellation/recreation, cache reload, prompt caps, timeout, output sanitization, and approval refusal. |
-| .planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-08-LIVE-CHECK.md | Approval provenance and sanitized live/defer result | VERIFIED | Hash is unchanged: E46E6A356A540D4F5EB9887489E67B6C41CAC9C5BA3EA6EF67C5E3512CCDB1B8. It records defer, zero SDK initialization/prompts, and all four requirements Pending. |
+| .planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-08-LIVE-CHECK.md | Approval provenance and sanitized live/defer result | VERIFIED | It records the exact approval, consumed state, one provider startup attempt, a 900-second initialization timeout, zero prompts, and all four requirements Pending. |
 
 ## Key Link Verification
 
@@ -114,7 +114,7 @@ This closes the prior harness implementation gap. It does not provide the missin
 | apps/server/src/session/refresh.ts | RepairCoordinator.accept | Accepted snapshot callback | WIRED | Only a current accepted snapshot becomes a repair candidate. |
 | apps/server/src/server.ts | RepairCoordinator.schedulePending | After baseline turn/refresh | WIRED | Repair work is asynchronous relative to the baseline response. |
 | apps/server/src/brain/claude/repair-coordinator.ts | repair-cache.ts | Validated load/save | WIRED | Cache hits are revalidated; only validated patches are saved. |
-| apps/server/scripts/claude-sdk-live-check.ts | apps/server/src/brain/claude/provider.ts | Dynamic createClaudeProvider import after exact approval | WIRED, LIVE UNVERIFIED | Main production callback is wired; no production initialization was attempted. |
+| apps/server/scripts/claude-sdk-live-check.ts | apps/server/src/brain/claude/provider.ts | Dynamic createClaudeProvider import after exact approval | WIRED, PARTIAL | One production provider-creation attempt occurred; it timed out during initialization before a role result was observed. |
 | apps/server/scripts/claude-sdk-live-check.ts | apps/server/src/brain/claude/intent-router.ts | Synthetic grammar misses through routeIntent | WIRED | Fake tests confirm schema/current-ID checks and one dispatch per route. |
 | apps/server/scripts/claude-sdk-live-check.ts | apps/server/src/brain/claude/repair-schema.ts and repair-cache.ts | Validate, save, reload, and revalidate synthetic patch | WIRED | Fake tests confirm the temporary cache round trip and stale patch rejection. |
 
@@ -126,27 +126,28 @@ This closes the prior harness implementation gap. It does not provide the missin
 | repair-coordinator.ts | current model and repair patch | Accepted snapshot, deterministic baseline, provider patch, identity/ID validation | Fake provider and temporary cache in tests | OFFLINE FLOWING; LIVE UNVERIFIED |
 | repair-cache.ts | value-free patch entry | Validated descriptive patch keyed by normalized URL and structure | Disk-backed temp-cache tests confirm save/load and revalidation | VERIFIED OFFLINE |
 
-No UI-rendering artifact is part of this phase. Dynamic server paths were traced through the fake provider and local validation logic; no live SDK data flowed through them.
+No UI-rendering artifact is part of this phase. Dynamic server paths were traced through the fake provider and local validation logic. The approved production attempt yielded no role init event or model data.
 
 ## Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
 | Approved-mode synthetic harness | npx vitest run --project @blip/server apps/server/test/claude-sdk-live-check.test.ts | 1 file, 12 tests passed | PASS |
+| Provider and consumed-approval regression tests | npx vitest run --project @blip/server apps/server/test/claude-provider.test.ts apps/server/test/claude-sdk-live-check.test.ts | 2 files, 18 tests passed | PASS |
 | Full repository test suite | npm test | 76 files passed, 12 skipped; 790 tests passed, 21 skipped | PASS |
 | Offline live-check gate | npm run claude:live-check --workspace @blip/server -- --offline --max-seconds 900 | status offline, stage not_started, 0 SDK initialization and 0 prompts | PASS |
 | Provider, routing, repair, watchdog, projection, and privacy regressions | npx vitest run --project @blip/server apps/server/test/claude-provider.test.ts apps/server/test/intent-router.test.ts apps/server/test/repair-flow.test.ts apps/server/test/turn-brain.test.ts apps/server/test/brain-projection.test.ts apps/server/test/brain-privacy.test.ts | 6 files, 40 tests passed | PASS |
 | Extension action and protocol regressions | npx vitest run apps/extension/test/act.test.ts packages/protocol/test/form-model.test.ts packages/protocol/test/protocol-lock.test.ts | 3 files, 40 tests passed | PASS |
 | Workspace TypeScript | npm run typecheck | Exit 0 | PASS |
-| Live production initialization, prompts, latency, Windows cancellation, and real repair | Not run; 04-08 live-use decision remains deferred | Report records zero SDK initialization and zero prompts | GAP |
+| Approved production provider initialization and synthetic follow-up probes | npm run claude:live-check --workspace @blip/server -- --live --max-seconds 900 | status timeout, stage initialization, elapsed 900207 ms; zero prompts and no tool counts observed | GAP |
 
-No live SDK or provider call was made, and no credentials or environment values were inspected.
+One production provider-creation attempt was made under the exact approval. It timed out before a role init result or prompt. No credentials or environment values were inspected.
 
 ## Requirements Coverage
 
 | Requirement | Source Plans | Description | Status | Evidence |
 |---|---|---|---|---|
-| BRAIN-01 | 04-01, 04-02, 04-08 | Isolated subscription provider; refuses unexpected init tools | BLOCKED / PENDING | Offline configuration and refusal pass. The follow-up report records zero streaming initializations. |
+| BRAIN-01 | 04-01, 04-02, 04-08 | Isolated subscription provider; refuses unexpected init tools | BLOCKED / PENDING | Offline configuration and refusal pass. The approved streaming startup timed out before a role init result; the earlier spike reported one tool per role. |
 | BRAIN-02 | 04-03, 04-04, 04-06, 04-08 | Free-form requests become structured current-page Intents | BLOCKED / PENDING | Offline grammar/privacy/schema/current-ID path passes. No live Intent or latency exists. |
 | BRAIN-03 | 04-01, 04-02, 04-06, 04-07, 04-08 | Prewarm and recover from failed/hung calls with spoken fallback | BLOCKED / PENDING | Watchdog and fake-adapter recovery pass; production SDK cancellation/recreation is unverified. |
 | PAGE-04 | 04-03, 04-05, 04-07, 04-08 | Background label repair and structural cache | BLOCKED / PENDING | Offline repair/cache behavior passes; no live patch or real-model cache hit exists. |
@@ -164,9 +165,9 @@ All Phase 4 requirements declared by plans are represented above; no orphaned Ph
 
 ### 1. Production Agent SDK integration
 
-**Test:** Only after fresh, separate authorization is recorded in the existing report, run its bounded check using synthetic data.
+**Test:** Only after fresh, separate authorization is recorded in the existing report, run one bounded check using synthetic data. The 2026-10-17 approval has been consumed.
 **Expected:** Both production streaming roles initialize with zero tools; current-ID Intents and latency are recorded; cancellation/recreation recovers; a validated repair patch reloads from cache.
-**Why human:** This consumes the developer subscription and exercises the external SDK plus Windows process behavior. The current report explicitly defers that use.
+**Why human:** This consumes the developer subscription and exercises the external SDK plus Windows process behavior. The approved attempt timed out during initialization; another attempt requires fresh authorization.
 
 ### 2. End-to-end repair and recovery behavior
 
@@ -178,9 +179,9 @@ All Phase 4 requirements declared by plans are represented above; no orphaned Ph
 
 Plan 04-09 successfully closes the approved-mode harness stub. The verifier now runs synthetic grammar misses through routeIntent, validates current IDs and a repair patch, exercises cancellation/recreation under injected conditions, saves and reloads through RepairCache, enforces prompt/deadline caps, and serializes only sanitized evidence. The focused test suite, related regression suites, offline CLI path, and typecheck pass.
 
-Phase 4's goal remains unmet because the live streaming SDK check is still deferred. The 04-08 report is unchanged and records zero initialization and prompts; the earlier startup()+outputFormat spike reported a tool for each role. There is no live Intent, Windows SDK recovery result, repair output, or real-model cache hit. Keep BRAIN-01, BRAIN-02, BRAIN-03, and PAGE-04 Pending. The roadmap and state now show all nine plans complete while Phase 4 remains in progress pending live evidence.
+Phase 4's goal remains unmet. The user explicitly approved one bounded live check; provider creation timed out during initialization after 900 seconds, before a role init result or prompt. The report records zero prompts and consumes the approval so it cannot be reused. The earlier startup()+outputFormat spike reported a tool for each role. There is no live Intent, Windows SDK recovery result, repair output, or real-model cache hit. Keep BRAIN-01, BRAIN-02, BRAIN-03, and PAGE-04 Pending. The roadmap and state show all nine plans complete while Phase 4 remains in progress pending successful live evidence.
 
 ---
 
-_Verified: 2026-10-17T11:15:06Z_
+_Verified: 2026-10-17T12:25:07Z_
 _Verifier: GSD phase verifier_
