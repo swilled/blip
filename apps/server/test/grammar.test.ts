@@ -48,7 +48,20 @@ describe("matchGrammar", () => {
     // @ts-expect-error request_action is not a local command
     const bad: LocalCommand["type"] = "request_action";
     expect(allowed).not.toContain(bad);
-    for (const phrase of ["click submit", "book the room", "pay now", "fill my name", "delete everything", "confirm", "yes submit"]) {
+    for (const phrase of [
+      "click submit",
+      "book the room",
+      "pay now",
+      "fill my name",
+      "delete everything",
+      "confirm",
+      "yes submit",
+      "submit booking",
+      "confirm payment",
+      "confirm deletion",
+      "confirm sending",
+      "leave this site",
+    ]) {
       expect(matchGrammar(phrase)).toBeNull();
     }
   });

@@ -1,7 +1,6 @@
 // One utterance, start to finish: transcript, routing, snapshot fetch, reply, state pushes (D-23, D-24).
-// Nothing in here acts on the page. The fake and (later) real brain can only produce an Intent, and
-// no Intent causes an act.request or a confirm.armed in Phase 1: the Executor does not exist until
-// Phase 3 (GATE-05 foundation, T-01-26).
+// The fake and (later) real brain can only produce an Intent. Ungated Intents enter the established
+// field action path; gated Intents enter the deterministic Executor and never authorize themselves.
 import { newId, type Intent, type Message, type PayloadOf } from "@blip/protocol";
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
@@ -94,9 +93,9 @@ async function readOut(
 }
 
 /**
- * Carry out an Intent (from the grammar or the brain). The only intents Phase 1 understands are the
- * read-only ones. Every other type, including request_action, click_safe and set_fields, is refused
- * out loud and causes no act.request and no confirm.armed.
+ * Carry out an Intent (from the grammar or the brain). Only deterministic local commands are resolved
+ * in grammar; model-produced gated Intents enter the single Executor, while safe field actions retain
+ * the existing ungated path.
  */
 async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promise<void> {
   const { hub, session } = ctx;

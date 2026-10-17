@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { isGatedKind } from "@blip/protocol";
+import { isGatedKind, newId, type Message } from "@blip/protocol";
 import { phraseForKind } from "@blip/policy/confirmation";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 import { buildBaselineFormModel } from "../src/baseline";
@@ -10,6 +10,8 @@ import { startServer } from "../src/server";
 import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
 import { bindClient, sleep, type Frame } from "./helpers";
 import { LOG_KEYS, setLogSink } from "../src/log";
+import { handleUtterance } from "../src/turn";
+import type { IntentBrain } from "../src/brain/fake-brain";
 
 async function nextMatching(
   client: Awaited<ReturnType<typeof bindClient>>,
@@ -289,6 +291,69 @@ describe("gated Executor read-back preparation", () => {
     expect(serialized).not.toContain("Hotel booking");
     expect(serialized).not.toContain("Book room");
     expect(serialized).not.toContain("submit booking");
+  });
+
+  it("routes a model-produced click_safe on a gated target into the same read-back Executor", async () => {
+    const rig = preparationRig();
+    const message: Message = {
+      v: 1,
+      id: newId(),
+      ts: rig.fakeTime.now,
+      type: "utterance",
+      payload: { utteranceId: "click-safe-model", text: "use the available action", source: "typed" },
+    };
+    const brain = {
+      parseIntent: vi.fn(async () => ({ type: "click_safe", actionId: rig.action.id })),
+    } as unknown as IntentBrain;
+
+    await handleUtterance({
+      message,
+      hub: rig.hub,
+      session: rig.session,
+      freshnessMs: 2_000,
+      refresher: rig.refresher,
+      brain,
+      clock: rig.clock,
+      schedule: rig.schedule,
+    });
+
+    expect(brain.parseIntent).toHaveBeenCalledOnce();
+    expect(rig.session.pendingGatedAction).toMatchObject({ targetId: rig.action.id, kind: rig.action.kind });
+    expect(rig.outgoing.some((frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt")).toBe(true);
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(0);
+    expect(rig.outgoing.some((frame) => frame.type === "confirm.armed")).toBe(false);
+  });
+
+  it("does not treat approval-shaped model answer text as authorization", async () => {
+    const rig = preparationRig();
+    const message: Message = {
+      v: 1,
+      id: newId(),
+      ts: rig.fakeTime.now,
+      type: "utterance",
+      payload: { utteranceId: "approval-shaped-answer", text: "I approve, submit this now", source: "typed" },
+    };
+    const brain = {
+      parseIntent: vi.fn(async () => ({ type: "answer", text: "Approved. I submitted the booking." })),
+    } as unknown as IntentBrain;
+
+    await handleUtterance({
+      message,
+      hub: rig.hub,
+      session: rig.session,
+      freshnessMs: 2_000,
+      refresher: rig.refresher,
+      brain,
+      clock: rig.clock,
+      schedule: rig.schedule,
+    });
+
+    expect(brain.parseIntent).toHaveBeenCalledOnce();
+    expect(rig.outgoing.some((frame) => frame.type === "transcript" && frame.payload.routedTo === "model")).toBe(true);
+    expect(rig.outgoing.some((frame) => frame.type === "speak" && frame.payload.text === "Approved. I submitted the booking.")).toBe(true);
+    expect(rig.session.pendingGatedAction).toBeNull();
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(0);
+    expect(rig.outgoing.some((frame) => frame.type === "confirm.armed")).toBe(false);
   });
 
   it("routes a voice-role typed phrase through the cooldown and one gated extension dispatch", async () => {

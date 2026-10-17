@@ -63,12 +63,14 @@ describe("server ungated act path", () => {
     }
   });
 
-  it("keeps request_action refusal ahead of a matching fill phrase", async () => {
-    const r = await rig("e1");
+  it("routes model request_action into read-back without directly dispatching", async () => {
+    const r = await rig("e10");
     try {
       const frames = await turn(r.voice, "fill Full name with Jane Doe");
-      expect(frames.some((frame) => frame.type === "speak" && frame.payload.text === "I can't do that yet.")).toBe(true);
+      expect(frames.some((frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt")).toBe(true);
       expect(r.extension.received().filter((message) => message.type === "act.request")).toHaveLength(0);
+      expect(frames.some((frame) => frame.type === "confirm.armed")).toBe(false);
+      expect(r.server.session.pendingGatedAction).toMatchObject({ targetId: "e10", kind: "submit" });
     } finally {
       r.voice.ws.terminate();
       r.extension.close();
