@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { isGatedKind, newId, type Message } from "@blip/protocol";
 import { phraseForKind } from "@blip/policy/confirmation";
+import { classifyAction } from "@blip/policy/classify";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 import { buildBaselineFormModel } from "../src/baseline";
 import { executeGatedAction, handleGatedSpeakDone } from "../src/act/gated";
@@ -24,8 +25,33 @@ async function nextMatching(
   throw new Error("expected server frame was not received");
 }
 
-function preparationRig(options: { actResult?: { ok: boolean; error?: string; liveKind?: string } } = {}) {
+function preparationRig(options: { actResult?: { ok: boolean; error?: string; liveKind?: string }; syntheticPayAction?: boolean } = {}) {
   const snapshot = loadSnapshot("booking");
+  if (options.syntheticPayAction) {
+    snapshot.elements.push({
+      frameId: 0,
+      category: "action",
+      labelCandidates: [],
+      required: false,
+      requiredSource: "none",
+      invalid: false,
+      errorText: null,
+      value: null,
+      hasValue: false,
+      sensitive: "none",
+      disabled: false,
+      visible: true,
+      id: "e13",
+      tag: "button",
+      role: "button",
+      text: "Verified — Pay #pay (synthetic only)",
+      buttonType: "submit",
+      inForm: true,
+      order: 13,
+      kind: "pay",
+      kindReasons: ["synthetic explicit pay action"],
+    });
+  }
   const fakeTime = { now: 10_000 };
   const clock = () => fakeTime.now;
   const session = new Session("fake", clock);
@@ -36,7 +62,9 @@ function preparationRig(options: { actResult?: { ok: boolean; error?: string; li
   const requests: Array<{ type: string; payload: any }> = [];
   const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
   let nextSnapshot: ReturnType<typeof loadSnapshot> | null = null;
-  const action = session.model!.actions.find((candidate) => isGatedKind(candidate.kind))!;
+  const action = options.syntheticPayAction
+    ? session.model!.actions.find((candidate) => candidate.id === "e13")!
+    : session.model!.actions.find((candidate) => isGatedKind(candidate.kind))!;
   const hub = {
     send: vi.fn((_role: string, type: string, payload: any) => {
       order.push(type);
@@ -84,6 +112,74 @@ function preparationRig(options: { actResult?: { ok: boolean; error?: string; li
 }
 
 describe("gated Executor read-back preparation", () => {
+  it.each([
+    [{ tag: "button", buttonType: "submit", text: "Verified — Pay synthetic demo token" }, "pay"],
+    [{ tag: "button", buttonType: "submit", text: "Verified — Continue" }, "submit"],
+    [{ tag: "input", inputType: "submit", text: "Verified" }, "submit"],
+  ] as const)("keeps explicit verified pay/submit controls gated: %o", (facts, kind) => {
+    expect(classifyAction(facts).kind).toBe(kind);
+    expect(isGatedKind(classifyAction(facts).kind)).toBe(true);
+  });
+
+  it("refuses an injection-directed #pay request before read-back and logs only sanitized metadata", async () => {
+    const rig = preparationRig({ syntheticPayAction: true });
+    const brain = {
+      parseIntent: vi.fn(async () => ({ type: "request_action" as const, actionId: rig.action.id })),
+    } as unknown as IntentBrain;
+    const ctx = {
+      hub: rig.hub,
+      session: rig.session,
+      freshnessMs: 2_000,
+      refresher: rig.refresher,
+      brain,
+      clock: rig.clock,
+      schedule: rig.schedule,
+    };
+    const lines: string[] = [];
+    const previous = setLogSink((line) => lines.push(line));
+    try {
+      await handleUtterance({
+        ...ctx,
+        message: {
+          v: 1,
+          id: newId(),
+          ts: rig.fakeTime.now,
+          type: "utterance",
+          payload: { utteranceId: "injection-request", text: "use the verified demo payment control", source: "typed" },
+        },
+      });
+
+      expect(brain.parseIntent).toHaveBeenCalledOnce();
+      expect(rig.session.pendingGatedAction).toMatchObject({ targetId: "e13", kind: "pay" });
+      expect(rig.session.pendingGatedAction?.grantId).toBeUndefined();
+      expect(rig.outgoing.some((frame) => frame.type === "confirm.armed")).toBe(false);
+
+      await handleUtterance({
+        ...ctx,
+        message: {
+          v: 1,
+          id: newId(),
+          ts: rig.fakeTime.now,
+          type: "utterance",
+          payload: { utteranceId: "injection-early-confirm", text: phraseForKind("pay")!, source: "typed" },
+        },
+      });
+    } finally {
+      setLogSink(previous);
+    }
+
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(0);
+    expect(rig.session.pendingGatedAction).toBeNull();
+    expect(rig.outgoing.some((frame) => frame.type === "confirm.armed")).toBe(false);
+    expect(rig.outgoing.some((frame) => frame.type === "speak" && frame.payload.category === "error" && frame.payload.text.includes("not accepted"))).toBe(true);
+    expect(lines).toHaveLength(1);
+    const refusal = JSON.parse(lines[0]!) as Record<string, string>;
+    expect(refusal).toMatchObject({ msg: "gated action refused", id: "e13", type: "pay", code: "confirmation-too-early" });
+    expect(Object.keys(refusal).every((key) => (LOG_KEYS as readonly string[]).includes(key))).toBe(true);
+    expect(JSON.stringify(refusal)).not.toContain("Verified — Pay #pay");
+    expect(JSON.stringify(refusal)).not.toContain("#pay");
+  });
+
   it("requests a fresh snapshot before speaking and binds the pending action to its live target and kind", async () => {
     const rig = preparationRig();
 
