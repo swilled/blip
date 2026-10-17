@@ -95,12 +95,12 @@ Plans:
 - [x] 02-08-PLAN.md — Add hash, identity, bounded text and shared readonly/visibility helpers
 - [x] 02-09-PLAN.md — Add label, required/error, sensitivity and option helpers, including Luhn detection
 - [x] 02-10-PLAN.md — Implement the content DOM walker and per-frame 250-element snapshot
-- [ ] 02-11-PLAN.md — Route snapshots across frames, preserve ordering and prove baseline compatibility
+- [x] 02-11-PLAN.md — Route snapshots across frames, preserve ordering and prove baseline compatibility
 - [x] 02-12-PLAN.md — Add deterministic REPL field phrases and the allowlisted server act path
 - [x] 02-13-PLAN.md — Build the loopback-only fixture host and bounded report endpoint
 - [x] 02-14-PLAN.md — Add React, vanilla, readonly and auto-submit form fixtures
 - [x] 02-15-PLAN.md — Add dynamic/iframe/CSP/shadow fixtures and the dedicated browser launcher
-- [ ] 02-16-PLAN.md — Implement live field writes, post-write sensitivity recheck and submit-event blocking
+- [x] 02-16-PLAN.md — Implement live field writes, post-write sensitivity recheck and submit-event blocking
 - [ ] 02-17-PLAN.md — Route acts through frames and prove privacy/auto-submit behavior in a browser
 - [ ] 02-18-PLAN.md — Add the closed-shadow highlight and structural mutation observer
 - [ ] 02-19-PLAN.md — Connect navigation/tab/structural changes to server freshness
