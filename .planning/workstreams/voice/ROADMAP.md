@@ -112,7 +112,7 @@ Plans:
      - A bare "yes" is refused and the banner stays.
      - Only "submit survey" submits.
 
-**Plans**: 5/7 plans executed
+**Plans**: 6/7 plans executed
 
 Plans:
 - [x] 02-01-PLAN.md — Broken survey form page, voice-owned snapshot and generated survey FormModel (DEMO-01)
@@ -120,7 +120,7 @@ Plans:
 - [x] 02-03-PLAN.md — BLOCKED banner model, renderer and window wiring (VIS-02)
 - [x] 02-04-PLAN.md — Reducer contracts plus read-the-form, option pick and dictation fill with page-sourced echo
 - [x] 02-05-PLAN.md — Read-back, submit, arm-after-read-back, armed-mode refusal, seeded invariant test
-- [ ] 02-06-PLAN.md — Dialogue runner, fail-closed stub gate, run-real wiring, end-to-end test, HO-8 hand-offs
+- [x] 02-06-PLAN.md — Dialogue runner, fail-closed stub gate, run-real wiring, end-to-end test, HO-8 hand-offs
 - [ ] 02-07-PLAN.md — One-command reset, demo profile, human I2 run
 
 **UI hint**: yes
@@ -181,6 +181,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
-| 2. Fill and Gated Submit on the Broken Form | 5/7 | In Progress | - |
+| 2. Fill and Gated Submit on the Broken Form | 6/7 | In Progress | - |
 | 3. Full Command Set with Real Claude | 0/TBD | Not started | - |
 | 4. NVDA Mode and Demo-Safe | 0/TBD | Not started | - |
