@@ -18,7 +18,7 @@ function page() {
 function providerWith(...responses: unknown[]) {
   let index = 0;
   return {
-    parseIntent: vi.fn(async () => {
+    parseIntent: vi.fn(async (_prompt: string, _signal?: AbortSignal): Promise<Intent> => {
       const response = responses[Math.min(index, responses.length - 1)];
       index += 1;
       if (response instanceof Error) throw response;
@@ -87,6 +87,16 @@ describe("privacy-gated intent routing", () => {
     expect(provider.parseIntent).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects sensitive-shaped values from model output before they can be spoken or written", async () => {
+    const provider = providerWith(
+      { type: "answer", text: "Your card number is 4111 1111 1111 1111" },
+      { type: "answer", text: "Your card number is 4111 1111 1111 1111" },
+    );
+
+    await expect(routeIntent("tell me the card number", page(), provider)).rejects.toBeInstanceOf(InvalidIntentResultError);
+    expect(provider.parseIntent).toHaveBeenCalledTimes(2);
+  });
+
   it("retries invalid structured output once, but not a provider failure", async () => {
     const accepted = page();
     const valid = { type: "describe" } as const;
@@ -105,7 +115,7 @@ describe("privacy-gated intent routing", () => {
     let current = true;
     const accepted = { ...page(), isCurrent: () => current };
     const provider: IntentRouteProvider = {
-      parseIntent: vi.fn(async () => {
+      parseIntent: vi.fn(async (_prompt: string, _signal?: AbortSignal): Promise<Intent> => {
         current = false;
         return { type: "describe" };
       }),
