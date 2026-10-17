@@ -173,10 +173,7 @@ async function executeResolved(
         if (!outcome.ok) return failure(actId, "exception", { ...liveExtra, detail: outcome.detail });
         const post = safeValueForAct(valueElement);
         if (post.sensitive !== "none") return failure(actId, "sensitive-field", { observedValue: null });
-        const observedValue = element.localName === "select"
-          ? post.value
-          : (valueElement as HTMLInputElement).value;
-        return success(actId, { ...liveExtra, observedValue });
+        return success(actId, { ...liveExtra, observedValue: post.value });
       }
       case "check": {
         if (raw.category !== "field" || element.localName !== "input" || (element as HTMLInputElement).type !== "checkbox") {
@@ -190,6 +187,7 @@ async function executeResolved(
       }
       case "focus": {
         if (element instanceof (document.defaultView?.HTMLElement ?? HTMLElement)) {
+          try { (element as HTMLElement).scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch { /* best effort */ }
           focusWithEvents(element as HTMLElement);
         }
         return success(actId, { ...liveExtra, observedValue: null });

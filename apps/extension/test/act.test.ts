@@ -70,6 +70,18 @@ describe("executeAct live safety checks", () => {
     expect(document.querySelector<HTMLInputElement>("#reference")?.value).toBe(cardNumber);
   });
 
+  it("rechecks select read-back shapes before returning an option value", async () => {
+    const cardNumber = "4111111111111111";
+    document.body.innerHTML = `<label for="reference">Reference</label><select id="reference" name="reference"><option value="">Choose</option><option value="${cardNumber}">Card</option></select>`;
+    const frame = capture();
+    const field = frame.elements[0]!;
+
+    const result = await executeAct(request(field.id, { op: "select", targetId: field.id, optionValue: cardNumber }, "select"));
+
+    expect(result).toEqual({ actId: "act-1", ok: false, error: "sensitive-field", observedValue: null });
+    expect(JSON.stringify(result)).not.toContain(cardNumber);
+  });
+
   it("returns the actual clamped DOM value for a safe fill", async () => {
     document.body.innerHTML = '<label for="name">Name</label><input id="name" maxlength="5">';
     const frame = capture();
@@ -78,6 +90,32 @@ describe("executeAct live safety checks", () => {
     await expect(executeAct(request(field.id, { op: "fill", targetId: field.id, value: "abcdefgh" }))).resolves.toMatchObject({
       ok: true, observedValue: "abcde", detail: "truncated to 5 characters", liveKind: "fill",
     });
+  });
+
+  it("reports actual checkbox and radio states while keeping matching writes as no-ops", async () => {
+    document.body.innerHTML = `
+      <label><input id="breakfast" type="checkbox" name="breakfast">Breakfast</label>
+      <fieldset><legend>Room</legend>
+        <label><input type="radio" name="room" value="a" checked>A</label>
+        <label><input type="radio" name="room" value="b">B</label>
+      </fieldset>
+    `;
+    const frame = capture();
+    const checkbox = frame.elements.find((item) => item.name === "breakfast")!;
+    const radioGroup = frame.elements.find((item) => item.name === "room")!;
+    const change = vi.fn();
+    document.querySelector<HTMLInputElement>("#breakfast")!.addEventListener("change", change);
+
+    await expect(executeAct(request(checkbox.id, { op: "check", targetId: checkbox.id, checked: true }, "check"))).resolves.toMatchObject({
+      ok: true, observedValue: "true", liveKind: "check",
+    });
+    await executeAct(request(checkbox.id, { op: "check", targetId: checkbox.id, checked: true }, "check"));
+    await expect(executeAct(request(radioGroup.id, { op: "select", targetId: radioGroup.id, optionValue: "b" }, "select"))).resolves.toMatchObject({
+      ok: true, observedValue: "b", liveKind: "select",
+    });
+
+    expect(change).toHaveBeenCalledOnce();
+    expect(document.querySelector<HTMLInputElement>('input[name="room"][value="b"]')?.checked).toBe(true);
   });
 
   it("rejects a changed target fingerprint before acting", async () => {
