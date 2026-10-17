@@ -13,7 +13,7 @@ import { parseArgs } from "node:util";
 import { DEFAULT_PORT, WS_PATH, LOOPBACK_HOST } from "@blip/protocol";
 import { parseAllowedOrigin } from "./hub/guard";
 import type { StaticRoot } from "./hub/static";
-import { BrainUnavailableError, CLAUDE_BRAIN_UNAVAILABLE, startServer } from "./server";
+import { startServer } from "./server";
 
 function die(message: string, code: number): never {
   process.stderr.write(`${message}\n`);
@@ -45,15 +45,12 @@ async function main(): Promise<void> {
       allowPositionals: false,
     }));
   } catch (err) {
-    die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
+        die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake|claude] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
   }
 
   const dev = values.dev === true;
   const brain = values.brain;
-  if (brain === "claude") {
-    die(CLAUDE_BRAIN_UNAVAILABLE, 2);
-  }
-  if (brain !== "fake") die(`--brain must be fake (claude arrives in Phase 4), got "${brain}"`, 2);
+  if (brain !== "fake" && brain !== "claude") die(`--brain must be fake or claude, got "${brain}"`, 2);
 
   const port = parseIntegerFlag("port", values.port, DEFAULT_PORT, 65535);
   const fakeDelayMs = parseIntegerFlag("fake-delay", values["fake-delay"], 1500, 600000);
@@ -90,7 +87,6 @@ async function main(): Promise<void> {
       ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
     });
   } catch (err) {
-    if (err instanceof BrainUnavailableError) die(err.message, 2);
     if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
       die(`port ${port} is already in use; stop the other process or pick another with --port <n>`, 1);
     }

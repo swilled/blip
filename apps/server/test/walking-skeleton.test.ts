@@ -160,12 +160,6 @@ describe("turn frame order (D-23)", () => {
   });
 });
 
-describe("brain selection (D-21)", () => {
-  it("startServer itself rejects brain claude with the Phase 4 message", async () => {
-    await expect(startServer({ port: 0, brain: "claude" })).rejects.toThrow(/not available yet.*Phase 4/);
-  });
-});
-
 describe("determinism (D-23)", () => {
   it("the same input gives the same text across turns and across server instances", async () => {
     const texts: string[][] = [];

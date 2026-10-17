@@ -117,12 +117,11 @@ describe("npm run dev (D-21)", () => {
     }
   }, 60000);
 
-  it("--brain=claude exits 2 with the Phase 4 message", async () => {
-    const r = run("--brain=claude");
+  it("an unknown brain mode exits 2 without initializing the provider", async () => {
+    const r = run("--brain=remote");
     try {
       expect(await exitWithin(r, 30000)).toBe(2);
-      expect(r.err()).toContain("--brain=claude is not available yet");
-      expect(r.err()).toContain("Phase 4");
+      expect(r.err()).toContain("--brain must be fake or claude");
     } finally {
       killTree(r);
     }

@@ -7,7 +7,9 @@ import { hostAllowed, parseAllowedOrigin } from "./hub/guard";
 import { createStaticHandler, type StaticRoot } from "./hub/static";
 import { Session, type Brain } from "./session/session";
 import { createRefresher, type Refresher } from "./session/refresh";
-import { createFakeBrain } from "./brain/fake-brain";
+import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
+import { createClaudeProvider, type ClaudeProvider } from "./brain/claude/provider";
+import type { ClaudeSdkAdapter } from "./brain/claude/session";
 import { handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
 
@@ -24,6 +26,8 @@ export type StartServerOptions = {
   fakeRequestActionId?: string;
   /** Test-only: with fakeRequestActionId, trigger request_action only for this exact utterance. */
   fakeRequestActionPhrase?: string;
+  /** Test-only: injects a scripted SDK boundary; production loads the SDK only in Claude mode. */
+  claudeAdapter?: ClaudeSdkAdapter;
   /** Message handlers by type; anything without one gets not-implemented (D-14). Plan 01-05 fills these. */
   handlers?: Handlers;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
@@ -64,24 +68,12 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(text);
 }
 
-/** Shared by startServer, the server CLI and the dev runner (D-21). All of them map it to exit code 2. */
-export const CLAUDE_BRAIN_UNAVAILABLE =
-  "--brain=claude is not available yet: the Claude brain arrives in Phase 4. Use --brain=fake.";
-
-export class BrainUnavailableError extends Error {
-  constructor() {
-    super(CLAUDE_BRAIN_UNAVAILABLE);
-    this.name = "BrainUnavailableError";
-  }
-}
-
 export async function startServer(options: StartServerOptions = {}): Promise<RunningServer> {
-  if (options.brain === "claude") throw new BrainUnavailableError();
+  const brainMode = options.brain ?? "fake";
   const dev = options.dev ?? false;
   const extraVoiceOrigins = (options.extraVoiceOrigins ?? []).map(parseAllowedOrigin);
   const clock = options.clock ?? Date.now;
   const schedule = options.schedule;
-  const session = new Session(options.brain ?? "fake", clock);
   let boundPort = options.port ?? DEFAULT_PORT;
   const serveStatic =
     options.staticRoots && options.staticRoots.length > 0 ? createStaticHandler(options.staticRoots) : undefined;
@@ -115,11 +107,28 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   let refresher: Refresher;
 
   const fakeDelayMs = options.fakeDelayMs ?? 1500;
-  const brain = createFakeBrain({
-    delayMs: fakeDelayMs,
-    ...(options.fakeRequestActionId !== undefined ? { requestActionId: options.fakeRequestActionId } : {}),
-    ...(options.fakeRequestActionPhrase !== undefined ? { requestActionPhrase: options.fakeRequestActionPhrase } : {}),
-  });
+  let claudeProvider: ClaudeProvider | null = null;
+  let brain: IntentBrain | ClaudeProvider;
+  if (brainMode === "claude") {
+    claudeProvider = await createClaudeProvider({ ...(options.claudeAdapter !== undefined ? { adapter: options.claudeAdapter } : {}) });
+    brain = claudeProvider;
+  } else {
+    brain = createFakeBrain({
+      delayMs: fakeDelayMs,
+      ...(options.fakeRequestActionId !== undefined ? { requestActionId: options.fakeRequestActionId } : {}),
+      ...(options.fakeRequestActionPhrase !== undefined ? { requestActionPhrase: options.fakeRequestActionPhrase } : {}),
+    });
+  }
+
+  // Plan 04-06 replaces this closed legacy turn seam with the privacy-gated projection router.
+  // Until then, never pass a raw utterance straight from turn.ts to the production provider.
+  const turnBrain: IntentBrain = claudeProvider === null ? brain : {
+    async parseIntent() {
+      throw new Error("Claude intent calls require the privacy-gated router.");
+    },
+  };
+
+  const session = new Session(brainMode, clock);
 
   // Turns run one at a time so busy/state pushes and reply order stay coherent.
   let turnQueue: Promise<void> = Promise.resolve();
@@ -132,7 +141,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
           session: s,
           freshnessMs,
           refresher,
-          brain,
+          brain: turnBrain,
           clock,
           ...(schedule !== undefined ? { schedule } : {}),
         }),
@@ -198,6 +207,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       server.off("error", reject);
       resolve();
     });
+  }).catch(async (error: unknown) => {
+    await claudeProvider?.close();
+    throw error;
   });
   boundPort = (server.address() as AddressInfo).port;
   log("info", { msg: "listening", host: `${LOOPBACK_HOST}:${boundPort}` });
@@ -216,11 +228,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     },
     session,
     hub,
-    close: () =>
-      new Promise<void>((resolve) => {
-        hub.close();
+    close: async () => {
+      hub.close();
+      const serverClosed = new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
-      }),
+      });
+      await Promise.all([serverClosed, claudeProvider?.close() ?? Promise.resolve()]);
+    },
   };
 }
