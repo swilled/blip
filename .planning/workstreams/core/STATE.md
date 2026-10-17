@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase complete — ready for verification
-stopped_at: Completed 04-09-PLAN.md
-last_updated: "2026-10-17T11:11:35.848Z"
+status: Phase 04 plans complete; live verification gaps remain
+stopped_at: Phase 04 re-verification found live-provider evidence gaps
+last_updated: "2026-10-17T11:15:26Z"
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 3
   total_plans: 40
   completed_plans: 40
 ---
@@ -122,7 +122,7 @@ None yet.
 - [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
-- [Phase 4] Plans 04-01 through 04-08 are complete; the live check was deferred with zero SDK initialization or prompts. Verification found the approved-mode harness stub, and Plan 04-09 passed plan-checker review to close that gap offline. Keep BRAIN-01/02/03/PAGE-04 pending until approved live evidence is obtained.
+- [Phase 4] Plans 04-01 through 04-09 are complete. Re-verification closed the approved-mode harness stub with synthetic offline probes, but the live check remains deferred with zero SDK initialization or prompts. Keep BRAIN-01/02/03/PAGE-04 pending until separately approved live evidence is obtained.
 - Phase 04 live SDK verification deferred for lack of fresh approval; zero SDK initialization and prompts; BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04 remain pending.
 
 ## Deferred Items
@@ -135,6 +135,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T11:10:57.266Z
-Stopped at: Completed 04-09-PLAN.md
+Last session: 2026-10-17T11:15:26Z
+Stopped at: Phase 04 re-verification; live-provider evidence remains pending
 Resume file: None
