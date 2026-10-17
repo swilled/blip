@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 02
 current_phase_name: Fill and Gated Submit on the Broken Form
 status: executing
-stopped_at: Completed 02-05-PLAN.md
-last_updated: "2026-10-17T05:32:29.220Z"
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-10-17T05:46:51.983Z"
 last_activity: 2026-10-17
 last_activity_desc: Plan 02-05 complete; Plan 02-06 ready
-state_head: 478114ce254403610b431a1d0224d6840f09aa85
+state_head: 0c4ad6a133867e56a57fb10d1b2ef5b918f36897
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 18
-  completed_plans: 16
+  completed_plans: 17
 milestone_name: milestone
 ---
 
@@ -30,7 +30,7 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 ## Current Position
 
 Phase: 02 (Fill and Gated Submit on the Broken Form) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-10-17 — Plan 02-05 complete; Plan 02-06 ready
 
@@ -70,6 +70,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02 P03 | 8min | 2 tasks | 5 files |
 | Phase 02 P04 | 18min | 3 tasks | 13 files |
 | Phase 02 P05 | 12min | 3 tasks | 6 files |
+| Phase 02 P06 | 14min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,7 @@ Recent decisions affecting the voice track:
 - [Phase 02]: Confirmation accepts only the exact requested token sequence with a one-second gate window. — Affirmatives and near-phrases cannot arm or satisfy the submit gate.
 - [Phase 02]: Spoken echo and read-back use observed page values and hide sensitive fields. — The user hears what the page holds while password and card values remain undisclosed.
 - [Phase 02]: Keep kind: armConfirm as the Effect discriminant and name its ActionKind payload actionKind. — An Effect object cannot carry two different kind properties; this keeps the type contract unambiguous and aligned with Plans 02-05 and 02-06.
+- [Phase 02]: Keep the development GatePort fail-closed until core supplies a grant-bound Executor. — The voice runner can verify the confirmation path without allowing an unconnected gate to submit.
 
 ### Pending Todos
 
@@ -108,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-17T05:14:21.040Z
-Stopped at: Completed 02-05-PLAN.md
+Last session: 2026-10-17T05:46:51.815Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: None
