@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsx build.ts"
+    "build": "tsx build.ts",
+    "serve": "tsx serve.ts"
   },
   "dependencies": {
     "react": "18.3.1",
