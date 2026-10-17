@@ -78,7 +78,7 @@ completed: 2026-10-16
 
 - `npx vitest run test/fill.test.ts test/act.test.ts test/submit-guard.test.ts test/content-install.test.ts --config vitest.config.ts` — passed, 4 files and 20 tests.
 - `npm run ext:typecheck` — passed after the parallel 02-11 source files were present.
-- Root `npm run typecheck` was still failing on missing ambient `chrome` types in the concurrent 02-11 `background/dispatch.ts` and `background/tabs.ts` at summary time. Those paths are outside this plan; rerun after 02-11 resolves the issue.
+- Root `npm run typecheck` initially reported missing ambient `chrome` types in concurrent 02-11 files; after that plan's fix landed, the rerun passed with exit code 0.
 
 ## Files Created/Modified
 
@@ -125,7 +125,7 @@ completed: 2026-10-16
 
 ## Issues Encountered
 
-- The root typecheck exposed missing Chrome ambient types in concurrent 02-11 background files. The extension package typecheck passes; root typecheck must be rerun after the owning executor resolves its error.
+- The first root typecheck overlapped with incomplete 02-11 background files and reported missing Chrome ambient types. After 02-11 committed its fix, root `npm run typecheck` passed.
 
 ## User Setup Required
 
@@ -133,7 +133,7 @@ None - no external service configuration required.
 
 ## Next Phase Readiness
 
-The content act path is ready for 02-17 to connect service-worker routing and for 02-20 to validate the privacy boundary in a real browser. Root typecheck remains pending the 02-11 fix noted above.
+The content act path is ready for 02-17 to connect service-worker routing and for 02-20 to validate the privacy boundary in a real browser. Root typecheck passes with the 02-11 integration present.
 
 ## Self-Check: PASSED
 
