@@ -141,7 +141,7 @@ Plans:
   4. On the broken demo form, unlabeled and placeholder-only fields get repaired labels in the background (marked model-sourced, with a confidence) without delaying the instant baseline answer; patches touch only existing ids and never kind, value or sensitivity; a second visit loads the repair from cache instantly.
 
 **Research**: A bounded local `outputFormat` + `startup()` spike reported one init tool for both roles, even with `tools: []` and `disallowedTools: ["*"]`; it stopped before any model prompt, so the structured-output path was not selected. Use the D-01 streaming/Zod fallback with explicit deny-all and a mandatory empty-tool init check; live streaming initialization remains unverified. Watch subscription quota (Haiku-class intents, Sonnet-class repair, disk cache). Apply the roughly 8k-token snapshot trim here, at the model-prompt boundary; Phase 2 only caps the extension wire snapshot at 250 elements.
-**Plans**: 7/8 complete; gap-closure Plan 04-08 passed plan-checker review. Phase 4 verification still has live-provider gaps (see `04-VERIFICATION.md`).
+**Plans**: 8/9 complete; gap-closure Plan 04-09 passed plan-checker review to complete the offline-testable approved-mode verifier. Phase 4 live-provider gaps remain (see `04-VERIFICATION.md`).
 
 Plans:
 - [x] 04-01-PLAN.md — Approve the exact SDK pin and add a bounded, gated SDK lifecycle spike
@@ -152,6 +152,7 @@ Plans:
 - [x] 04-06-PLAN.md — Route grammar misses through schema-checked intents and a recovering watchdog
 - [x] 04-07-PLAN.md — Repair labels asynchronously and cache validated value-free patches
 - [x] 04-08-PLAN.md — Close Phase 4 live SDK verification gaps behind a fresh approval gate
+- [ ] 04-09-PLAN.md — Complete the approved-mode synthetic verifier behind the existing approval gate
 **UI hint**: no
 
 ### Phase 5: Hostile Pages, Real Web and Freeze
@@ -183,7 +184,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
-| 4. Claude Brain and Label Repair | 8/8 | Complete   | 2026-10-17 |
+| 4. Claude Brain and Label Repair | 8/9 | In Progress|  |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).

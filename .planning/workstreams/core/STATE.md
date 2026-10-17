@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase complete — ready for verification
-stopped_at: Completed 04-08; live SDK check deferred; Phase 4 verification pending
-last_updated: "2026-10-17T10:48:03.059Z"
+status: Ready to execute
+stopped_at: Plan 04-09 passed plan-checker review; execute offline verifier gap closure while live SDK use remains deferred
+last_updated: "2026-10-17T10:58:30Z"
 progress:
   total_phases: 5
-  completed_phases: 4
-  total_plans: 39
+  completed_phases: 3
+  total_plans: 40
   completed_plans: 39
 ---
 
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 04 (Claude Brain and Label Repair) — EXECUTING
-Plan: 8 of 8
+Plan: 8 of 9 complete; 04-09 is ready to execute
 
 ## Performance Metrics
 
@@ -119,7 +119,7 @@ None yet.
 - [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
-- [Phase 4] Plans 04-01 through 04-07 are complete. Plan 04-08 passed plan-checker review and Task 1 offline diagnosis is complete; Task 2 awaits fresh exact approval before any live SDK use. Keep Phase 4 and BRAIN-01/02/03/PAGE-04 unmarked until safely verified.
+- [Phase 4] Plans 04-01 through 04-08 are complete; the live check was deferred with zero SDK initialization or prompts. Verification found the approved-mode harness stub, and Plan 04-09 passed plan-checker review to close that gap offline. Keep BRAIN-01/02/03/PAGE-04 pending until approved live evidence is obtained.
 - Phase 04 live SDK verification deferred for lack of fresh approval; zero SDK initialization and prompts; BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04 remain pending.
 
 ## Deferred Items
@@ -132,6 +132,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T10:47:54.254Z
-Stopped at: Completed 04-08; live SDK check deferred; Phase 4 verification pending
+Last session: 2026-10-17T10:58:30Z
+Stopped at: Plan 04-09 passed plan-checker review; execute its offline verifier gap closure; live SDK check remains deferred
 Resume file: None
