@@ -39,6 +39,7 @@ describe("extension server restart recovery", () => {
     const profileDir = path.join(profileRoot, `reconnect-${process.pid}-${Date.now()}`);
     let child: ChildProcess | undefined;
     const servers: Array<{ port: number; session: { extensionConnected: boolean }; close(): Promise<void> }> = [];
+    const closedServers = new Set<object>();
     let spawnError: Error | undefined;
 
     const waitForBind = async (after: number, label: string): Promise<string> => {
@@ -93,6 +94,7 @@ describe("extension server restart recovery", () => {
 
       const restartLogStart = logs.length;
       await first.close();
+      closedServers.add(first);
       const second = await startServer({ port: first.port, dev: false });
       servers.push(second);
       expect(second.port).toBe(first.port);
@@ -104,7 +106,9 @@ describe("extension server restart recovery", () => {
     } finally {
       try {
         if (child) await stopOwnedBrowser(child);
-        for (const server of servers.reverse()) await server.close();
+        for (const server of servers.reverse()) {
+          if (!closedServers.has(server)) await server.close();
+        }
         await rm(profileDir, { recursive: true, force: true });
       } finally {
         setLogSink(previousLogSink);
