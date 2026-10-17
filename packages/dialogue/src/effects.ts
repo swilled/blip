@@ -1,18 +1,21 @@
-import type { FormModel, PayloadOf } from "@blip/protocol";
+import type { ActionKind, ConfirmClearedPayload, FormModel, PayloadOf } from "@blip/protocol";
+import type { CancelSpeechEffect, DialogueState, SpeakEffect } from "./state";
 
-// Type-only: effects the dialogue reducer asks the window to perform. Derived from the protocol.
+export type { DialogueState } from "./state";
+
+// Type-only: effects the dialogue reducer asks the window/runner to perform.
 // Page text reaches these types as data only; no effect executes page text as a command.
 export type Effect =
-  | {
-      kind: "speak";
-      text: string;
-      category: PayloadOf<"speak">["category"];
-      interruptible: boolean;
-    }
+  | SpeakEffect
   | { kind: "earcon"; name: PayloadOf<"earcon">["name"] }
-  | { kind: "cancelSpeech" }
-  | { kind: "parseIntent"; text: string };
+  | CancelSpeechEffect
+  | { kind: "parseIntent"; text: string }
+  | { kind: "fill"; fieldId: string; value: string }
+  | { kind: "select"; fieldId: string; optionValue: string }
+  | { kind: "focus"; fieldId: string }
+  | { kind: "refreshForm" }
+  | { kind: "armConfirm"; actionId: string; actionKind: ActionKind; title: string; digest: string }
+  | { kind: "clearConfirm"; grantId: string; reason: ConfirmClearedPayload["reason"] }
+  | { kind: "redeem"; grantId: string };
 
-export type DialogueState = { lastSpoken: string | null };
-
-export type DialogueContext = { form: FormModel | null };
+export type DialogueContext = { form: FormModel | null; now: number };
