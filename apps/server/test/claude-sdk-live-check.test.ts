@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Intent, type FormModel, type Snapshot } from "@blip/protocol";
 import {
   LIVE_CHECK_MAX_SECONDS,
+  LIVE_CHECK_BOOTSTRAP_LIMITS,
   LIVE_CHECK_PROMPT_LIMITS,
+  LIVE_CHECK_TOTAL_DISPATCH_LIMIT,
   LIVE_CHECK_APPROVAL_LINE,
   parseLiveCheckArguments,
   runApprovedProbeSequence,
@@ -216,6 +218,8 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       status: "offline",
       stage: "not_started",
       promptCounts: { intent: 0, repair: 0, total: 0 },
+      bootstrapCounts: { intent: 0, repair: 0, total: 0 },
+      dispatchCounts: { intent: 0, repair: 0, total: 0 },
     });
     expect(readReport).not.toHaveBeenCalled();
     expect(createProvider).not.toHaveBeenCalled();
@@ -315,7 +319,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       "set_fields", "request_action", "synthetic prompt", "Bash", "ANTHROPIC_API_KEY", "credential",
     ]) expect(serialized).not.toContain(privateValue);
     expect(Object.keys(result).sort()).toEqual([
-      "cancellationVerified", "currentSyntheticIdMatched", "elapsedMs", "intentAccepted", "intentLatenciesMs",
+      "bootstrapCounts", "cancellationVerified", "currentSyntheticIdMatched", "dispatchCounts", "elapsedMs", "intentAccepted", "intentLatenciesMs",
       "intentSchemaValid", "invalidToolList", "promptCounts", "rejectingRole", "repairCacheReloaded",
       "repairSchemaValid", "recreatedIntentToolCount", "stage", "status", "subsequentPromptsAfterBlock", "toolCount",
     ].sort());
@@ -473,6 +477,8 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
 
   it("keeps duration and role-specific prompt ceilings bounded", () => {
     expect(LIVE_CHECK_PROMPT_LIMITS).toEqual({ intent: 4, repair: 1, total: 5 });
+    expect(LIVE_CHECK_BOOTSTRAP_LIMITS).toEqual({ intent: 2, repair: 1, total: 3 });
+    expect(LIVE_CHECK_TOTAL_DISPATCH_LIMIT).toBe(8);
     expect(parseLiveCheckArguments(["--offline"])).toEqual({ live: false, maxSeconds: LIVE_CHECK_MAX_SECONDS });
     expect(() => parseLiveCheckArguments(["--offline", "--live"])).toThrow(/cannot be combined/);
     expect(() => parseLiveCheckArguments(["--live", "--max-seconds", "901"])).toThrow(/900 seconds/);
@@ -499,9 +505,48 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     expect(result).toMatchObject({
       status: "completed",
       promptCounts: { intent: 4, repair: 1, total: 5 },
+      bootstrapCounts: { intent: 0, repair: 0, total: 0 },
+      dispatchCounts: { intent: 4, repair: 1, total: 5 },
       subsequentPromptsAfterBlock: 0,
     });
     expect(provider.parseIntent).toHaveBeenCalledTimes(4);
     expect(provider.repairFormModel).toHaveBeenCalledOnce();
+  });
+
+  it("counts bootstrap roles before dispatch and refuses over-cap or ninth operations", async () => {
+    const provider = fakeProvider();
+    const createProvider = vi.fn(async (
+      _signal: AbortSignal,
+      beforeBootstrapDispatch: (role: "intent" | "repair") => void,
+    ) => {
+      beforeBootstrapDispatch("intent");
+      beforeBootstrapDispatch("repair");
+      beforeBootstrapDispatch("intent");
+      expect(() => beforeBootstrapDispatch("intent")).toThrow(/bootstrap dispatch cap/);
+      expect(() => beforeBootstrapDispatch("repair")).toThrow(/bootstrap dispatch cap/);
+      return provider;
+    });
+    const verify = vi.fn(async (guarded: LiveCheckProvider) => {
+      for (let index = 0; index < LIVE_CHECK_PROMPT_LIMITS.intent; index += 1) {
+        await guarded.parseIntent(`synthetic intent ${index}`);
+      }
+      await guarded.repairFormModel("one synthetic repair");
+      await expect(guarded.parseIntent("ninth dispatch must not queue")).rejects.toThrow(/prompt cap/);
+    });
+    const result = await runOfflineFirstLiveCheck(
+      { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
+      { readReport: async () => APPROVED_REPORT, createProvider, verify },
+    );
+
+    expect(result).toMatchObject({
+      status: "completed",
+      bootstrapCounts: { intent: 2, repair: 1, total: 3 },
+      promptCounts: { intent: 4, repair: 1, total: 5 },
+      dispatchCounts: { intent: 6, repair: 2, total: 8 },
+    });
+    expect(provider.parseIntent).toHaveBeenCalledTimes(4);
+    expect(provider.repairFormModel).toHaveBeenCalledOnce();
+    expect(Object.keys(result)).toEqual(expect.arrayContaining(["bootstrapCounts", "dispatchCounts"]));
+    expect(JSON.stringify(result)).not.toContain("synthetic intent");
   });
 });

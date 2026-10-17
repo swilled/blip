@@ -10,12 +10,14 @@ import { UnexpectedClaudeToolsError, type ClaudeRole } from "../src/brain/claude
 
 export const LIVE_CHECK_MAX_SECONDS = 900;
 export const LIVE_CHECK_PROMPT_LIMITS = { intent: 4, repair: 1, total: 5 } as const;
-export const LIVE_CHECK_APPROVAL_LINE = "phase04FollowupApproval: approve-04-08-live-check";
+export const LIVE_CHECK_BOOTSTRAP_LIMITS = { intent: 2, repair: 1, total: 3 } as const;
+export const LIVE_CHECK_TOTAL_DISPATCH_LIMIT = 8;
+export const LIVE_CHECK_APPROVAL_LINE = "phase04FollowupApproval: approve-04-10-bootstrap-check";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPORT_PATH = resolve(
   SCRIPT_DIR,
-  "../../../.planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-08-LIVE-CHECK.md",
+  "../../../.planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-10-LIVE-CHECK.md",
 );
 
 export type LiveCheckArguments = { live: boolean; maxSeconds: number };
@@ -58,6 +60,8 @@ export type LiveCheckResult = LiveCheckProbeEvidence & {
   status: "offline" | "completed" | "externally_blocked" | "timeout" | "failed";
   elapsedMs: number;
   promptCounts: { intent: number; repair: number; total: number };
+  bootstrapCounts: { intent: number; repair: number; total: number };
+  dispatchCounts: { intent: number; repair: number; total: number };
   rejectingRole: ClaudeRole | null;
   toolCount: number | null;
   invalidToolList: boolean;
@@ -68,7 +72,10 @@ export type LiveCheckDependencies = {
   /** Read only the plan-specific report; this callback is not called in offline mode. */
   readReport(): Promise<string>;
   /** The production implementation dynamically imports the SDK only after approval passes. */
-  createProvider(signal: AbortSignal): Promise<LiveCheckProvider>;
+  createProvider(
+    signal: AbortSignal,
+    beforeBootstrapDispatch: (role: ClaudeRole) => void,
+  ): Promise<LiveCheckProvider>;
   /** Injected so offline tests can prove gates without sending any provider prompt. */
   verify(
     provider: GuardedLiveCheckProvider,
@@ -409,6 +416,14 @@ function emptyCounts(): LiveCheckResult["promptCounts"] {
   return { intent: 0, repair: 0, total: 0 };
 }
 
+function emptyBootstrapCounts(): LiveCheckResult["bootstrapCounts"] {
+  return { intent: 0, repair: 0, total: 0 };
+}
+
+function emptyDispatchCounts(): LiveCheckResult["dispatchCounts"] {
+  return { intent: 0, repair: 0, total: 0 };
+}
+
 export async function runOfflineFirstLiveCheck(
   args: LiveCheckArguments,
   dependencies: LiveCheckDependencies,
@@ -417,6 +432,8 @@ export async function runOfflineFirstLiveCheck(
   const startedAt = now();
   const evidence = createLiveCheckProbeEvidence();
   const counts = emptyCounts();
+  const bootstraps = emptyBootstrapCounts();
+  const dispatches = emptyDispatchCounts();
   const result = (
     status: LiveCheckResult["status"],
     role: ClaudeRole | null = null,
@@ -427,6 +444,8 @@ export async function runOfflineFirstLiveCheck(
     status,
     elapsedMs: Math.max(0, Math.round(now() - startedAt)),
     promptCounts: { intent: counts.intent, repair: counts.repair, total: counts.total },
+    bootstrapCounts: { intent: bootstraps.intent, repair: bootstraps.repair, total: bootstraps.total },
+    dispatchCounts: { intent: dispatches.intent, repair: dispatches.repair, total: dispatches.total },
     rejectingRole: role === "intent" || role === "repair" ? role : null,
     toolCount: Number.isSafeInteger(toolCount) && toolCount !== null && toolCount >= 0 ? toolCount : null,
     invalidToolList: invalidToolList === true,
@@ -453,6 +472,21 @@ export async function runOfflineFirstLiveCheck(
   evidence.stage = "initialization";
   let timedOut = false;
 
+  const spendBootstrap = (role: ClaudeRole): void => {
+    if (blockState.current !== null) throw new Error("Live check blocked after init tools were reported.");
+    if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Live check aborted.");
+    if (bootstraps[role] >= LIVE_CHECK_BOOTSTRAP_LIMITS[role] ||
+      bootstraps.total >= LIVE_CHECK_BOOTSTRAP_LIMITS.total ||
+      dispatches.total >= LIVE_CHECK_TOTAL_DISPATCH_LIMIT) {
+      throw new Error("Live check bootstrap dispatch cap reached.");
+    }
+    // Count before the session manager queues this fixed synthetic operation.
+    bootstraps[role] += 1;
+    bootstraps.total += 1;
+    dispatches[role] += 1;
+    dispatches.total += 1;
+  };
+
   const timeout = new Promise<"timeout">((resolveTimeout) => {
     timeoutHandle = setTimer(() => {
       timedOut = true;
@@ -464,7 +498,7 @@ export async function runOfflineFirstLiveCheck(
 
   const run = (async (): Promise<"completed" | "externally_blocked" | "failed"> => {
     try {
-      provider = await dependencies.createProvider(controller.signal);
+      provider = await dependencies.createProvider(controller.signal, spendBootstrap);
       if (controller.signal.aborted) {
         await provider.close().catch(() => {});
         provider = undefined;
@@ -474,12 +508,15 @@ export async function runOfflineFirstLiveCheck(
       const spendPrompt = async <T>(role: "intent" | "repair", action: () => Promise<T>): Promise<T> => {
         if (blockState.current !== null) throw new Error("Live check blocked after init tools were reported.");
         if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Live check aborted.");
-        if (counts[role] >= LIVE_CHECK_PROMPT_LIMITS[role] || counts.total >= LIVE_CHECK_PROMPT_LIMITS.total) {
+        if (counts[role] >= LIVE_CHECK_PROMPT_LIMITS[role] || counts.total >= LIVE_CHECK_PROMPT_LIMITS.total ||
+          dispatches.total >= LIVE_CHECK_TOTAL_DISPATCH_LIMIT) {
           throw new Error("Live check prompt cap reached.");
         }
         // Count immediately before dispatch, including a call that is later aborted.
         counts[role] += 1;
         counts.total += 1;
+        dispatches[role] += 1;
+        dispatches.total += 1;
         return action();
       };
 
@@ -530,9 +567,9 @@ async function main(): Promise<void> {
   const args = parseLiveCheckArguments(process.argv.slice(2));
   const result = await runOfflineFirstLiveCheck(args, {
     readReport: () => import("node:fs/promises").then(({ readFile }) => readFile(REPORT_PATH, "utf8")),
-    async createProvider(startupSignal) {
+    async createProvider(startupSignal, beforeBootstrapDispatch) {
       const { createClaudeProvider } = await import("../src/brain/claude/provider");
-      return createClaudeProvider({ startupSignal });
+      return createClaudeProvider({ startupSignal, beforeBootstrapDispatch });
     },
     async verify(provider, signal, evidence) {
       const cacheDirectory = await mkdtemp(join(tmpdir(), "blip-claude-live-check-"));
