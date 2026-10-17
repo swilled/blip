@@ -109,7 +109,7 @@ describe("interpretResult", () => {
 });
 
 describe("what went wrong", () => {
-  async function requestCurrentErrors(initialName: string, freshSnapshot: ReturnType<typeof loadSnapshot>) {
+  async function requestCurrentErrors(initialName: Parameters<typeof loadSnapshot>[0], freshSnapshot: ReturnType<typeof loadSnapshot>) {
     const session = new Session("fake");
     session.extensionConnected = true;
     session.applySnapshot(loadSnapshot(initialName));
@@ -170,7 +170,7 @@ describe("what went wrong", () => {
 });
 
 describe("gated post-action result", () => {
-  async function dispatchWithResult(resultSnapshot: ReturnType<typeof loadSnapshot>) {
+  async function dispatchWithResult(resultSnapshot: ReturnType<typeof loadSnapshot>, failPostActRefresh = false) {
     const initial = loadSnapshot("booking");
     const fakeTime = { now: 10_000 };
     const session = new Session("fake", () => fakeTime.now);
@@ -195,6 +195,7 @@ describe("gated post-action result", () => {
     const refresher = {
       request: vi.fn(async (reason: string) => {
         order.push(`refresh:${reason}`);
+        if (reason === "post-act" && failPostActRefresh) return { ok: false, kind: "read-failed" } as const;
         if (reason === "post-act") session.applySnapshot(resultSnapshot, { updateDialogue: false });
         return { ok: true, applied: true, snapshot: reason === "post-act" ? resultSnapshot : initial } as const;
       }),
@@ -221,6 +222,14 @@ describe("gated post-action result", () => {
     expect(refresher.request).toHaveBeenCalledWith("post-act");
     expect(order.indexOf("request:act.request")).toBeLessThan(order.indexOf("refresh:post-act"));
     expect(order.indexOf("refresh:post-act")).toBeLessThan(order.lastIndexOf("send:speak"));
+    expect(lastSpeech).toBe("I couldn't verify the page outcome.");
+  });
+
+  it("speaks unverified without a cause when the post-act snapshot cannot be read", async () => {
+    const { outgoing, refresher } = await dispatchWithResult(loadSnapshot("result-ok"), true);
+    const lastSpeech = outgoing.filter((message) => message.type === "speak").at(-1)?.payload.text as string;
+
+    expect(refresher.request).toHaveBeenCalledWith("post-act");
     expect(lastSpeech).toBe("I couldn't verify the page outcome.");
   });
 

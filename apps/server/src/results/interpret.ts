@@ -1,6 +1,7 @@
 import type { FormModel, Snapshot } from "@blip/protocol";
 
 export type ResultFieldError = { label: string; message: string };
+export type ResultErrors = { fieldErrors: ResultFieldError[]; pageErrors: string[] };
 export type ResultInterpretation = {
   status: "confirmed" | "errors" | "unverified";
   confirmationNumber: string | null;
@@ -8,12 +9,33 @@ export type ResultInterpretation = {
   pageErrors: string[];
 };
 
+export function formatResultErrors(errors: ResultErrors): string | null {
+  const sections: string[] = [];
+  if (errors.fieldErrors.length > 0) {
+    sections.push(`Field errors in page order: ${errors.fieldErrors.map(({ label, message }, index) => `${index + 1}. ${label}: ${message}`).join(" ")}`);
+  }
+  if (errors.pageErrors.length > 0) sections.push(`Page errors: ${errors.pageErrors.join(" ")}`);
+  return sections.length === 0 ? null : sections.join(" ");
+}
+
+export function formatResultSpeech(result: ResultInterpretation): string {
+  const errors = formatResultErrors(result);
+  if (result.status === "confirmed") {
+    const number = result.confirmationNumber === null ? "" : ` Confirmation number ${result.confirmationNumber}.`;
+    return `The page confirms the action.${number}${errors === null ? "" : ` ${errors}`}`;
+  }
+  if (result.status === "errors" && errors !== null) return `The page reports errors. ${errors}`;
+  return "I couldn't verify the page outcome.";
+}
+
 const CONFIRMED = /\b(?:confirmed|confirmation\s+(?:number|no\.?|#)|successfully\s+(?:submitted|booked|processed|sent|paid)|submission\s+(?:complete|completed)|booking\s+(?:complete|completed)|payment\s+(?:complete|completed|successful))\b/i;
 const NEGATED_CONFIRMATION = /\b(?:not|never|failed\s+to|unable\s+to|could\s+not|cannot|can't)\s+(?:(?:be|been)\s+)?(?:successfully\s+)?(?:confirmed|confirm|completed|complete|submitted|processed|booked|paid|sent)\b/i;
 const CONFIRMATION_NUMBER = /\bconfirmation\s+(?:number|no\.?|#)\s*(?::|#|is)?\s*([A-Z0-9][A-Z0-9-]{1,31})\b/i;
 const EXPLICIT_ERROR = /\b(?:errors?|invalid|failed|failure|unable\s+to|cannot|could\s+not|rejected|required|fix\s+\d+\s+errors?)\b/i;
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const LONG_NUMBER = /(?<!\d)(?:\d[ -]?){9,19}(?!\d)/g;
+const SENSITIVE_NUMBER = /\b(?:cvc|cvv|security code|otp|one[- ]time code|ssn|social security(?: number)?)\s*(?::|=|is)?\s*\d{3,16}\b/gi;
+const SENSITIVE_SECRET = /\b(?:password|passcode)\s*(?::|=|is)\s*[^\s.,;]{3,64}/gi;
 const MAX_CONFIRMATION_CHARS = 32;
 
 type Evidence = { text: string; source: "heading" | "alert" };
@@ -48,7 +70,11 @@ function redactKnownValues(text: string, model: FormModel): string {
 function safeText(value: string, model: FormModel, maxLength: number): string {
   let text = value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLength);
   text = redactKnownValues(text, model);
-  text = text.replace(EMAIL, "[redacted]").replace(LONG_NUMBER, "[redacted]");
+  text = text
+    .replace(EMAIL, "[redacted]")
+    .replace(LONG_NUMBER, "[redacted]")
+    .replace(SENSITIVE_NUMBER, "[redacted]")
+    .replace(SENSITIVE_SECRET, "[redacted]");
   return text;
 }
 
@@ -93,6 +119,12 @@ function pageErrors(model: FormModel, evidence: Evidence[]): string[] {
   });
 }
 
+/** Errors from the current FormModel, with success-only status messages omitted. */
+export function interpretCurrentErrors(model: FormModel): ResultErrors {
+  const alerts = model.pageErrors.map((text) => ({ text, source: "alert" as const }));
+  return { fieldErrors: fieldErrors(model), pageErrors: pageErrors(model, alerts) };
+}
+
 /**
  * Classify a fresh result snapshot using only bounded headings/alerts and the corresponding model's
  * explicit field/page errors. Title, URL, dispatch status and absence of errors never prove success.
@@ -108,13 +140,15 @@ export function interpretResult(snapshot: Snapshot, model: FormModel): ResultInt
 
   const evidence = boundedEvidence(snapshot);
   const confirmed = evidence.some((item) => isConfirmationEvidence(item.text));
-  const fields = fieldErrors(model);
-  const pages = pageErrors(model, evidence);
+  const errors = { fieldErrors: fieldErrors(model), pageErrors: pageErrors(model, evidence) };
 
   return {
-    status: confirmed ? "confirmed" : fields.length > 0 || pages.length > 0 ? "errors" : "unverified",
+    status: confirmed
+      ? "confirmed"
+      : errors.fieldErrors.length > 0 || errors.pageErrors.length > 0
+        ? "errors"
+        : "unverified",
     confirmationNumber: confirmed ? confirmationNumber(evidence, model) : null,
-    fieldErrors: fields,
-    pageErrors: pages,
+    ...errors,
   };
 }

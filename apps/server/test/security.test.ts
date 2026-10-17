@@ -211,7 +211,7 @@ describe("gated audit privacy", () => {
       send: vi.fn(() => true),
       pushState: vi.fn(),
     } as unknown as Hub;
-    const refresher = { request: vi.fn(async () => ({ ok: true, applied: true } as const)) };
+    const refresher = { request: vi.fn(async () => ({ ok: true, applied: true, snapshot } as const)) };
     try {
       await executeGatedAction(
         { hub, session, refresher, clock: () => 10_000 },

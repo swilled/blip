@@ -59,9 +59,10 @@ function preparationRig(options: { actResult?: { ok: boolean; error?: string; li
   const refresher = {
     request: vi.fn(async () => {
       order.push("fresh-snapshot");
-      session.applySnapshot(nextSnapshot ?? snapshot);
+      const acceptedSnapshot = nextSnapshot ?? snapshot;
+      session.applySnapshot(acceptedSnapshot);
       nextSnapshot = null;
-      return { ok: true, applied: true } as const;
+      return { ok: true, applied: true, snapshot: acceptedSnapshot } as const;
     }),
   };
   const schedule = (callback: () => void, delayMs: number) => scheduled.push({ callback, delayMs });

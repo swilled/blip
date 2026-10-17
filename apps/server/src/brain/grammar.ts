@@ -9,6 +9,7 @@ import type { Intent } from "@blip/protocol";
  */
 export type LocalCommand =
   | Extract<Intent, { type: "describe" | "whats_required" | "read_form" | "stop" }>
+  | { type: "what_went_wrong" }
   | { type: "repeat" };
 
 /** Lower-case, drop punctuation (apostrophes included), collapse whitespace. */
@@ -27,6 +28,7 @@ const TABLE: ReadonlyArray<readonly [ReadonlySet<string>, LocalCommand]> = [
   ],
   [new Set(["whats required", "what is required", "which fields are required", "what fields are required"]), { type: "whats_required" }],
   [new Set(["read the form", "read form"]), { type: "read_form" }],
+  [new Set(["what went wrong"]), { type: "what_went_wrong" }],
   [new Set(["stop", "be quiet", "quiet", "stop talking"]), { type: "stop" }],
   [new Set(["repeat", "say that again", "repeat that"]), { type: "repeat" }],
 ];

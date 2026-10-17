@@ -1,11 +1,11 @@
-import type { PayloadOf } from "@blip/protocol";
+import type { PayloadOf, Snapshot } from "@blip/protocol";
 import { HubRequestError, type Hub } from "../hub/hub";
 import type { Session } from "./session";
 
 export type RefreshReason = PayloadOf<"snapshot.request">["reason"];
 
 export type RefreshResult =
-  | { ok: true; applied: boolean }
+  | { ok: true; applied: true; snapshot: Snapshot }
   | { ok: false; kind: "no-extension" | "read-failed" | "stale-snapshot" };
 
 export type Refresher = { request(reason: RefreshReason): Promise<RefreshResult> };
@@ -38,7 +38,7 @@ export function createRefresher(options: { hub: Hub; session: Session; timeoutMs
         return { ok: false, kind: "stale-snapshot" };
       }
       hub.pushState();
-      return { ok: true, applied: true };
+      return { ok: true, applied: true, snapshot: result.payload.snapshot };
     } catch (error) {
       session.stale = true;
       if (error instanceof HubRequestError && (error.code === "disconnected" || error.code === "no-connection")) {

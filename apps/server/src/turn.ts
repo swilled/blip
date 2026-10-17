@@ -7,6 +7,7 @@ import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
 import { executeUngated } from "./act/ungated";
 import { executeGatedAction, type GatedCommand } from "./act/gated";
+import { formatResultErrors, interpretCurrentErrors } from "./results/interpret";
 import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
 import type { Refresher } from "./session/refresh";
@@ -38,6 +39,7 @@ export const MSG_UNKNOWN = "I didn't understand that.";
 export const MSG_BRAIN_FAILED = "Something went wrong on my side.";
 export const MSG_FILLER = "One moment.";
 const MSG_FIELD_PHRASE_TOO_LONG = "That value is too long to fill.";
+const MSG_NO_CURRENT_ERRORS = "There are no errors currently detected.";
 
 type SpeakOptions = { interrupt?: boolean; record?: boolean };
 
@@ -92,6 +94,21 @@ async function readOut(
   else speak(ctx.hub, ctx.session, build(ctx.session.model!), "answer");
 }
 
+/** This command always reads the current page before repeating its detected errors. */
+async function reportCurrentErrors(ctx: TurnContext): Promise<void> {
+  const result = await ctx.refresher.request("user");
+  if (!result.ok) {
+    speak(ctx.hub, ctx.session, result.kind === "no-extension" ? MSG_NO_EXTENSION : MSG_READ_FAILED, "error");
+    return;
+  }
+  if (ctx.session.model === null || ctx.session.stale) {
+    speak(ctx.hub, ctx.session, MSG_READ_FAILED, "error");
+    return;
+  }
+  const errors = formatResultErrors(interpretCurrentErrors(ctx.session.model));
+  speak(ctx.hub, ctx.session, errors ?? MSG_NO_CURRENT_ERRORS, "answer");
+}
+
 /**
  * Carry out an Intent (from the grammar or the brain). Only deterministic local commands are resolved
  * in grammar; model-produced gated Intents enter the single Executor, while safe field actions retain
@@ -106,6 +123,8 @@ async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promi
       return readOut(ctx, requiredReply, ctx.freshnessMs);
     case "read_form":
       return readOut(ctx, readFormReply, ctx.freshnessMs);
+    case "what_went_wrong":
+      return reportCurrentErrors(ctx);
     case "stop":
       return sayStop(hub, session);
     case "repeat":

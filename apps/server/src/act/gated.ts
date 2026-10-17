@@ -4,6 +4,7 @@ import type { Hub } from "../hub/hub";
 import { log } from "../log";
 import type { Refresher } from "../session/refresh";
 import type { PendingGatedAction, Session } from "../session/session";
+import { formatResultSpeech, interpretResult } from "../results/interpret";
 
 const MAX_READBACK_CHARS = 20_000;
 const ACT_TIMEOUT_MS = 5_000;
@@ -18,7 +19,7 @@ const MSG_PAGE_CHANGED = "The page changed after the read-back. Nothing was subm
 const MSG_VALUE_CHANGED = "A field changed after the read-back. Nothing was submitted; please ask me to read the form back again.";
 const MSG_EXTENSION_REFUSED = "The page refused the action. It was not carried out; please ask me to read the form back again.";
 const MSG_DISPATCH_UNKNOWN = "I couldn't verify what the page did. I won't retry; please check the page before trying again.";
-const MSG_DISPATCHED = "The action was sent to the page. I have not verified the result yet.";
+const MSG_RESULT_UNVERIFIED = "I couldn't verify the page outcome.";
 const MSG_GRANT_EXPIRED = "The confirmation expired. Nothing was carried out; please ask me to read the form back again.";
 
 export type GatedContext = {
@@ -419,5 +420,10 @@ async function acceptConfirmation(ctx: GatedContext, text: string): Promise<void
     return finishPending(ctx, pending, "result-kind-mismatch", { wireReason: "executed", reply: MSG_DISPATCH_UNKNOWN });
   }
   finishPending(ctx, pending, "dispatched", { outcome: "allowed", wireReason: "executed" });
-  speak(ctx, MSG_DISPATCHED, "answer");
+  const resultSnapshot = await ctx.refresher.request("post-act");
+  if (!resultSnapshot.ok || resultSnapshot.snapshot === undefined || ctx.session.model === null || ctx.session.stale) {
+    speak(ctx, MSG_RESULT_UNVERIFIED, "answer");
+    return;
+  }
+  speak(ctx, formatResultSpeech(interpretResult(resultSnapshot.snapshot, ctx.session.model)), "answer");
 }

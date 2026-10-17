@@ -151,7 +151,7 @@ describe("server ungated act path", () => {
     const refresher = {
       request: vi.fn(async () => {
         calls.push("refresh");
-        return { ok: true, applied: true } as const;
+        return { ok: true, applied: true, snapshot } as const;
       }),
     };
     const reply = await executeUngated({ hub, session, refresher, freshnessMs: 2000 }, {
@@ -186,7 +186,7 @@ describe("server ungated act path", () => {
         refreshedVersion++;
         const next = { ...snapshot, version: refreshedVersion, capturedAt: snapshot.capturedAt + refreshedVersion } as Snapshot;
         session.applySnapshot(next);
-        return { ok: true, applied: true } as const;
+        return { ok: true, applied: true, snapshot: next } as const;
       }),
     };
     const reply = await executeUngated({ hub, session, refresher, freshnessMs: 2000 }, {
