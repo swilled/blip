@@ -1,10 +1,11 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type RuntimeMessageListener = (
   message: unknown,
-  sender: { id?: string },
+  sender: { id?: string; frameId?: number },
   sendResponse: (response: unknown) => void,
-) => void;
+) => boolean | void;
 
 describe("install-time content injection", () => {
   let tabsQuery: ReturnType<typeof vi.fn>;
@@ -98,5 +99,36 @@ describe("content message listener installation", () => {
     listeners[0]?.({ type: "blip.ping" }, { id: "blip-extension-id" }, sendResponse);
     expect(sendResponse).toHaveBeenCalledOnce();
     expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+  });
+
+  it("captures a snapshot baseline and answers an act message asynchronously", async () => {
+    document.body.innerHTML = '<label for="name">Name</label><input id="name">';
+    await import("../src/content/index.js");
+    const sender = { id: "blip-extension-id", frameId: 0 };
+    const snapshotResponse = vi.fn();
+    listeners[0]?.({ t: "snapshot", topOrigin: "https://forms.example" }, sender, snapshotResponse);
+    const snapshot = snapshotResponse.mock.calls[0]?.[0] as {
+      t: string;
+      snapshot: { elements: Array<{ id: string }> };
+    };
+    const targetId = snapshot.snapshot.elements[0]!.id;
+
+    const response = await new Promise<unknown>((resolve) => {
+      const asynchronous = listeners[0]?.({
+        t: "act",
+        snapshotVersion: 1,
+        request: {
+          actId: "content-act",
+          tabId: 1,
+          snapshotVersion: 1,
+          action: { op: "fill", targetId, value: "Ada" },
+          expectedKind: "fill",
+        },
+      }, sender, resolve);
+      expect(asynchronous).toBe(true);
+    });
+
+    expect(response).toMatchObject({ t: "act.result", result: { actId: "content-act", ok: true, observedValue: "Ada" } });
+    expect(document.querySelector<HTMLInputElement>("#name")?.value).toBe("Ada");
   });
 });

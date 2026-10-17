@@ -1,6 +1,7 @@
 export {};
 
 import type { BackgroundToContentMessage, ContentResponse, ContentToBackgroundMessage } from "../shared/messages.js";
+import { executeAct } from "./act.js";
 import { captureFrameSnapshot } from "./snapshot.js";
 export { captureFrameSnapshot } from "./snapshot.js";
 export { resolveElementId, walkDocument } from "./walk.js";
@@ -17,13 +18,25 @@ if (isolatedWorld.__blipContentShellInstalled !== true) {
       return;
     }
 
-    if (!("t" in message) || message.t !== "snapshot" || !("topOrigin" in message) || typeof message.topOrigin !== "string") return;
-    const request = message as Extract<BackgroundToContentMessage, { t: "snapshot" }>;
-    const response: ContentResponse = {
-      t: "snapshot.result",
-      snapshot: captureFrameSnapshot({ topOrigin: request.topOrigin }),
-    };
-    sendResponse(response);
+    if (!("t" in message)) return;
+    if (message.t === "snapshot" && "topOrigin" in message && typeof message.topOrigin === "string") {
+      const request = message as Extract<BackgroundToContentMessage, { t: "snapshot" }>;
+      const response: ContentResponse = {
+        t: "snapshot.result",
+        snapshot: captureFrameSnapshot({ topOrigin: request.topOrigin, frameId: sender.frameId ?? 0 }),
+      };
+      sendResponse(response);
+      return;
+    }
+
+    if (message.t === "act" && "request" in message) {
+      const request = message as Extract<BackgroundToContentMessage, { t: "act" }>;
+      void executeAct(request.request, { frameId: sender.frameId ?? 0 }).then((result) => {
+        const response: ContentResponse = { t: "act.result", result };
+        sendResponse(response);
+      });
+      return true;
+    }
   });
 
   const ready: ContentToBackgroundMessage = { t: "ready" };

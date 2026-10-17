@@ -1,5 +1,6 @@
 import type { ContentSnapshot } from "../shared/messages.js";
 import { computeStructuralHash } from "../shared/signature.js";
+import { rememberSnapshotFingerprints } from "./act.js";
 import { boundedText } from "./text.js";
 import { isVisible } from "./visibility.js";
 import { elementsInComposedDocument, walkDocument, type WalkOptions } from "./walk.js";
@@ -109,5 +110,6 @@ export function captureFrameSnapshot(options: CaptureFrameSnapshotOptions = {}):
     capturedAt: Date.now(),
   };
   if (stepHint) result.stepHint = stepHint;
+  rememberSnapshotFingerprints(ownerDocument, selected);
   return result;
 }
