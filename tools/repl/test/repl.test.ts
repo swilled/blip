@@ -1,6 +1,7 @@
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 import { startServer, type RunningServer } from "../../../apps/server/src/server";
+import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 import { startFakeExtension, type FakeExtension } from "../../fake-extension/src/fake-extension";
 import { startRepl, type Repl, type ReplOptions } from "../src/repl";
 
@@ -86,6 +87,18 @@ describe("repl output formats (D-25)", () => {
     await t.waitFor((l) => l.startsWith("speak[answer]: 6 required"));
     const answers = t.lines.filter((l) => l.startsWith("speak[answer]:"));
     expect(answers[0]).toContain("Hotel booking. 9 fields");
+  });
+
+  it("prints the accepted warning boolean without echoing hostile page prose", async () => {
+    const t = await setup();
+    const bait = "BLIP-GATE07-PRIVATE-BAIT-7391";
+    const accepted = { ...loadSnapshot("booking"), alerts: [bait], untrustedInstructionDetected: true };
+    expect(server!.session.applySnapshot(accepted)).toBe(true);
+    server!.hub.pushState();
+
+    const line = await t.waitFor((value) => value.startsWith("state:") && value.includes("injection-warning=true"));
+    expect(line).toContain("page=Hotel booking");
+    expect(t.lines.join("\n")).not.toContain(bait);
   });
 });
 
