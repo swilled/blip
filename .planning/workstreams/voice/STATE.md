@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 02
 current_phase_name: Fill and Gated Submit on the Broken Form
 status: executing
-stopped_at: Completed 02-01-PLAN.md
-last_updated: "2026-10-17T03:44:21.620Z"
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-10-17T04:00:48.594Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 02 execution started
-state_head: 017a75b0837b90431b2298436ea1e329a740628f
+state_head: 07c24639eea66b78170c83695df4af440f7e8c3c
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 18
-  completed_plans: 12
+  completed_plans: 13
 milestone_name: milestone
 ---
 
@@ -30,7 +30,7 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 ## Current Position
 
 Phase: 02 (Fill and Gated Submit on the Broken Form) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-10-16 — Phase 02 execution started
 
@@ -66,6 +66,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 02 P01 | 8min | 2 tasks | 5 files |
+| Phase 02 P02 | 10 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,9 @@ Recent decisions affecting the voice track:
 - [Roadmap]: Half-duplex audio. The confirm phrase is matched in server code; the voice UI never decides
 - [Pending, Phase 1 spikes by ~h3]: voice-window layout; PTT route (uiohook-napi hold vs `chrome.commands` toggle); NVDA route (controller DLL via koffi vs in-page live region)
 - [Phase 02]: The phone field keeps autocomplete=tel, with form-level autocomplete=off and reset hooks covering restoration safety.
+- [Phase 02]: Field matching uses normalized token lists and returns ambiguity instead of guessing. — This keeps page text out of regular expressions and makes uncertain dictation fail closed.
+- [Phase 02]: Confirmation accepts only the exact requested token sequence with a one-second gate window. — Affirmatives and near-phrases cannot arm or satisfy the submit gate.
+- [Phase 02]: Spoken echo and read-back use observed page values and hide sensitive fields. — The user hears what the page holds while password and card values remain undisclosed.
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-17T03:44:21.463Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-10-17T04:00:34.054Z
+Stopped at: Completed 02-02-PLAN.md
 Resume file: None
