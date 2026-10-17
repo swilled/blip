@@ -41,6 +41,7 @@ describe("verifySubmitMethodGuard", () => {
 
   it("verifies exactly one result in the requested MAIN-world frame", async () => {
     const { verifySubmitMethodGuard } = await import("../src/background/submit-method-guard.js");
+    await import("../src/content/submit-method-guard-main.js");
 
     await expect(verifySubmitMethodGuard(42, 7)).resolves.toBe(true);
     expect(executeScript).toHaveBeenCalledOnce();
@@ -49,6 +50,8 @@ describe("verifySubmitMethodGuard", () => {
       world: "MAIN",
       func: expect.any(Function),
     }));
+    const injected = executeScript.mock.calls[0]?.[0] as { func?: () => unknown } | undefined;
+    expect(injected?.func?.()).toBe(guardSentinel);
   });
 
   it.each([
