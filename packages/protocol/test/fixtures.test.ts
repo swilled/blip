@@ -43,3 +43,36 @@ describe("booking fixture composition", () => {
     expect(snap.elements.filter((e) => e.required)).toHaveLength(6);
   });
 });
+
+describe("fixture composition (counts are part of the contract)", () => {
+  const counts = (name: (typeof FIXTURE_NAMES)[number]) => {
+    const els = loadSnapshot(name).elements;
+    return {
+      total: els.length,
+      fields: els.filter((e) => e.category === "field").length,
+      visibleFields: els.filter((e) => e.category === "field" && e.visible).length,
+      actions: els.filter((e) => e.category === "action").length,
+      required: els.filter((e) => e.category === "field" && e.visible && e.required).length,
+    };
+  };
+
+  it("broken: 8 elements, 5 visible fields (2 required), 2 actions", () => {
+    expect(counts("broken")).toEqual({ total: 8, fields: 6, visibleFields: 5, actions: 2, required: 2 });
+  });
+
+  it("result-ok: 0 fields, 1 action", () => {
+    expect(counts("result-ok")).toMatchObject({ fields: 0, actions: 1 });
+  });
+
+  it("result-errors: the booking form re-rendered at version 2 with the same 12 elements", () => {
+    const booking = loadSnapshot("booking");
+    const errors = loadSnapshot("result-errors");
+    expect(errors.version).toBe(2);
+    expect(errors.elements.map((e) => e.id)).toEqual(booking.elements.map((e) => e.id));
+    expect(errors.alerts).toEqual(["Please fix 2 errors before continuing."]);
+  });
+
+  it("covers every fixture name", () => {
+    expect([...FIXTURE_NAMES]).toEqual(["booking", "broken", "result-ok", "result-errors"]);
+  });
+});
