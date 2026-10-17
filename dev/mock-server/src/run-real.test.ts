@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { buildFrame, FormModel, parseFrame, type Message } from "@blip/protocol";
-import { reduce } from "@blip/dialogue";
+import { initialState, reduce } from "@blip/dialogue";
 import fixtureJson from "../../../fixtures/forms/broken-form.model.json" with { type: "json" };
 import { startReal } from "./run-real";
 
@@ -45,7 +45,7 @@ describe("run-real", () => {
       throw new Error("no speak frame");
     };
     const speak = await waitSpeak();
-    const expected = reduce({ lastSpoken: null }, { type: "utterance", utterance: { utteranceId: "u1", text: "what's here", source: "typed" } }, { form })
+    const expected = reduce(initialState(), { type: "utterance", utterance: { utteranceId: "u1", text: "what's here", source: "typed" } }, { form, now: 0 })
       .effects[0] as { text: string };
     expect(speak.payload.text).toBe(expected.text);
 

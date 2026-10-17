@@ -22,7 +22,7 @@ import {
   type MessageType,
   type PayloadOf,
 } from "@blip/protocol";
-import { reduce, type DialogueState, type Effect } from "@blip/dialogue";
+import { initialState, reduce, type DialogueState, type Effect } from "@blip/dialogue";
 import { hostAllowed, rolesForOrigin } from "../../../apps/server/src/hub/guard";
 
 export type MockServerOptions = {
@@ -76,7 +76,7 @@ export function createMockServer(options: MockServerOptions): MockServer {
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
   const conns = new Set<Conn>();
   let voice: Conn | undefined;
-  let dialogue: DialogueState = { lastSpoken: null };
+  let dialogue: DialogueState = initialState();
   const outstanding = new Set<string>();
   let pendingTimer: NodeJS.Timeout | undefined;
 
@@ -114,8 +114,7 @@ export function createMockServer(options: MockServerOptions): MockServer {
     };
   }
 
-  function speak(conn: Conn, text: string, category: PayloadOf<"speak">["category"], interrupt: boolean): void {
-    const speakId = newId();
+  function speak(conn: Conn, speakId: string, text: string, category: PayloadOf<"speak">["category"], interrupt: boolean): void {
     outstanding.add(speakId);
     sendTo(conn, "speak", { speakId, text, category, interrupt });
   }
@@ -130,16 +129,44 @@ export function createMockServer(options: MockServerOptions): MockServer {
 
   function applyEffects(conn: Conn, effects: Effect[]): void {
     for (const e of effects) {
-      if (e.kind === "speak") speak(conn, e.text, e.category, false);
-      else if (e.kind === "earcon") sendTo(conn, "earcon", { name: e.name });
-      else if (e.kind === "parseIntent") speak(conn, FALLBACK_REPLY, "answer", false);
-      else speak(conn, "Stopped.", "answer", true);
+      switch (e.kind) {
+        case "speak":
+          speak(conn, e.speakId, e.text, e.category, false);
+          break;
+        case "cancelSpeech":
+          speak(conn, e.speakId, "Stopped.", "answer", true);
+          break;
+        case "earcon":
+          sendTo(conn, "earcon", { name: e.name });
+          break;
+        case "parseIntent": {
+          const reply = reduce(dialogue, { type: "intent.reply", text: FALLBACK_REPLY }, { form, now: Date.now() });
+          dialogue = reply.state;
+          applyEffects(conn, reply.effects);
+          break;
+        }
+        case "fill":
+        case "select":
+        case "focus":
+        case "refreshForm":
+        case "armConfirm":
+        case "clearConfirm":
+        case "redeem":
+          // The mock server has no extension or confirmation gate.
+          break;
+      }
     }
+  }
+
+  function runDialogueEvent(conn: Conn, event: Parameters<typeof reduce>[1]): void {
+    const result = reduce(dialogue, event, { form, now: Date.now() });
+    dialogue = result.state;
+    applyEffects(conn, result.effects);
   }
 
   function onUtterance(conn: Conn, utterance: PayloadOf<"utterance">): void {
     if (pendingTimer !== undefined) clearTimeout(pendingTimer);
-    const result = reduce(dialogue, { type: "utterance", utterance }, { form });
+    const result = reduce(dialogue, { type: "utterance", utterance }, { form, now: Date.now() });
     const routedTo = result.effects.some((e) => e.kind === "parseIntent") ? "model" : "grammar";
     sendTo(conn, "transcript", { utteranceId: utterance.utteranceId, heardAs: utterance.text, routedTo });
     sendTo(conn, "state", statePayload(true));
@@ -180,13 +207,12 @@ export function createMockServer(options: MockServerOptions): MockServer {
         return;
       case "speak.done":
         outstanding.delete(msg.payload.speakId);
+        runDialogueEvent(conn, { type: "speak.done", done: msg.payload });
         return;
       case "control":
-        if (msg.payload.cmd === "stop") {
+        if (msg.payload.cmd === "stop" || msg.payload.cmd === "repeat") {
           cancelPending(conn);
-          speak(conn, "Stopped.", "answer", true);
-        } else if (msg.payload.cmd === "repeat" && dialogue.lastSpoken !== null) {
-          speak(conn, dialogue.lastSpoken, "answer", false);
+          runDialogueEvent(conn, { type: "control", cmd: msg.payload.cmd });
         }
         return;
       default:

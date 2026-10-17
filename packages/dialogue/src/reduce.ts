@@ -1,5 +1,8 @@
 import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
+import { cleanTitle, normalizeCommand, plural } from "./normalize";
+import { cancelEffect, speakEffect } from "./state";
+import { handleSubmitFlow } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
 // before it is spoken; only counts are spoken, never field labels or values.
@@ -16,24 +19,6 @@ const WHATS_HERE = [
   /^what is on this form$/,
 ];
 
-function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function cleanTitle(title: string): string {
-  // eslint-disable-next-line no-control-regex
-  return title.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
-}
-
-function plural(n: number, one: string, many: string): string {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 function describe(form: NonNullable<DialogueContext["form"]>): string {
   const title = cleanTitle(form.title);
   const required = form.fields.filter((f) => f.required).length;
@@ -42,22 +27,34 @@ function describe(form: NonNullable<DialogueContext["form"]>): string {
   return `${title}. ${plural(form.fields.length, "field", "fields")}, ${required} required, ${actions}.`;
 }
 
+function answer(state: DialogueState, text: string): { state: DialogueState; effects: Effect[] } {
+  const spoken = speakEffect(state, text, "answer", { interruptible: true });
+  return { state: spoken.state, effects: [spoken.effect] };
+}
+
 export function reduce(
   state: DialogueState,
   event: DialogueEvent,
   ctx: DialogueContext,
 ): { state: DialogueState; effects: Effect[] } {
-  if (event.type !== "utterance") return { state, effects: [] };
+  if (event.type === "intent.reply") return answer(state, event.text);
+
+  if (event.type === "control") {
+    if (event.cmd === "stop") {
+      const ready = cancelEffect({ ...state, mode: "ready" });
+      return { state: ready.state, effects: [ready.effect] };
+    }
+    return answer(state, state.lastSpoken ?? "There's nothing to repeat.");
+  }
+
+  if (event.type !== "utterance") return handleSubmitFlow(state, event, ctx);
   const raw = event.utterance.text;
-  const norm = normalize(raw);
+  const norm = normalizeCommand(raw);
   if (norm === "") return { state, effects: [] };
 
   if (WHATS_HERE.some((re) => re.test(norm))) {
     const text = ctx.form === null ? "I can't see a page yet." : describe(ctx.form);
-    return {
-      state: { ...state, lastSpoken: text },
-      effects: [{ kind: "speak", text, category: "answer", interruptible: true }],
-    };
+    return answer(state, text);
   }
   return { state, effects: [{ kind: "parseIntent", text: raw }] };
 }

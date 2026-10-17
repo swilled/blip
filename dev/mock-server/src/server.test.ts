@@ -13,7 +13,7 @@ import {
   type PayloadOf,
 } from "@blip/protocol";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
-import { reduce } from "@blip/dialogue";
+import { initialState, reduce } from "@blip/dialogue";
 import { buildBaselineFormModel } from "../../../apps/server/src/baseline/index";
 import fixtureJson from "../../../fixtures/forms/broken-form.model.json" with { type: "json" };
 import { createMockServer } from "./server";
@@ -95,7 +95,7 @@ async function voice(port: number): Promise<Client> {
 }
 
 const utt = (text: string, id = "u1") => ({ utteranceId: id, text, source: "typed" as const });
-const expectedText = reduce({ lastSpoken: null }, { type: "utterance", utterance: utt("what's here") }, { form }).effects[0] as {
+const expectedText = reduce(initialState(), { type: "utterance", utterance: utt("what's here") }, { form, now: 0 }).effects[0] as {
   text: string;
 };
 
@@ -236,12 +236,26 @@ describe("mock server", () => {
   });
 
   it("11: control stop yields an interrupting Stopped.", async () => {
-    const { port } = await start();
+    const { s, port } = await start();
     const c = await voice(port);
     c.send("control", { cmd: "stop" });
     const sp = await c.waitFor("speak");
     expect(sp.payload.text).toBe("Stopped.");
     expect(sp.payload.interrupt).toBe(true);
+    expect(s.outstandingSpeakIds()).toContain(sp.payload.speakId);
+  });
+
+  it("11b: control repeat reuses the last reducer reply with a tracked id", async () => {
+    const { s, port } = await start();
+    const c = await voice(port);
+    c.send("utterance", utt("what's here"));
+    const first = await c.waitFor("speak");
+    c.send("speak.done", { speakId: first.payload.speakId, interrupted: false });
+    c.send("control", { cmd: "repeat" });
+    const repeated = await c.waitFor("speak");
+    expect(repeated.payload.text).toBe(first.payload.text);
+    expect(repeated.payload.speakId).not.toBe(first.payload.speakId);
+    expect(s.outstandingSpeakIds()).toContain(repeated.payload.speakId);
   });
 
   it("12: a second voice connection replaces the first", async () => {
