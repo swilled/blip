@@ -110,6 +110,7 @@ Each task was committed atomically:
 - `npm run typecheck` - passed
 - `npx vitest run apps/extension/test/background-listeners.test.ts` - passed (3 tests)
 - `npm run ext:smoke` - passed; Edge 155 connected with the pinned extension Origin.
+- Temporary Edge restart smoke harness (removed after execution) - passed; observed a second production extension bind after closing and restarting the server on the same port.
 
 ## Issues Encountered
 
