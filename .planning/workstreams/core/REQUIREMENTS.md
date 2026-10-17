@@ -17,7 +17,7 @@
 
 ### Page Understanding
 
-- [ ] **PAGE-01**: Blip captures a snapshot of the active tab's form controls via a content-script DOM walk (accessible names, roles, values, required, options, errors), capped at 250 elements on the extension wire; `truncated` is true only when that element cap cuts the result, and the ~8k-token trim is applied in Phase 4 at the model-prompt boundary
+- [x] **PAGE-01**: Blip captures a snapshot of the active tab's form controls via a content-script DOM walk (accessible names, roles, values, required, options, errors), capped at 250 elements on the extension wire; `truncated` is true only when that element cap cuts the result, and the ~8k-token trim is applied in Phase 4 at the model-prompt boundary
 - [ ] **PAGE-02**: Blip builds a baseline form model in code from the snapshot (field id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms
 - [x] **PAGE-03**: Every actionable element gets a kind (fill / select / check / click-safe / submit / pay / delete / send / navigate-cross-domain) from fail-closed rules, never from the model
 - [ ] **PAGE-04**: For unlabeled or placeholder-only fields, Claude repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
@@ -25,10 +25,10 @@
 
 ### Actions
 
-- [ ] **ACT-01**: Blip types a value into a text field so that React/Vue-style site validation fires, without ever sending Enter
-- [ ] **ACT-02**: Blip selects options in selects, radio groups and checkboxes
+- [x] **ACT-01**: Blip types a value into a text field so that React/Vue-style site validation fires, without ever sending Enter
+- [x] **ACT-02**: Blip selects options in selects, radio groups and checkboxes
 - [ ] **ACT-03**: The field Blip is working on is visibly highlighted on the page (for sighted judges)
-- [ ] **ACT-04**: After every fill, Blip reads the value back from the DOM and reports that actual value (not what was heard)
+- [x] **ACT-04**: After every fill, Blip reads the value back from the DOM and reports that actual value (not what was heard)
 
 ### Safety Gate
 
