@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Contract and Walking Skeleton** - Frozen `@blip/protocol`, a loopback-only server hub, and fakes (extension, brain, REPL) so the whole loop runs offline
 - [x] **Phase 2: Real Page Read and Fill** - The Chrome extension snapshots a live form, classifies every action by rule, and fills fields with DOM-verified values (completed 2026-10-17)
-- [ ] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2)
+- [x] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2) (completed 2026-10-17)
 - [ ] **Phase 4: Claude Brain and Label Repair** - Locked-down, pre-warmed Claude turns free-form speech into Intents and repairs unlabeled fields in the background
 - [ ] **Phase 5: Hostile Pages, Real Web and Freeze** - Injection page blocked and flagged, real public form works (I3), one-command startup, `demo-safe` freeze
 
@@ -123,7 +123,7 @@ Plans:
   5. I2 (~h12): on the local broken demo form with the fake brain, a user goes describe -> fill -> read back -> says the phrase -> submitted, then hears the confirmation (with any confirmation number) or each error tied to its field label; "what went wrong" repeats the errors, and Blip never claims a success the page doesn't show.
 
 **Research**: No research; needs adversarial tests in `packages/policy/test` ("yes", injected labels, typeless buttons, Enter, value change after read-back, phrase from the wrong socket).
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 **UI hint**: no
 
 ### Phase 4: Claude Brain and Label Repair
@@ -172,7 +172,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
-| 3. Gated Submit and Result Reading | 2/6 | In Progress | - |
+| 3. Gated Submit and Result Reading | 6/6 | Complete   | 2026-10-17 |
 | 4. Claude Brain and Label Repair | 0/TBD | Not started | - |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
 

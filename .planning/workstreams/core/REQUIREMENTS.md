@@ -34,10 +34,10 @@
 
 - [x] **GATE-01**: Submit / pay / delete / send / cross-domain navigation actions are blocked by default and only execute through the single Executor with a valid grant
 - [x] **GATE-02**: Pressing Enter in a field, `form.submit()`, `requestSubmit()` or a div "button" cannot submit the form while no grant is armed (capture-phase interception in the extension)
-- [ ] **GATE-03**: A grant is single-use, expires after 30 s, and is bound to target + kind + URL + snapshot version
-- [ ] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
-- [ ] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
-- [ ] **GATE-08**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
+- [x] **GATE-03**: A grant is single-use, expires after 30 s, and is bound to target + kind + URL + snapshot version
+- [x] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
+- [x] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
+- [x] **GATE-08**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
 - [ ] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
 - [ ] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
 
@@ -111,17 +111,17 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | ACT-04 | core | Phase 2 | Complete |
 | GATE-01 | core | Phase 3 | Complete |
 | GATE-02 | core | Phase 3 | Complete |
-| GATE-03 | core | Phase 3 | Pending |
-| GATE-04 | core | Phase 3 | Pending |
-| GATE-05 | core | Phase 3 | Pending |
+| GATE-03 | core | Phase 3 | Complete |
+| GATE-04 | core | Phase 3 | Complete |
+| GATE-05 | core | Phase 3 | Complete |
 | GATE-06 | core | Phase 5 | Pending |
 | GATE-07 | core | Phase 5 | Pending |
-| GATE-08 | core | Phase 3 | Pending |
+| GATE-08 | core | Phase 3 | Complete |
 | BRAIN-01 | core | Phase 4 | Pending |
 | BRAIN-02 | core | Phase 4 | Pending |
 | BRAIN-03 | core | Phase 4 | Pending |
-| RES-01 | core | Phase 3 | Pending |
-| RES-02 | core | Phase 3 | Pending |
+| RES-01 | core | Phase 3 | Complete |
+| RES-02 | core | Phase 3 | Complete |
 
 **Coverage:**
 - Core v1 requirements: 25 total
