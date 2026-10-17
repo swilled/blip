@@ -35,3 +35,11 @@ export function readFormReply(model: FormModel): string {
   const items = model.fields.map((f, i) => `${i + 1}: ${spokenLabel(f)}${f.required ? ", required" : ""}.`);
   return `${model.title}. ${plural(model.fields.length, "field", "fields")}. ${items.join(" ")}`;
 }
+
+/** Speak only the value the extension read back from the DOM. Controls and length are bounded. */
+export function fieldValueReply(field: Field, observedValue: string | null, requestedValue: string): string | null {
+  if (field.sensitive !== "none" || observedValue === null || observedValue !== requestedValue) return null;
+  const clean = observedValue.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (clean === "") return null;
+  return `${field.label} is now ${clean}.`;
+}

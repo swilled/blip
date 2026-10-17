@@ -5,6 +5,8 @@
 import { newId, type Intent, type Message, type PayloadOf } from "@blip/protocol";
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
+import { matchFieldPhrase, resolveFieldPhrase } from "./brain/phrases";
+import { executeUngated } from "./act/ungated";
 import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
 import type { Refresher } from "./session/refresh";
@@ -32,6 +34,7 @@ export const MSG_STOPPED = "Stopped.";
 export const MSG_UNKNOWN = "I didn't understand that.";
 export const MSG_BRAIN_FAILED = "Something went wrong on my side.";
 export const MSG_FILLER = "One moment.";
+const MSG_FIELD_PHRASE_TOO_LONG = "That value is too long to fill.";
 
 type SpeakOptions = { interrupt?: boolean; record?: boolean };
 
@@ -110,6 +113,11 @@ async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promi
       return speak(hub, session, intent.text, "answer");
     case "unknown":
       return speak(hub, session, MSG_UNKNOWN, "answer");
+    case "set_fields":
+    case "go_to_field": {
+      const result = await executeUngated(ctx, intent);
+      return speak(hub, session, result.text, result.category);
+    }
     default:
       // request_action, click_safe, set_fields, fill_profile, ...: nothing acts in Phase 1 (T-01-26).
       return speak(hub, session, MSG_NOT_YET, "answer");
@@ -122,7 +130,12 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
   const { utteranceId, text } = message.payload;
 
   const command = matchGrammar(text);
-  hub.send("voice", "transcript", { utteranceId, heardAs: text, routedTo: command !== null ? "grammar" : "model" });
+  const fieldPhrase = matchFieldPhrase(text);
+  hub.send("voice", "transcript", {
+    utteranceId,
+    heardAs: text,
+    routedTo: command !== null || fieldPhrase !== null ? "grammar" : "model",
+  });
 
   session.busy = true;
   session.dialogue = "describing";
@@ -140,6 +153,14 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
         hub.send("voice", "earcon", { name: "error" });
         speak(hub, session, MSG_BRAIN_FAILED, "error");
         return;
+      }
+      if (fieldPhrase !== null && intent.type !== "request_action") {
+        if (fieldPhrase.type === "invalid") {
+          return speak(hub, session, fieldPhrase.reason === "too-long" ? MSG_FIELD_PHRASE_TOO_LONG : "Say a field and the value to fill.", "error");
+        }
+        const ready = await ensureSnapshot(ctx, ctx.freshnessMs);
+        if (!ready.ok) return speak(hub, session, ready.reply, "error");
+        intent = resolveFieldPhrase(session.model!, fieldPhrase);
       }
       await runIntent(ctx, intent);
     }
