@@ -1,5 +1,5 @@
 // Core's real server in-process (dev true, fake brain) serving apps/voice/dist, plus the PTT hook and voice window.
-// Imports core modules read-only. The fake extension is the default; --browser-extension loads the local DOM bridge.
+// Imports core modules read-only. The fake extension is the default; --browser-extension selects local DOM bridge mode.
 //   node --import tsx dev/mock-server/src/run-real.ts [--fixture=booking|broken] [--port=7777] [--fake-delay=1500] [--browser-extension]
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,9 +15,9 @@ import { startFakeExtension } from "../../../tools/fake-extension/src/fake-exten
 import type { FakeExtension } from "../../../tools/fake-extension/src/fake-extension";
 import { launchVoiceWindow } from "./launch-window";
 import { startPttWire } from "./ptt-wire";
+import { DEMO_EXTENSION_ID } from "./extension-id";
 
-/** Stable id derived from the public key in dev/mock-server/extension/manifest.json. */
-export const DEMO_EXTENSION_ID = "biplgmlbldfekkjdjanlgmhjabdgaknc";
+export { DEMO_EXTENSION_ID } from "./extension-id";
 
 export interface RealOptions {
   port?: number;
@@ -27,7 +27,7 @@ export interface RealOptions {
   gate?: GatePort;
   now?: () => number;
   onActRequest?: (request: ActRequest) => void;
-  /** Use the local Chrome bridge instead of the in-memory extension fixture. */
+  /** Use the dedicated Chrome profile and expect the manually installed local bridge. */
   browserExtension?: boolean;
 }
 
