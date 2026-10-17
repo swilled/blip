@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-10-17T06:08:38.906Z"
+stopped_at: Completed 03-03-PLAN.md; 03-02 remains next
+last_updated: "2026-10-17T06:16:12.841Z"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 31
-  completed_plans: 26
+  completed_plans: 27
 ---
 
 # Project State
@@ -65,6 +65,7 @@ Plan: 2 of 6
 | Phase 02 P18 | 8m | 3 tasks | 8 files |
 | Phase 02 P19 | 9m | 2 tasks | 10 files |
 | Phase 03 P01 | 6 min | 2 tasks | 6 files |
+| Phase 03 P03 | 6 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,7 @@ Recent decisions affecting current work:
 - [Phase 02]: Kept Chrome ambient types local with types set only in apps/extension/tsconfig.json.
 - [Phase 03]: Fixed per-kind confirmation phrases normalize only case, whitespace, and terminal punctuation.
 - [Phase 03]: Grant fingerprints bind ordered field state while omitting sensitive values and retaining sensitive presence only.
+- [Phase 03]: The MAIN-world direct-submit guard remains immutable, while one-use submit-event authorization stays isolated.
 
 ### Pending Todos
 
@@ -109,6 +111,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T06:08:38.901Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-10-17T06:16:12.834Z
+Stopped at: Completed 03-03-PLAN.md; 03-02 remains next
 Resume file: None
