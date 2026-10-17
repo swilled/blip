@@ -11,6 +11,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "tsx scripts/dev.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "gen:extension-key": "tsx scripts/gen-extension-key.ts",

@@ -13,7 +13,7 @@ import { parseArgs } from "node:util";
 import { DEFAULT_PORT, WS_PATH, LOOPBACK_HOST } from "@blip/protocol";
 import { parseAllowedOrigin } from "./hub/guard";
 import type { StaticRoot } from "./hub/static";
-import { startServer } from "./server";
+import { BrainUnavailableError, CLAUDE_BRAIN_UNAVAILABLE, startServer } from "./server";
 
 function die(message: string, code: number): never {
   process.stderr.write(`${message}\n`);
@@ -51,7 +51,7 @@ async function main(): Promise<void> {
   const dev = values.dev === true;
   const brain = values.brain;
   if (brain === "claude") {
-    die("--brain=claude is not available yet: the Claude brain arrives in Phase 4. Use --brain=fake.", 2);
+    die(CLAUDE_BRAIN_UNAVAILABLE, 2);
   }
   if (brain !== "fake") die(`--brain must be fake (claude arrives in Phase 4), got "${brain}"`, 2);
 
@@ -90,6 +90,7 @@ async function main(): Promise<void> {
       ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
     });
   } catch (err) {
+    if (err instanceof BrainUnavailableError) die(err.message, 2);
     if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
       die(`port ${port} is already in use; stop the other process or pick another with --port <n>`, 1);
     }

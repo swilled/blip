@@ -54,7 +54,19 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(text);
 }
 
+/** Shared by startServer, the server CLI and the dev runner (D-21). All of them map it to exit code 2. */
+export const CLAUDE_BRAIN_UNAVAILABLE =
+  "--brain=claude is not available yet: the Claude brain arrives in Phase 4. Use --brain=fake.";
+
+export class BrainUnavailableError extends Error {
+  constructor() {
+    super(CLAUDE_BRAIN_UNAVAILABLE);
+    this.name = "BrainUnavailableError";
+  }
+}
+
 export async function startServer(options: StartServerOptions = {}): Promise<RunningServer> {
+  if (options.brain === "claude") throw new BrainUnavailableError();
   const dev = options.dev ?? false;
   const extraVoiceOrigins = (options.extraVoiceOrigins ?? []).map(parseAllowedOrigin);
   const session = new Session(options.brain ?? "fake");
