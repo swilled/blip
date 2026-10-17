@@ -1,0 +1,252 @@
+{
+  "snapshotId": "broken-survey-1",
+  "version": 1,
+  "tabId": 1,
+  "url": "http://127.0.0.1:7777/fixtures/forms/broken.html",
+  "origin": "http://127.0.0.1:7777",
+  "title": "Customer survey",
+  "headings": [
+    {
+      "level": 1,
+      "text": "Customer survey"
+    }
+  ],
+  "alerts": [],
+  "elements": [
+    {
+      "id": "e1",
+      "frameId": 0,
+      "category": "field",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "labelCandidates": [
+        {
+          "text": "Your name",
+          "source": "placeholder",
+          "confidence": 0.5
+        }
+      ],
+      "name": "q1",
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "order": 1
+    },
+    {
+      "id": "e2",
+      "frameId": 0,
+      "category": "field",
+      "tag": "input",
+      "inputType": "email",
+      "role": "textbox",
+      "labelCandidates": [
+        {
+          "text": "Email",
+          "source": "nearby-text",
+          "confidence": 0.6
+        }
+      ],
+      "name": "q2",
+      "required": true,
+      "requiredSource": "attr",
+      "invalid": false,
+      "errorText": null,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "order": 2
+    },
+    {
+      "id": "e3",
+      "frameId": 0,
+      "category": "field",
+      "tag": "input",
+      "inputType": "text",
+      "role": "textbox",
+      "labelCandidates": [],
+      "name": "q3",
+      "autocomplete": "tel",
+      "required": true,
+      "requiredSource": "attr",
+      "invalid": false,
+      "errorText": null,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "order": 3
+    },
+    {
+      "id": "e4",
+      "frameId": 0,
+      "category": "field",
+      "tag": "select",
+      "role": "combobox",
+      "labelCandidates": [
+        {
+          "text": "How did you hear about us",
+          "source": "nearby-text",
+          "confidence": 0.6
+        }
+      ],
+      "name": "q4",
+      "required": true,
+      "requiredSource": "attr",
+      "invalid": false,
+      "errorText": null,
+      "value": "",
+      "hasValue": false,
+      "options": [
+        {
+          "value": "",
+          "label": "Choose one",
+          "selected": true
+        },
+        {
+          "value": "friend",
+          "label": "Friend",
+          "selected": false
+        },
+        {
+          "value": "web",
+          "label": "Web search",
+          "selected": false
+        },
+        {
+          "value": "other",
+          "label": "Other",
+          "selected": false
+        }
+      ],
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "order": 4
+    },
+    {
+      "id": "e5",
+      "frameId": 0,
+      "category": "field",
+      "tag": "input",
+      "inputType": "radio",
+      "role": "radiogroup",
+      "labelCandidates": [
+        {
+          "text": "Satisfaction",
+          "source": "nearby-text",
+          "confidence": 0.6
+        }
+      ],
+      "name": "satisfaction",
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "options": [
+        {
+          "value": "low",
+          "label": "Low",
+          "selected": false
+        },
+        {
+          "value": "medium",
+          "label": "Medium",
+          "selected": false
+        },
+        {
+          "value": "high",
+          "label": "High",
+          "selected": false
+        }
+      ],
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "order": 5
+    },
+    {
+      "id": "e6",
+      "frameId": 0,
+      "category": "field",
+      "tag": "input",
+      "inputType": "number",
+      "role": "spinbutton",
+      "labelCandidates": [
+        {
+          "text": "Age",
+          "source": "placeholder",
+          "confidence": 0.5
+        }
+      ],
+      "name": "age",
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": "",
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "order": 6
+    },
+    {
+      "id": "e7",
+      "frameId": 0,
+      "category": "action",
+      "tag": "div",
+      "role": "button",
+      "labelCandidates": [],
+      "text": "Send feedback",
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "inForm": true,
+      "kind": "submit",
+      "kindReasons": [
+        "explicit survey submit control"
+      ],
+      "order": 7
+    },
+    {
+      "id": "e8",
+      "frameId": 0,
+      "category": "action",
+      "tag": "div",
+      "role": "button",
+      "labelCandidates": [],
+      "required": false,
+      "requiredSource": "none",
+      "invalid": false,
+      "errorText": null,
+      "value": null,
+      "hasValue": false,
+      "sensitive": "none",
+      "disabled": false,
+      "visible": true,
+      "inForm": true,
+      "order": 8
+    }
+  ],
+  "truncated": false,
+  "structuralHash": "broken-survey-structure-v1",
+  "capturedAt": 1760000000000
+}

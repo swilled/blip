@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
+import { FormModel } from "@blip/protocol";
 import { describe, expect, it } from "vitest";
+import surveyModelJson from "../../../fixtures/forms/survey-form.model.json" with { type: "json" };
 
 const html = readFileSync(new URL("../../../fixtures/forms/broken.html", import.meta.url), "utf8");
 
@@ -62,5 +64,24 @@ describe("broken survey form", () => {
     expect(html).not.toMatch(/localStorage/i);
     expect(html.toLowerCase()).not.toContain("submit survey");
     expect(html).not.toMatch(/>\s*yes\s*</i);
+  });
+});
+
+describe("generated survey form model", () => {
+  const model = FormModel.parse(surveyModelJson);
+
+  it("preserves the six survey fields and fail-closed submit action", () => {
+    expect(model.fields).toHaveLength(6);
+    expect(model.fields.some((field) => field.label === "")).toBe(true);
+
+    const select = model.fields.find((field) => field.type === "select");
+    expect(select?.options?.some((option) => option.value === "")).toBe(true);
+
+    const radios = model.fields.find((field) => field.type === "radio-group");
+    expect(radios?.options).toHaveLength(3);
+
+    expect(model.fields.filter((field) => field.required && !field.hasValue).length).toBeGreaterThanOrEqual(2);
+    expect(model.actions.filter((action) => action.primary && action.kind === "submit")).toHaveLength(1);
+    expect(model.actions.filter((action) => action.primary)).toHaveLength(1);
   });
 });
