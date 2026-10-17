@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
+import { isSsn as sharedIsSsn, luhnValid as sharedLuhnValid } from "@blip/policy/sensitive-shapes";
 import { isSsn, luhnValid, safeValueOf, sensitivityOf, readValue } from "../src/content/sensitive.js";
 
 beforeEach(() => {
@@ -15,6 +16,27 @@ function input(markup: string): HTMLInputElement {
 }
 
 describe("sensitivity classification", () => {
+  it("uses the shared pure Luhn and SSN predicates at every existing boundary", () => {
+    expect(luhnValid).toBe(sharedLuhnValid);
+    expect(isSsn).toBe(sharedIsSsn);
+
+    for (const value of [
+      "4222222222222",
+      "4111 1111 1111 1111",
+      "4111-1111-1111-1111",
+      "4111 1111 1111 1112",
+      "411111111111",
+      "41111111111111111111",
+      "078-05-1120",
+      "078-00-1120",
+      "666-12-3456",
+      "900-12-3456",
+    ]) {
+      expect(luhnValid(value)).toBe(sharedLuhnValid(value));
+      expect(isSsn(value)).toBe(sharedIsSsn(value));
+    }
+  });
+
   it("classifies password, card, CVC, OTP and SSN fields from type, autocomplete or names", () => {
     expect(sensitivityOf(input('<input type="password">'))).toBe("password");
     expect(sensitivityOf(input('<input autocomplete="cc-number">'))).toBe("card-number");
