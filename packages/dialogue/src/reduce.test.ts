@@ -159,16 +159,15 @@ describe("reduce: what's here", () => {
     }
   });
 
-  it("11: speak.done and form.changed are no-ops", () => {
+  it("11: speak.done updates timing while an unrelated form.changed is a no-op", () => {
     const s: DialogueState = { ...initialState(), lastSpoken: "x" };
-    for (const e of [
-      { type: "speak.done", done: { speakId: "s1", interrupted: false } },
-      { type: "form.changed" },
-    ] as DialogueEvent[]) {
-      const r = reduce(s, e, context(form));
-      expect(r.state).toBe(s);
-      expect(r.effects).toEqual([]);
-    }
+    const completed = reduce(s, { type: "speak.done", done: { speakId: "s1", interrupted: false } }, context(form));
+    expect(completed.state).toEqual({ ...s, lastDoneAt: 0 });
+    expect(completed.effects).toEqual([]);
+
+    const unchanged = reduce(s, { type: "form.changed" }, context(form));
+    expect(unchanged.state).toBe(s);
+    expect(unchanged.effects).toEqual([]);
   });
 
   it("12: fixture is the real FormModel shape", () => {

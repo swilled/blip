@@ -3,7 +3,7 @@ import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
 import { handleActResult, handleFillUtterance, handleOptionPick, handleReadUtterance } from "./read-fill";
-import { handleSubmitFlow, handleSubmitUtterance } from "./submit";
+import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
 // before it is spoken; only counts are spoken, never field labels or values.
@@ -44,9 +44,22 @@ export function reduce(
       return handleSubmitFlow(state, event, ctx);
     }
     if (event.type === "act.result") return handleActResult(state, event, ctx);
-    if (event.type === "intent.reply") return answer(state, event.text);
+    if (event.type === "intent.reply") {
+      if (state.mode === "reading-back" || state.mode === "awaiting-confirm" || state.mode === "executing") {
+        return { state, effects: [] };
+      }
+      return answer(state, event.text);
+    }
 
     if (event.type === "control") {
+      if (state.mode === "awaiting-confirm") return handleArmedUtterance(state, event, ctx);
+      if (state.mode === "executing") {
+        if (event.cmd === "stop") {
+          const stopped = cancelEffect(state);
+          return { state: stopped.state, effects: [stopped.effect] };
+        }
+        return answer(state, state.lastSpoken ?? "There's nothing to repeat.");
+      }
       if (event.cmd === "stop") {
         const ready = cancelEffect({ ...state, mode: "ready", readBack: null });
         return { state: ready.state, effects: [ready.effect] };
@@ -58,6 +71,9 @@ export function reduce(
   }
 
   const raw = event.utterance.text;
+  if (state.mode === "awaiting-confirm") return handleArmedUtterance(state, event, ctx);
+  if (state.mode === "reading-back") return handleReadbackUtterance(state, event, ctx);
+  if (state.mode === "executing") return { state, effects: [] };
   if (raw.length > 200) return { state, effects: [{ kind: "parseIntent", text: raw }] };
   const norm = normalizeCommand(raw);
   if (norm === "") return { state, effects: [] };

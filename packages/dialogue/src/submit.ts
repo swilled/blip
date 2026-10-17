@@ -2,16 +2,21 @@ import { isGatedKind } from "@blip/protocol";
 import type { FormModel } from "@blip/protocol";
 import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
+import { confirmWindowOpen, isCancel, phraseMatches } from "./confirm";
 import { formDigest, requiredEmpty } from "./fields";
 import { normalizeCommand } from "./normalize";
-import { speakEffect } from "./state";
-import { confirmPromptText, readBackText, requiredEmptyText } from "./templates";
+import { cancelEffect, speakEffect } from "./state";
+import { resolveEdit } from "./read-fill";
+import { confirmPromptText, readBackText, refusalText, requiredEmptyText } from "./templates";
 
 type DialogueResult = { state: DialogueState; effects: Effect[] };
 
 const READ_BACK_COMMANDS = new Set(["read back", "read it back", "read everything back"]);
 const SUBMIT_COMMANDS = new Set(["submit", "submit it", "submit the form", "submit survey"]);
+const REPEAT_COMMANDS = new Set(["repeat", "say that again", "repeat that"]);
+const STOP_COMMANDS = new Set(["stop", "be quiet", "quiet", "stop talking"]);
 const FORM_CHANGED_TEXT = "The form changed, so I'm not submitting. Say submit when you're ready.";
+const WAIT_FOR_READBACK_TEXT = "Wait for the read-back to finish, or say cancel.";
 
 function speak(state: DialogueState, text: string, category: "answer" | "confirm-prompt" | "error" | "readback"): DialogueResult {
   const spoken = speakEffect(state, text, category, { interruptible: true });
@@ -72,6 +77,111 @@ export function handleSubmitUtterance(
   }
   if (SUBMIT_COMMANDS.has(norm)) return requestSubmit(state, ctx);
   return null;
+}
+
+function refuseArmed(state: DialogueState): DialogueResult {
+  const phrase = state.confirm?.phrase;
+  if (phrase === undefined) {
+    const reset = speakEffect(state, "I can't submit that right now.", "error", { interruptible: true });
+    return { state: reset.state, effects: [reset.effect, { kind: "earcon", name: "blocked" }] };
+  }
+  const refusal = speakEffect(state, refusalText(phrase), "confirm-prompt", { interruptible: true });
+  return { state: refusal.state, effects: [refusal.effect, { kind: "earcon", name: "blocked" }] };
+}
+
+/** Only the gate phrase and narrowly permitted controls are handled while a grant is armed. */
+export function handleArmedUtterance(
+  state: DialogueState,
+  event: Extract<DialogueEvent, { type: "utterance" }> | Extract<DialogueEvent, { type: "control" }>,
+  ctx: DialogueContext,
+): DialogueResult {
+  if (event.type === "control") {
+    if (event.cmd === "stop") {
+      const stopped = cancelEffect(state);
+      return { state: stopped.state, effects: [stopped.effect] };
+    }
+    const repeated = speakEffect(state, state.lastSpoken ?? "There's nothing to repeat.", "answer", { interruptible: true });
+    return { state: repeated.state, effects: [repeated.effect] };
+  }
+
+  const raw = event.utterance.text;
+  const norm = normalizeCommand(raw);
+  const confirm = state.confirm;
+
+  if (confirm !== null && phraseMatches(raw, confirm.phrase)) {
+    if (confirmWindowOpen(state.outstanding.length, state.lastDoneAt, ctx.now)) {
+      return { state: { ...state, mode: "executing" }, effects: [{ kind: "redeem", grantId: confirm.grantId }] };
+    }
+    return refuseArmed(state);
+  }
+
+  if (isCancel(raw)) {
+    const reset: DialogueState = { ...state, mode: "ready", readBack: null, confirm: null };
+    const acknowledgement = speakEffect(reset, "Okay, not submitting.", "answer", { interruptible: true });
+    return {
+      state: acknowledgement.state,
+      effects: [
+        ...(confirm === null ? [] : [{ kind: "clearConfirm" as const, grantId: confirm.grantId, reason: "cancelled" as const }]),
+        acknowledgement.effect,
+      ],
+    };
+  }
+
+  if (STOP_COMMANDS.has(norm)) {
+    const stopped = cancelEffect(state);
+    return { state: stopped.state, effects: [stopped.effect] };
+  }
+
+  if (REPEAT_COMMANDS.has(norm)) {
+    const repeated = speakEffect(state, state.lastSpoken ?? "There's nothing to repeat.", "answer", { interruptible: true });
+    return { state: repeated.state, effects: [repeated.effect] };
+  }
+
+  if (READ_BACK_COMMANDS.has(norm)) {
+    const repeatedReadBack = ctx.form === null
+      ? speakEffect(state, "I can't see a page yet.", "error", { interruptible: true })
+      : speakEffect(state, readBackText(ctx.form), "readback", { interruptible: true });
+    return { state: repeatedReadBack.state, effects: [repeatedReadBack.effect] };
+  }
+
+  const preflight = resolveEdit(state, raw, ctx);
+  if (preflight !== null && confirm !== null) {
+    const clearedBase: DialogueState = { ...state, mode: "awaiting-value", readBack: null, confirm: null };
+    const warning = speakEffect(clearedBase, FORM_CHANGED_TEXT, "error", { interruptible: true });
+    // resolveEdit is pure; rerun it against the post-warning state so every speak id is unique and ordered.
+    const edit = resolveEdit(warning.state, raw, ctx);
+    const finalState = edit === null ? warning.state : { ...edit.state, mode: "awaiting-value" as const, confirm: null, readBack: null };
+    return {
+      state: finalState,
+      effects: [
+        { kind: "clearConfirm", grantId: confirm.grantId, reason: "value-changed" },
+        warning.effect,
+        ...(edit?.effects ?? []),
+      ],
+    };
+  }
+
+  return refuseArmed(state);
+}
+
+/** Reading-back speech cannot reach general grammar or the model. */
+export function handleReadbackUtterance(
+  state: DialogueState,
+  event: Extract<DialogueEvent, { type: "utterance" }>,
+  ctx: DialogueContext,
+): DialogueResult {
+  const norm = normalizeCommand(event.utterance.text);
+  if (STOP_COMMANDS.has(norm)) {
+    const stopped = cancelEffect({ ...state, mode: "ready", readBack: null });
+    return { state: stopped.state, effects: [stopped.effect] };
+  }
+  if (isCancel(event.utterance.text)) {
+    const reset = { ...state, mode: "ready" as const, readBack: null };
+    const acknowledgement = speakEffect(reset, "Okay, not submitting.", "answer", { interruptible: true });
+    return { state: acknowledgement.state, effects: [acknowledgement.effect] };
+  }
+  const waiting = speakEffect(state, WAIT_FOR_READBACK_TEXT, "answer", { interruptible: true });
+  return { state: waiting.state, effects: [waiting.effect] };
 }
 
 function finishReadback(state: DialogueState, event: Extract<DialogueEvent, { type: "speak.done" }>, ctx: DialogueContext): DialogueResult {
