@@ -272,11 +272,11 @@ This maps to the existing work split and the phase context’s reusable assets. 
 
 Availability probes were run on 2026-10-17. Claude credentials were not inspected. [VERIFIED: environment probes; .planning/workstreams/core/STATE.md:1-6, 31-35]
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **What exact core payload/field carries GATE-07’s page warning flag?** The voice context says it consumes the flag, while ownership remains core. Require the planner to add an explicit contract/fixture verification checkpoint; voice should not invent a parallel wire field. [VERIFIED: 03-CONTEXT.md:84-86; .planning/workstreams/voice/ROADMAP.md:133-147]
-2. **What explicit evidence can DLG-11 speak for a repaired label?** Confirm that the integrated model/snapshot supplies it; if it supplies only provenance/confidence, follow the locked uncertain wording rather than inventing a reason. [VERIFIED: 03-CONTEXT.md:36; packages/protocol/src/form-model.ts:17-30]
-3. **When will core deliver the I3 dependencies?** Current core/voice STATE files show planning/execution is earlier than the I3 milestone; plan tests against fixtures first and gate the real-Claude end-to-end acceptance on core delivery. [VERIFIED: .planning/workstreams/core/STATE.md:1-6, 31-35; .planning/workstreams/voice/STATE.md:30-47]
+1. **GATE-07 warning contract — RESOLVED as an upstream contract gate.** Voice will consume only the core-owned warning flag once its exact payload is published; it will not invent a parallel wire field. Phase 3's integration plan verifies that contract before the real-core run. If the contract is not available, the integration acceptance remains blocked rather than treating a fixture as proof of the core path. [VERIFIED: 03-CONTEXT.md:84-86; .planning/workstreams/voice/ROADMAP.md:133-147; 03-04-PLAN.md]
+2. **Evidence for DLG-11 guessed-label disclosures — RESOLVED by the locked truthful fallback.** Speak only explicit evidence present in the agreed repaired-model/snapshot contract. If core supplies provenance/confidence without an evidence reason, use the locked “uncertain” wording; do not infer a reason. The plan tests both evidence-present and evidence-absent cases. [VERIFIED: 03-CONTEXT.md:36; packages/protocol/src/form-model.ts:17-30; 03-03-PLAN.md]
+3. **Core delivery timing for I3 — RESOLVED as an accepted dependency.** Delivery timing remains core-owned and is not assumed. Voice-owned behavior is exercised with fixtures/mock runner first; the real-Claude I3 run is gated on the required core contracts and delivery. If they are unavailable, record the human integration criterion as pending rather than claiming it passed. [VERIFIED: .planning/workstreams/core/STATE.md:1-6, 31-35; .planning/workstreams/voice/STATE.md:30-47; 03-04-PLAN.md]
 
 ## Assumptions Log
 
