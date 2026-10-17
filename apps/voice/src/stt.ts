@@ -132,15 +132,12 @@ export function createStt(opts: SttOptions): Stt {
       r.interimResults = true;
       r.maxAlternatives = MAX_ALTERNATIVES;
       settled = false;
+      let latestResult: SttResultEvent | null = null;
       r.onresult = (e) => {
         if (rec !== r) return;
-        const final = buildFinal(e);
-        if (final) {
-          if (settled) return;
-          settled = true;
-          opts.onFinal(final);
-          return;
-        }
+        // The browser may finalize speech in multiple chunks. Keep the latest
+        // complete result list and wait until `end` before sending the command.
+        latestResult = e;
         let interim = "";
         for (let i = 0; i < e.results.length; i++) {
           const res = e.results[i];
@@ -156,7 +153,13 @@ export function createStt(opts: SttOptions): Stt {
       };
       r.onend = () => {
         if (rec !== r) return;
+        const final = latestResult ? buildFinal(latestResult) : null;
         finish();
+        if (final && !settled) {
+          settled = true;
+          opts.onFinal(final);
+          return;
+        }
         report(errorFor("no-speech"));
       };
       rec = r;

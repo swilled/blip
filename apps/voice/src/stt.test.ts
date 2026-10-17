@@ -87,6 +87,25 @@ describe("stt", () => {
     expect(stt.isActive()).toBe(false);
   });
 
+  it("waits for all final chunks before delivering a multiword utterance", () => {
+    const { f, stt, finals } = setup();
+    stt.press();
+
+    f.rec.onresult!(event(res(true, [["read the", 0.9]])));
+    expect(finals).toEqual([]);
+
+    f.rec.onresult!(
+      event(res(true, [["read the", 0.9]]), res(true, [["form", 0.8]])),
+    );
+    expect(finals).toEqual([]);
+
+    f.rec.onend!();
+    expect(finals).toHaveLength(1);
+    expect(finals[0]!.text).toBe("read the form");
+    expect(finals[0]!.confidence).toBeCloseTo(0.85);
+    expect(finals[0]!.alternatives).toEqual([]);
+  });
+
   it("clamps confidence and limits alternatives", () => {
     const { f, stt, finals } = setup();
     stt.press();
@@ -103,6 +122,7 @@ describe("stt", () => {
         ]),
       ),
     );
+    f.rec.onend!();
     const out = finals[0]!;
     expect(out.confidence).toBe(1);
     expect(out.alternatives).toHaveLength(3);

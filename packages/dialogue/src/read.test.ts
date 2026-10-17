@@ -5,6 +5,7 @@ import brokenJson from "../../../fixtures/forms/broken-form.model.json" with { t
 import type { DialogueEvent } from "./events";
 import { initialState } from "./state";
 import { reduce } from "./reduce";
+import { requiredEmptyText } from "./templates";
 
 const survey = FormModel.parse(surveyJson);
 const broken = FormModel.parse(brokenJson);
@@ -91,6 +92,15 @@ describe("dialogue read and option picks", () => {
       speak("No fields are required."),
     ]);
   });
+
+  it.each(["what's missing", "what do I still need", "what do I need to fill"])(
+    "names currently empty required fields when asked %s",
+    (command) => {
+      expect(reduce(initialState(), say(command), ctx(survey)).effects).toEqual([
+        speak(requiredEmptyText(survey)),
+      ]);
+    },
+  );
 
   it.each(["two", "number two", "option 2", "Web search"])("picks an option by %s and sends its value", (choice) => {
     const second = readSecondSurveyBatch();
