@@ -108,7 +108,7 @@ Each task was committed atomically:
 2. **Task 2: Dialogue runner** - `db85a39`.
 3. **Task 3: run-real wiring, integration tests, and handoff** - RED `8688672`, GREEN `0c4ad6a`.
 
-**Plan metadata:** Summary, STATE.md, ROADMAP.md, and REQUIREMENTS.md are committed together after the task commits.
+**Plan metadata:** Summary, STATE.md, ROADMAP.md, and REQUIREMENTS.md are committed together in `cfa3125` after the task commits.
 
 Both TDD RED records were accepted by GSD as `RED_EVIDENCE_OK` before their GREEN commits.
 
