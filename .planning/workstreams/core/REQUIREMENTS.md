@@ -32,8 +32,8 @@
 
 ### Safety Gate
 
-- [ ] **GATE-01**: Submit / pay / delete / send / cross-domain navigation actions are blocked by default and only execute through the single Executor with a valid grant
-- [ ] **GATE-02**: Pressing Enter in a field, `form.submit()`, `requestSubmit()` or a div "button" cannot submit the form while no grant is armed (capture-phase interception in the extension)
+- [x] **GATE-01**: Submit / pay / delete / send / cross-domain navigation actions are blocked by default and only execute through the single Executor with a valid grant
+- [x] **GATE-02**: Pressing Enter in a field, `form.submit()`, `requestSubmit()` or a div "button" cannot submit the form while no grant is armed (capture-phase interception in the extension)
 - [ ] **GATE-03**: A grant is single-use, expires after 30 s, and is bound to target + kind + URL + snapshot version
 - [ ] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
 - [ ] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
