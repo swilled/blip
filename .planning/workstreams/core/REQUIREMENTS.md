@@ -109,8 +109,8 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | ACT-02 | core | Phase 2 | Complete |
 | ACT-03 | core | Phase 2 | Complete |
 | ACT-04 | core | Phase 2 | Complete |
-| GATE-01 | core | Phase 3 | Pending |
-| GATE-02 | core | Phase 3 | Pending |
+| GATE-01 | core | Phase 3 | Complete |
+| GATE-02 | core | Phase 3 | Complete |
 | GATE-03 | core | Phase 3 | Pending |
 | GATE-04 | core | Phase 3 | Pending |
 | GATE-05 | core | Phase 3 | Pending |
