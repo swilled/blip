@@ -1,10 +1,13 @@
 import { buildFrame, parseFrame } from "@blip/protocol";
 import { ensureConnected } from "./socket.js";
 import { injectExistingTabs } from "./inject.js";
+import { registerTargetTabTracking } from "./tabs.js";
 
 function ensureReconnectAlarm(): void {
   void chrome.alarms.create("blip-reconnect", { periodInMinutes: 0.5 });
 }
+
+registerTargetTabTracking();
 
 // Register all wake-up paths synchronously before opening the first socket.
 chrome.runtime.onStartup.addListener(() => {
