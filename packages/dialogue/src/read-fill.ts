@@ -2,7 +2,7 @@ import type { Field, FormModel } from "@blip/protocol";
 import type { DialogueContext, Effect } from "./effects";
 import type { DialogueState } from "./state";
 import { cancelEffect, speakEffect } from "./state";
-import { fillableFields, matchOption, optionLabelFor, optionList, resolveField, spokenLabel } from "./fields";
+import { fillableFields, matchOption, optionLabelFor, optionList, profileFieldMatches, resolveField, spokenLabel } from "./fields";
 import { cleanValue, normalizeCommand, normalizeEmail, normalizeNumberish } from "./normalize";
 import { changeText, echoText, readBatchText, requiredEmptyText, spellValueText } from "./templates";
 import type { DialogueEvent } from "./events";
@@ -312,11 +312,66 @@ export function handleProfileFillUtterance(
   if (ctx.form === null) return answer(state, "I can't see a page yet.");
   const profile = ctx.profile;
   if (!profile) return answer(state, "I can't access the local profile yet.");
-  const field = fillableFields(ctx.form).find((candidate) => candidate.autocomplete === "email");
-  if (!field) return answer(state, "I couldn't find an email field to fill from your profile.");
-  if (field.sensitive !== "none") return handoffSensitive(state, field, ctx.form);
-  if (field.hasValue) return answer(state, `${spokenLabel(field, fieldNumber(ctx.form, field))} already has a value, so I left it unchanged.`);
-  return issueValueEffect(state, field, profile.email, "fill");
+  const allFields = profileFieldMatches(ctx.form);
+  const entries: NonNullable<DialogueState["profileBatch"]>["entries"] = [];
+  const skipped: string[] = [];
+  for (const { field, match } of allFields) {
+    const label = spokenLabel(field, fieldNumber(ctx.form, field));
+    if (field.disabled || field.sensitive !== "none" || field.hasValue || match.kind !== "match") {
+      skipped.push(label);
+      continue;
+    }
+    entries.push({ fieldId: field.id, key: match.key, value: profile[match.key], label });
+  }
+  if (entries.length === 0) {
+    const detail = skipped.length > 0 ? ` I left ${skipped.join(", ")} for you to fill.` : "";
+    return answer(state, `I didn't find any clear empty profile fields to fill.${detail}`);
+  }
+  const batchState: DialogueState = {
+    ...state,
+    profileBatch: { entries, cursor: 0, filled: [], skipped, reported: false },
+  };
+  return startProfileEntry(batchState, ctx.form);
+}
+
+function startProfileEntry(state: DialogueState, form: FormModel): DialogueResult {
+  const batch = state.profileBatch;
+  if (batch === null) return { state, effects: [] };
+  let cursor = batch.cursor;
+  const skipped = [...batch.skipped];
+  const fields = new Map(form.fields.map((field) => [field.id, field]));
+  while (cursor < batch.entries.length) {
+    const entry = batch.entries[cursor]!;
+    const field = fields.get(entry.fieldId);
+    if (!field || field.disabled || field.sensitive !== "none" || field.hasValue) {
+      skipped.push(entry.label);
+      cursor += 1;
+      continue;
+    }
+    const nextState: DialogueState = {
+      ...state,
+      mode: "awaiting-value",
+      currentFieldId: field.id,
+      pendingOptions: null,
+      pendingFill: { fieldId: field.id, replaced: false, profileBatch: true },
+      profileBatch: { ...batch, cursor, skipped },
+    };
+    return { state: nextState, effects: [{ kind: "fill", fieldId: field.id, value: entry.value }] };
+  }
+  if (batch.reported) return { state: { ...state, profileBatch: { ...batch, cursor, skipped } }, effects: [] };
+  const filledText = batch.filled.length > 0 ? `Filled ${batch.filled.map((item) => item.label).join(", ")}.` : "No profile fields were filled.";
+  const skippedText = skipped.length > 0 ? ` Skipped ${skipped.join(", ")}; you can dictate those fields.` : "";
+  const spoken = speakEffect(state, `${filledText}${skippedText}`, "answer", { interruptible: true });
+  return {
+    state: { ...spoken.state, profileBatch: { ...batch, cursor, skipped, reported: true } },
+    effects: [spoken.effect],
+  };
+}
+
+export function continueProfileBatch(state: DialogueState, form: FormModel | null): DialogueResult {
+  if (state.profileBatch === null) return { state, effects: [] };
+  if (form === null) return answer({ ...state, profileBatch: null }, "The page changed, so I stopped the profile fill. Please try again.");
+  return startProfileEntry(state, form);
 }
 
 /** Use the page's observed value as the sole source for a fill/select echo. */
@@ -331,6 +386,7 @@ export function handleActResult(
   if (!field) return { state, effects: [] };
 
   if (field.sensitive !== "none" || event.error === "sensitive-field") {
+    if (pending.profileBatch) return handoffSensitive({ ...state, profileBatch: null }, field, ctx.form);
     return handoffSensitive(state, field, ctx.form);
   }
 
@@ -341,6 +397,33 @@ export function handleActResult(
     pendingOptions: null,
   };
   const observed = event.observedValue;
+  if (pending.profileBatch && state.profileBatch !== null) {
+    const batch = state.profileBatch;
+    const entry = batch.entries[batch.cursor];
+    const nextCursor = batch.cursor + 1;
+    const nextBatch = {
+      ...batch,
+      cursor: nextCursor,
+      filled: event.ok && observed !== null && observed !== undefined && observed !== "" && entry
+        ? [...batch.filled, { fieldId: entry.fieldId, label: entry.label }]
+        : batch.filled,
+      skipped: event.ok && observed !== null && observed !== undefined && observed !== ""
+        ? batch.skipped
+        : [...batch.skipped, entry?.label ?? spokenLabel(field, fieldNumber(ctx.form, field))],
+    };
+    if (!event.ok || observed === null || observed === undefined || observed === "") {
+      const base = { ...state, mode: "ready" as const, pendingFill: null, profileBatch: nextBatch };
+      const spoken = speakEffect(base, `I tried to fill ${spokenLabel(field, fieldNumber(ctx.form, field))}, but the page shows nothing.`, "error", { interruptible: true });
+      return { state: spoken.state, effects: [spoken.effect, { kind: "earcon", name: "error" }, { kind: "refreshForm" }] };
+    }
+    let display = observed;
+    if (event.op === "select" || field.type === "select" || field.type === "radio-group") {
+      display = optionLabelFor(field, observed) ?? observed;
+    }
+    const base = { ...state, mode: "ready" as const, pendingFill: null, profileBatch: nextBatch };
+    const spoken = speakEffect(base, echoText(field, display, false), "answer", { interruptible: true });
+    return { state: spoken.state, effects: [spoken.effect, { kind: "refreshForm" }] };
+  }
   if (!event.ok || observed === null || observed === undefined || observed === "") {
     const text = `I tried to fill ${spokenLabel(field, fieldNumber(ctx.form, field))}, but the page shows nothing.`;
     const spoken = speakEffect(base, text, "error", { interruptible: true });

@@ -9,7 +9,14 @@ export type DialogueState = {
   readCursor: number | null;
   currentFieldId: string | null;
   pendingOptions: { fieldId: string } | null;
-  pendingFill: { fieldId: string; replaced: boolean; previousValue?: string | null } | null;
+  pendingFill: { fieldId: string; replaced: boolean; previousValue?: string | null; profileBatch?: boolean } | null;
+  profileBatch: {
+    entries: Array<{ fieldId: string; key: "name" | "email" | "tel"; value: string; label: string }>;
+    cursor: number;
+    filled: Array<{ fieldId: string; label: string }>;
+    skipped: string[];
+    reported: boolean;
+  } | null;
   outstanding: string[];
   lastDoneAt: number | null;
   readBack: { speakId: string; actionId: string; digest: string } | null;
@@ -36,6 +43,7 @@ export function initialState(): DialogueState {
     currentFieldId: null,
     pendingOptions: null,
     pendingFill: null,
+    profileBatch: null,
     outstanding: [],
     lastDoneAt: null,
     readBack: null,

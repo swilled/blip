@@ -2,7 +2,7 @@ import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, speakEffect } from "./state";
-import { handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance } from "./read-fill";
+import { continueProfileBatch, handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance } from "./read-fill";
 import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
@@ -39,6 +39,9 @@ export function reduce(
   ctx: DialogueContext,
 ): { state: DialogueState; effects: Effect[] } {
   if (event.type !== "utterance") {
+    if (event.type === "form.changed" && state.profileBatch !== null) {
+      return continueProfileBatch(state, ctx.form);
+    }
     if (event.type === "speak.done" || event.type === "form.changed" || event.type === "confirm.armed"
       || event.type === "confirm.refused" || event.type === "confirm.cleared" || event.type === "gated.result") {
       return handleSubmitFlow(state, event, ctx);

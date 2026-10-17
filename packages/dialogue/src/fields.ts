@@ -4,6 +4,37 @@ import { cleanSpoken, normalizeCommand, wordsToNumber } from "./normalize";
 export type ListedOption = { n: number; value: string; label: string };
 export type OptionMatch = { kind: "match"; option: ListedOption } | { kind: "many"; labels: string[] } | { kind: "none" };
 export type FieldMatch = { kind: "match"; field: Field; rest: string } | { kind: "ambiguous"; labels: string[] } | { kind: "none" };
+export type ProfileKey = "name" | "email" | "tel";
+export type ProfileTokenMatch = { kind: "match"; key: ProfileKey } | { kind: "ambiguous" } | { kind: "none" };
+export type ProfileFieldMatch = { field: Field; match: ProfileTokenMatch };
+
+const PROFILE_KEYS = new Set<ProfileKey>(["name", "email", "tel"]);
+
+/** Read only an explicit supported field-name token from autocomplete detail tokens. */
+export function profileTokenMatch(field: Field): ProfileTokenMatch {
+  const tokens = (field.autocomplete ?? "").toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const keys = tokens.filter((token): token is ProfileKey => PROFILE_KEYS.has(token as ProfileKey));
+  const distinct = [...new Set(keys)];
+  if (distinct.length > 1 || keys.length > distinct.length) return { kind: "ambiguous" };
+  if (distinct.length === 0) return { kind: "none" };
+  return { kind: "match", key: distinct[0]! };
+}
+
+/** Mark duplicate enabled fields for one profile key ambiguous instead of guessing. */
+export function profileFieldMatches(form: FormModel): ProfileFieldMatch[] {
+  const fields = form.fields.slice().sort((a, b) => a.order - b.order);
+  const direct = fields.map((field) => ({ field, match: profileTokenMatch(field) }));
+  const counts = new Map<ProfileKey, number>();
+  for (const { field, match } of direct) {
+    if (!field.disabled && match.kind === "match") counts.set(match.key, (counts.get(match.key) ?? 0) + 1);
+  }
+  return direct.map(({ field, match }) => ({
+    field,
+    match: !field.disabled && match.kind === "match" && (counts.get(match.key) ?? 0) > 1
+      ? { kind: "ambiguous" }
+      : match,
+  }));
+}
 
 /** Enabled fields use the same page order that spoken numbering uses. */
 export function fillableFields(form: FormModel): Field[] {

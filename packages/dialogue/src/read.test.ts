@@ -6,6 +6,7 @@ import type { DialogueEvent } from "./events";
 import { initialState } from "./state";
 import { reduce } from "./reduce";
 import { requiredEmptyText } from "./templates";
+import { profileFieldMatches, profileTokenMatch } from "./fields";
 
 const survey = FormModel.parse(surveyJson);
 const broken = FormModel.parse(brokenJson);
@@ -29,6 +30,81 @@ function readSecondSurveyBatch() {
 }
 
 describe("dialogue read and option picks", () => {
+  it("maps supported autocomplete detail tokens regardless of section and shipping or billing token order", () => {
+    const withAutocomplete = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e1"
+        ? { ...field, autocomplete: "section-shipping shipping name" }
+        : field.id === "e2"
+          ? { ...field, autocomplete: "billing email" }
+          : field.id === "e3"
+            ? { ...field, autocomplete: "tel section-home" }
+            : field),
+    });
+    const matches = profileFieldMatches(withAutocomplete).filter(({ match }) => match.kind === "match");
+    expect(matches.map(({ field, match }) => [field.id, match.kind === "match" ? match.key : null])).toEqual([
+      ["e1", "name"], ["e2", "email"], ["e3", "tel"],
+    ]);
+    expect(profileTokenMatch({ ...withAutocomplete.fields[0]!, autocomplete: "email name" })).toEqual({ kind: "ambiguous" });
+    expect(profileTokenMatch({ ...withAutocomplete.fields[0]!, autocomplete: "email email" })).toEqual({ kind: "ambiguous" });
+  });
+
+  it("fills clear profile matches one at a time in page order and advances after refresh", () => {
+    const profileForm = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e1"
+        ? { ...field, autocomplete: "section-checkout shipping name" }
+        : field.id === "e2"
+          ? { ...field, autocomplete: "billing email" }
+          : field.id === "e3"
+            ? { ...field, autocomplete: "section-contact tel" }
+            : field),
+    });
+    const profile = { name: "Rowan Example", email: "rowan@example.com", tel: "202-555-0142" };
+    const command = reduce(initialState(), say("fill from my profile"), { form: profileForm, now: 0, profile });
+    expect(command.effects).toEqual([{ kind: "fill", fieldId: "e1", value: profile.name }]);
+
+    const first = reduce(command.state, {
+      type: "act.result", op: "fill", fieldId: "e1", ok: true, observedValue: "Rowan",
+    }, { form: profileForm, now: 1, profile });
+    expect(first.effects[0]).toMatchObject({ kind: "speak", text: expect.stringContaining("Rowan") });
+    expect(first.effects.at(-1)).toEqual({ kind: "refreshForm" });
+    expect(first.state.profileBatch?.filled).toEqual([{ fieldId: "e1", label: "probably Your name" }]);
+
+    const refreshed = FormModel.parse({
+      ...profileForm,
+      fields: profileForm.fields.map((field) => field.id === "e1" ? { ...field, hasValue: true, value: "Rowan" } : field),
+    });
+    const second = reduce(first.state, { type: "form.changed" }, { form: refreshed, now: 2, profile });
+    expect(second.effects).toEqual([{ kind: "fill", fieldId: "e2", value: profile.email }]);
+  });
+
+  it("skips populated, ambiguous, unmatched, disabled, and sensitive profile fields", () => {
+    const form = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e1"
+        ? { ...field, autocomplete: "email", hasValue: true, value: "existing@example.test" }
+        : field.id === "e2"
+          ? { ...field, autocomplete: "email" }
+          : field.id === "e3"
+            ? { ...field, autocomplete: "tel", sensitive: "password", type: "password", value: null }
+            : field.id === "e6"
+              ? { ...field, autocomplete: "email", disabled: true }
+              : field),
+    });
+    const result = reduce(initialState(), say("fill from my profile"), {
+      form, now: 0, profile: { name: "Rowan Example", email: "rowan@example.com", tel: "202-555-0142" },
+    });
+    expect(result.effects.some((effect) => effect.kind === "fill")).toBe(false);
+    expect(result.effects.some((effect) => effect.kind === "parseIntent")).toBe(false);
+    const text = (result.effects.find((effect) => effect.kind === "speak") as { text: string }).text;
+    expect(text).toContain("Your name");
+    expect(text).toContain("Email");
+    expect(text).toContain("unlabeled field 3");
+    expect(text).toContain("Age");
+    expect(text).toContain("How did you hear about us");
+  });
+
   it("changes a named field and confirms its prior and page-observed values", () => {
     const filled = FormModel.parse({
       ...survey,

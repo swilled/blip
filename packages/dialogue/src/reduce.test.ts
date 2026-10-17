@@ -35,6 +35,7 @@ describe("reduce: what's here", () => {
       currentFieldId: null,
       pendingOptions: null,
       pendingFill: null,
+      profileBatch: null,
       outstanding: [],
       lastDoneAt: null,
       readBack: null,
