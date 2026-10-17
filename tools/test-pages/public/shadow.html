@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Shadow DOM contact form</title>
+    <script defer src="/report.js"></script>
+    <script defer>
+      class OpenNoteField extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: "open" });
+          root.innerHTML = `
+            <label for="open-note">Note in open shadow root</label>
+            <input id="open-note" name="open-note" type="text" autocomplete="off">
+          `;
+        }
+      }
+
+      class ClosedNoteField extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: "closed" });
+          root.innerHTML = `
+            <label for="closed-note">Note in closed shadow root</label>
+            <input id="closed-note" name="closed-note" type="text" autocomplete="off">
+          `;
+        }
+      }
+
+      customElements.define("open-note-field", OpenNoteField);
+      customElements.define("closed-note-field", ClosedNoteField);
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Shadow DOM contact form</h1>
+      <form>
+        <open-note-field></open-note-field>
+        <closed-note-field></closed-note-field>
+      </form>
+    </main>
+  </body>
+</html>

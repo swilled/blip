@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Delayed form reveal</title>
+    <script defer src="/report.js"></script>
+    <script defer>
+      window.addEventListener("DOMContentLoaded", () => {
+        const fields = document.querySelector("#delayed-fields");
+        const email = document.querySelector("#delayed-email");
+        const error = document.querySelector("#delayed-error");
+
+        window.setTimeout(() => {
+          fields.hidden = false;
+          window.blipReport("field-revealed", { field: "delayed-email" });
+        }, 700);
+
+        document.querySelector("#validate-later").addEventListener("click", () => {
+          window.setTimeout(() => {
+            error.hidden = email.validity.valid;
+            if (!error.hidden) window.blipReport("delayed-validation-error", { field: "delayed-email" });
+          }, 800);
+        });
+      });
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Delayed form reveal</h1>
+      <p>The email field appears after a short delay. A later check can reveal its validation message.</p>
+      <form>
+        <section id="delayed-fields" hidden>
+          <label for="delayed-email">Follow-up email</label>
+          <input id="delayed-email" name="email" type="email" autocomplete="email" required>
+          <p id="delayed-error" role="alert" hidden>Enter a valid email address.</p>
+        </section>
+        <button id="validate-later" type="button">Check email later</button>
+      </form>
+    </main>
+  </body>
+</html>
