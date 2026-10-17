@@ -174,6 +174,19 @@ function namedEdit(state: DialogueState, norm: string, raw: string, form: FormMo
   return fillField(state, match.field, match.rest, form);
 }
 
+/** Resolve only a named edit with a supplied value, reusing the normal fill/select/focus path. */
+export function resolveEdit(state: DialogueState, raw: string, ctx: DialogueContext): DialogueResult | null {
+  if (ctx.form === null) return null;
+  const norm = normalizeCommand(raw);
+  const stripped = stripLeadingFillPrefix(raw, norm);
+  const candidate = stripped.prefix === null ? raw : stripped.raw;
+  if (!candidate) return null;
+  const match = resolveField(ctx.form, candidate);
+  if (match.kind !== "match" || match.rest.trim() === "") return null;
+  return fillField(state, match.field, match.rest, ctx.form)
+    ?? errorAnswer(state, `I didn't find a value for ${spokenLabel(match.field, fieldNumber(ctx.form, match.field))}.`);
+}
+
 function controlOrLongValue(norm: string, tokenCount: number): boolean {
   if (tokenCount > 8 || NON_VALUE.has(norm)) return true;
   const first = norm.split(" ", 1)[0] ?? "";

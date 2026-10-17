@@ -303,7 +303,8 @@ describe("submit and read-back flow", () => {
       "yes", "yeah", "yep", "ok", "okay", "sure", "do it", "go ahead", "confirm", "submit",
       "submit it", "yes submit survey", "submit the survey", "submit surveys", "submit survey now",
       "I confirm", "correct", "affirmative", "absolutely", "please do", "send it", "yup", "right",
-      "sounds good", "go for it", "please submit survey", "submit survey please", "yes please",
+      "sounds good", "go for it", "please submit survey", "submit survey please", "yes please", "two",
+      "number two", "option 2", "continue", "Your name is", "help",
     ];
 
     it.each(refusalPhrases)("refuses %j without model routing or redeem", (phrase) => {
@@ -330,6 +331,36 @@ describe("submit and read-back flow", () => {
       expect(result.state.mode).toBe("awaiting-confirm");
     });
 
+    it("matches only utterance text and ignores recognition alternatives", () => {
+      const start = armed();
+      const promptDone = reduce(start.state, done("b2"), ctx(filledSurvey, 3000));
+      const result = reduce(promptDone.state, {
+        type: "utterance",
+        utterance: { utteranceId: "u-alt", text: "yes", alternatives: ["submit survey"], source: "typed" },
+      }, ctx(filledSurvey, 4000));
+      expect(result.effects).toContainEqual({
+        kind: "speak", speakId: "b3", text: refusalText("submit survey"), category: "confirm-prompt", interruptible: true,
+      });
+      expect(result.effects).toContainEqual({ kind: "earcon", name: "blocked" });
+      expect(result.effects.some((effect) => effect.kind === "redeem")).toBe(false);
+    });
+
+    it("keeps reading-back utterances out of general grammar and the model", () => {
+      const request = submitted();
+      const wait = reduce(request.state, say("submit survey"), ctx(filledSurvey, 300));
+      expect(wait.effects).toEqual([{
+        kind: "speak", speakId: "b2", text: "Wait for the read-back to finish, or say cancel.", category: "answer", interruptible: true,
+      }]);
+      expect(wait.effects.some((effect) => effect.kind === "parseIntent")).toBe(false);
+      expect(wait.state.mode).toBe("reading-back");
+
+      const long = reduce(request.state, say("x".repeat(250)), ctx(filledSurvey, 400));
+      expect(long.effects).toEqual([{
+        kind: "speak", speakId: "b2", text: "Wait for the read-back to finish, or say cancel.", category: "answer", interruptible: true,
+      }]);
+      expect(long.effects.some((effect) => effect.kind === "parseIntent")).toBe(false);
+    });
+
     it("refuses while any earlier refusal speak remains outstanding, then opens at 1000 ms", () => {
       const start = armed();
       const refused = reduce(start.state, say("yes"), ctx(filledSurvey, 2000));
@@ -341,10 +372,11 @@ describe("submit and read-back flow", () => {
       expect(duringRefusal.effects.some((effect) => effect.kind === "redeem")).toBe(false);
 
       const refusalDone = reduce(duringRefusal.state, done("b3"), ctx(filledSurvey, 3200));
-      const tooSoon = reduce(refusalDone.state, say("submit survey"), ctx(filledSurvey, 4199));
+      const duringRefusalDone = reduce(refusalDone.state, done("b4"), ctx(filledSurvey, 3300));
+      const tooSoon = reduce(duringRefusalDone.state, say("submit survey"), ctx(filledSurvey, 4299));
       expect(tooSoon.effects.some((effect) => effect.kind === "redeem")).toBe(false);
-      const refusalDoneAgain = reduce(tooSoon.state, done("b4"), ctx(filledSurvey, 4200));
-      const redeemed = reduce(refusalDoneAgain.state, say("submit survey"), ctx(filledSurvey, 5200));
+      const refusalDoneAgain = reduce(tooSoon.state, done("b5"), ctx(filledSurvey, 4300));
+      const redeemed = reduce(refusalDoneAgain.state, say("submit survey"), ctx(filledSurvey, 5300));
       expect(redeemed.effects).toEqual([{ kind: "redeem", grantId: "g1" }]);
       expect(redeemed.state.mode).toBe("executing");
       expect(reduce(redeemed.state, say("submit survey"), ctx(filledSurvey, 7000)).effects).toEqual([]);
