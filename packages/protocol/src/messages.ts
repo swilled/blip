@@ -2,10 +2,32 @@ import { z } from "zod";
 import { MAX_UTTERANCE_CHARS } from "./constants";
 import { ErrorMsg, Envelope, Hello, Welcome, type Sender } from "./envelope";
 import { newId } from "./ids";
-import { SnapshotRequestPayload, SnapshotResultPayload } from "./payloads-extension";
+import { ActRequest, ActResult } from "./act";
+import {
+  AnnouncePayload,
+  HighlightPayload,
+  PageChangedPayload,
+  PingPayload,
+  PongPayload,
+  PttHotkeyPayload,
+  SnapshotRequestPayload,
+  SnapshotResultPayload,
+} from "./payloads-extension";
+import {
+  ConfirmArmedPayload,
+  ConfirmClearedPayload,
+  ControlPayload,
+  EarconPayload,
+  PttPayload,
+  SettingsPayload,
+  SpeakDonePayload,
+  StatePayload,
+  TranscriptPayload,
+} from "./payloads-voice";
 
 // ---------------------------------------------------------------------------------------------
-// Payload schemas owned by this file (the tracer set). Plan 01-02 adds the rest of the D-14 set.
+// Payload schemas owned by this file: utterance and speak. The rest live in payloads-extension.ts,
+// payloads-voice.ts and act.ts (the full D-14 set of 24 types).
 // Default z.object everywhere: unknown keys are stripped, never rejected (D-17).
 // No .default() in wire schemas: input and output types must agree (research Pitfall 9).
 // ---------------------------------------------------------------------------------------------
@@ -45,8 +67,27 @@ export const MESSAGES = {
   error: { senders: ["server"], receivers: ["extension", "voice"], payload: ErrorMsg },
   utterance: { senders: ["voice"], receivers: ["server"], payload: Utterance },
   speak: { senders: ["server"], receivers: ["voice"], payload: Speak },
+  // extension <-> server
   "snapshot.request": { senders: ["server"], receivers: ["extension"], payload: SnapshotRequestPayload },
   "snapshot.result": { senders: ["extension"], receivers: ["server"], payload: SnapshotResultPayload },
+  "act.request": { senders: ["server"], receivers: ["extension"], payload: ActRequest },
+  "act.result": { senders: ["extension"], receivers: ["server"], payload: ActResult },
+  "page.changed": { senders: ["extension"], receivers: ["server"], payload: PageChangedPayload },
+  announce: { senders: ["server"], receivers: ["extension"], payload: AnnouncePayload },
+  highlight: { senders: ["server"], receivers: ["extension"], payload: HighlightPayload },
+  "ptt.hotkey": { senders: ["extension"], receivers: ["server"], payload: PttHotkeyPayload },
+  ping: { senders: ["extension"], receivers: ["server"], payload: PingPayload },
+  pong: { senders: ["server"], receivers: ["extension"], payload: PongPayload },
+  // voice <-> server (utterance and speak are declared above)
+  ptt: { senders: ["voice"], receivers: ["server"], payload: PttPayload },
+  "speak.done": { senders: ["voice"], receivers: ["server"], payload: SpeakDonePayload },
+  settings: { senders: ["voice"], receivers: ["server"], payload: SettingsPayload },
+  control: { senders: ["voice"], receivers: ["server"], payload: ControlPayload },
+  earcon: { senders: ["server"], receivers: ["voice"], payload: EarconPayload },
+  "confirm.armed": { senders: ["server"], receivers: ["voice"], payload: ConfirmArmedPayload },
+  "confirm.cleared": { senders: ["server"], receivers: ["voice"], payload: ConfirmClearedPayload },
+  state: { senders: ["server"], receivers: ["voice"], payload: StatePayload },
+  transcript: { senders: ["server"], receivers: ["voice"], payload: TranscriptPayload },
 } as const satisfies Record<string, RegistryEntry>;
 
 export type MessageType = keyof typeof MESSAGES;
@@ -74,6 +115,23 @@ export const Message = z.discriminatedUnion("type", [
   frame("speak", MESSAGES.speak.payload),
   frame("snapshot.request", MESSAGES["snapshot.request"].payload),
   frame("snapshot.result", MESSAGES["snapshot.result"].payload),
+  frame("act.request", MESSAGES["act.request"].payload),
+  frame("act.result", MESSAGES["act.result"].payload),
+  frame("page.changed", MESSAGES["page.changed"].payload),
+  frame("announce", MESSAGES.announce.payload),
+  frame("highlight", MESSAGES.highlight.payload),
+  frame("ptt.hotkey", MESSAGES["ptt.hotkey"].payload),
+  frame("ping", MESSAGES.ping.payload),
+  frame("pong", MESSAGES.pong.payload),
+  frame("ptt", MESSAGES.ptt.payload),
+  frame("speak.done", MESSAGES["speak.done"].payload),
+  frame("settings", MESSAGES.settings.payload),
+  frame("control", MESSAGES.control.payload),
+  frame("earcon", MESSAGES.earcon.payload),
+  frame("confirm.armed", MESSAGES["confirm.armed"].payload),
+  frame("confirm.cleared", MESSAGES["confirm.cleared"].payload),
+  frame("state", MESSAGES.state.payload),
+  frame("transcript", MESSAGES.transcript.payload),
 ]);
 export type Message = z.infer<typeof Message>;
 

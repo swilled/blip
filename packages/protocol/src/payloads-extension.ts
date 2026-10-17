@@ -22,3 +22,42 @@ export const SnapshotResultPayload = z.discriminatedUnion("ok", [
   }),
 ]);
 export type SnapshotResultPayload = z.infer<typeof SnapshotResultPayload>;
+
+// act.request and act.result use ActRequest and ActResult from act.ts directly (D-15).
+
+/** Debounced by the extension (500 ms); the server decides whether to re-snapshot. */
+export const PageChangedPayload = z.object({
+  tabId: z.number().int(),
+  url: z.string(),
+  reason: z.enum(["navigation", "mutation", "tab-activated"]),
+  structuralHash: z.string().optional(),
+});
+export type PageChangedPayload = z.infer<typeof PageChangedPayload>;
+
+/** In-page live region text for NVDA mode. */
+export const AnnouncePayload = z.object({
+  text: z.string().max(500),
+  politeness: z.enum(["polite", "assertive"]),
+});
+export type AnnouncePayload = z.infer<typeof AnnouncePayload>;
+
+/** Visual aid for the sighted audience; null clears the highlight. */
+export const HighlightPayload = z.object({
+  targetId: z.string().nullable(),
+});
+export type HighlightPayload = z.infer<typeof HighlightPayload>;
+
+/**
+ * Global-hotkey relay from chrome.commands (toggle only; there is no keyup). Separate from the
+ * voice-only `ptt` type so no type has two payload schemas (M0 sign-off item 1, research Pitfall 1).
+ */
+export const PttHotkeyPayload = z.object({
+  source: z.literal("global-hotkey"),
+});
+export type PttHotkeyPayload = z.infer<typeof PttHotkeyPayload>;
+
+/** Keepalive (D-06): the extension pings every 20 s, the server answers pong. */
+export const PingPayload = z.object({});
+export type PingPayload = z.infer<typeof PingPayload>;
+export const PongPayload = z.object({});
+export type PongPayload = z.infer<typeof PongPayload>;
