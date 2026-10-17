@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.DS_Store
+
+# GSD: per-machine workstream pointer (each dev sets GSD_WORKSTREAM instead)
+.planning/active-workstream
