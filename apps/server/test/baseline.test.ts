@@ -92,6 +92,18 @@ describe("buildBaselineFormModel: booking tracer", () => {
 });
 
 describe("pickLabel", () => {
+  it("keeps baseline provenance deterministic and never yields model", () => {
+    const sources = ["aria", "label", "nearby-text", "placeholder", "inferred"] as const;
+    for (const source of sources) {
+      expect(pickLabel([{ text: "Name", source, confidence: 0.8 }]).labelSource).toBe(source);
+    }
+    const baseline = buildBaselineFormModel(makeSnapshot({
+      elements: [makeElement({ labelCandidates: [{ text: "Name", source: "label", confidence: 0.8 }] })],
+    }));
+    expect(baseline.fields[0]!.labelSource).toBe("label");
+    expect(baseline.fields.some((field) => field.labelSource === "model")).toBe(false);
+  });
+
   it("tie between aria and label at 0.95 gives aria", () => {
     const r = pickLabel([
       { text: "from label", source: "label", confidence: 0.95 },

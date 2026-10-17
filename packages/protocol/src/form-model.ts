@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { LOW_CONFIDENCE_THRESHOLD } from "./constants";
 import { ActionKind } from "./action-kind";
-import { LabelSource, SENSITIVE_VALUE_MESSAGE, Sensitivity, sensitiveValueIsNull } from "./snapshot";
+import { RawLabelSource, SENSITIVE_VALUE_MESSAGE, Sensitivity, sensitiveValueIsNull } from "./snapshot";
+
+// Resolved FormModel provenance can include a validated server-side model repair.
+export const LabelSource = z.enum([...RawLabelSource.options, "model"]);
+export type LabelSource = z.infer<typeof LabelSource>;
 
 export const FieldType = z.enum([
   "text", "email", "tel", "url", "number", "date", "time", "password",

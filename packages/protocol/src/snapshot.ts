@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { ActionKind } from "./action-kind";
 
-export const LabelSource = z.enum(["aria", "label", "nearby-text", "placeholder", "inferred"]);
-export type LabelSource = z.infer<typeof LabelSource>;
+// Raw extension evidence is deterministic; model provenance exists only after server resolution.
+export const RawLabelSource = z.enum(["aria", "label", "nearby-text", "placeholder", "inferred"]);
+export type RawLabelSource = z.infer<typeof RawLabelSource>;
 
 export const Sensitivity = z.enum(["none", "password", "card-number", "card-cvc", "otp", "ssn"]);
 export type Sensitivity = z.infer<typeof Sensitivity>;
@@ -38,7 +39,7 @@ const RawElementBase = z.object({
     z.object({
       // ALL candidates, best first; the server picks
       text: z.string().max(200),
-      source: LabelSource,
+      source: RawLabelSource,
       confidence: z.number().min(0).max(1),
     }),
   ),
