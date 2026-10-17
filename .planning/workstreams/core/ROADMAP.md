@@ -141,7 +141,7 @@ Plans:
   4. On the broken demo form, unlabeled and placeholder-only fields get repaired labels in the background (marked model-sourced, with a confidence) without delaying the instant baseline answer; patches touch only existing ids and never kind, value or sensitivity; a second visit loads the repair from cache instantly.
 
 **Research**: A bounded local `outputFormat` + `startup()` spike reported one init tool for both roles, even with `tools: []` and `disallowedTools: ["*"]`; it stopped before any model prompt, so the structured-output path was not selected. Use the D-01 streaming/Zod fallback with explicit deny-all and a mandatory empty-tool init check; live streaming initialization remains unverified. Watch subscription quota (Haiku-class intents, Sonnet-class repair, disk cache). Apply the roughly 8k-token snapshot trim here, at the model-prompt boundary; Phase 2 only caps the extension wire snapshot at 250 elements.
-**Plans**: 9/10 complete. Plan 04-10 closes the streaming initialization deadlock hypothesis under a fixed, value-free bootstrap exception and one newly authorized bounded live check; Phase 4 remains in progress until verification evidence closes its remaining gaps (see `04-VERIFICATION.md`).
+**Plans**: 10/10 plans executed. Plan 04-10 adds fixed, value-free counted bootstraps and offline fail-closed coverage. Its single authorized live check failed during initialization after one intent bootstrap; Phase 4 remains in progress until verification evidence closes the remaining gaps (see `04-VERIFICATION.md`).
 
 Plans:
 - [x] 04-01-PLAN.md — Approve the exact SDK pin and add a bounded, gated SDK lifecycle spike
@@ -153,7 +153,7 @@ Plans:
 - [x] 04-07-PLAN.md — Repair labels asynchronously and cache validated value-free patches
 - [x] 04-08-PLAN.md — Close Phase 4 live SDK verification gaps behind a fresh approval gate
 - [x] 04-09-PLAN.md — Complete the approved-mode synthetic verifier behind the existing approval gate
-- [ ] 04-10-PLAN.md — Resolve the SDK init gate with a capped bootstrap and one authorized synthetic live check
+- [x] 04-10-PLAN.md — Resolve the SDK init gate with a capped bootstrap and one authorized synthetic live check
 **UI hint**: no
 
 ### Phase 5: Hostile Pages, Real Web and Freeze
@@ -185,7 +185,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
-| 4. Claude Brain and Label Repair | 9/9 | In Progress |  |
+| 4. Claude Brain and Label Repair | 10/10 | In Progress |  |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).

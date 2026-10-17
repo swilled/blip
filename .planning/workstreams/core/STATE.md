@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 04 plans complete; approved live check timed out during initialization
-stopped_at: Approved Phase 04 live check timed out at the initialization stage
-last_updated: "2026-10-17T12:25:07Z"
+status: Phase 04 plans executed; live provider evidence pending
+stopped_at: 04-10 approved live check failed at initialization; Phase 04 remains open
+last_updated: "2026-10-17T16:16:32.180Z"
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 40
-  completed_plans: 40
+  completed_phases: 4
+  total_plans: 50
+  completed_plans: 41
 ---
 
 # Project State
@@ -25,13 +25,13 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 04 (Claude Brain and Label Repair) — EXECUTING
-Plan: 9 of 9
+Plan: 10 of 10 (execution complete; Phase 04 verification gaps remain)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 41
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -74,6 +74,7 @@ Plan: 9 of 9
 | Phase 04 P05 | 6 min | 3 tasks | 9 files |
 | Phase 04 P08 | 5m | 3 tasks | 10 files |
 | Phase 04 P04-09 | 11m | 2 tasks | 2 files |
+| Phase 04 P10 | untracked continuation | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,8 @@ Recent decisions affecting current work:
 - [Phase 04]: Deferred 04-08 live SDK use under delegated instruction; user did not provide the exact token
 - [Phase 04]: Approved-mode verifier accepts only one exact plan-specific marker line; the single fresh approval was consumed after one initialization timeout.
 - [Phase 04]: All probes use injected fakes and synthetic data; requirements remain pending until separate approved live evidence exists.
+- [Phase 04]: Only fixed synthetic role operations may precede both valid empty-tool checks; bootstrap counts increment synchronously before SDK dispatch.
+- [Phase 04]: The one approved 04-10 initialization failure consumes its approval; no live retry is allowed and BRAIN-01/02/03/PAGE-04 remain pending.
 
 ### Pending Todos
 
@@ -122,8 +125,8 @@ None yet.
 - [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
-- [Phase 4] Plans 04-01 through 04-09 are complete. The approved synthetic live check timed out during provider initialization after 900 seconds, before any role result or prompt; its one-time approval is consumed. Keep BRAIN-01/02/03/PAGE-04 pending until separately approved live evidence is obtained.
-- Phase 04 live SDK verification timed out during initialization; zero prompts; no role tool counts observed; BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04 remain pending.
+- [Phase 4] The 04-08 approved live check timed out during provider initialization after 900 seconds; that historical approval is consumed.
+- [Phase 4] The separate 04-10 approved bootstrap check failed during initialization after 6,454 ms, with one intent bootstrap, no repair bootstrap, no ordinary probes, and no role/tool result. Its approval is consumed. BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04 remain pending; Phase 4 stays open.
 
 ## Deferred Items
 
@@ -135,6 +138,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T12:25:07Z
-Stopped at: Approved Phase 04 live check timed out during initialization
+Last session: 2026-10-17T16:16:32.177Z
+Stopped at: 04-10 approved live check failed at initialization; Phase 04 remains open
 Resume file: None
