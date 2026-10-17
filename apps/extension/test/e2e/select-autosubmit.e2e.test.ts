@@ -12,7 +12,7 @@ function isSubmitEvent(record: TestPageReport): boolean {
 describe("real select auto-submit barrier", () => {
   const enabled = process.env["BLIP_E2E_BROWSER"] === "1";
 
-  it.skipIf(!enabled)("blocks onchange requestSubmit during act and permits an ordinary submit after cleanup", async () => {
+  it.skipIf(!enabled)("blocks direct submit and requestSubmit during a real select act and while idle", async () => {
     const fixture = await openFixturePage("/select-autosubmit.html");
     const pagePath = "/select-autosubmit.html";
     try {
@@ -25,22 +25,22 @@ describe("real select auto-submit barrier", () => {
 
       const result = await fixture.requestAct(snapshot, { op: "select", targetId: room.id, optionValue: "deluxe" }, "select");
       expect(result).toMatchObject({ ok: true, observedValue: "deluxe" });
+      const directSubmitAttempt = await fixture.waitForReport(pagePath, "direct-submit-attempt");
+      expect(directSubmitAttempt.detail).toEqual({});
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       const duringActReports = await fixture.reports(pagePath);
       expect(duringActReports.some(isSubmitEvent)).toBe(false);
       expect(duringActReports.some((record) => record.type === "select-autosubmit")).toBe(false);
+      expect(await fixture.evaluateInPage("window.location.pathname")).toBe(pagePath);
 
-      // The isolated fixture debugger performs a normal page submit after the act scope has ended.
-      await fixture.evaluateInPage("document.querySelector('#select-form')?.requestSubmit(); 'submitted'");
-      const deadline = Date.now() + 5_000;
-      let afterCleanupReports = await fixture.reports(pagePath);
-      while (!afterCleanupReports.some((record) => record.type === "select-autosubmit") && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        afterCleanupReports = await fixture.reports(pagePath);
-      }
-      expect(afterCleanupReports.some(isSubmitEvent)).toBe(true);
-      expect(afterCleanupReports.some((record) => record.type === "select-autosubmit")).toBe(true);
+      // The persistent document-start event barrier remains default-deny after the act returns.
+      await fixture.evaluateInPage("document.querySelector('#select-form')?.requestSubmit(); 'attempted'");
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const afterActReports = await fixture.reports(pagePath);
+      expect(afterActReports.some(isSubmitEvent)).toBe(false);
+      expect(afterActReports.some((record) => record.type === "select-autosubmit")).toBe(false);
+      expect(await fixture.evaluateInPage("window.location.pathname")).toBe(pagePath);
     } finally {
       await fixture.close();
     }
