@@ -46,6 +46,11 @@ function shapeInUtterance(text: string): SensitiveValueShape | "password" | null
   return null;
 }
 
+/** Detect value-shaped secrets without needing a page model, for value-free transcript routing. */
+export function containsSensitiveUtterance(text: string): boolean {
+  return shapeInUtterance(text) !== null;
+}
+
 function labelMatches(model: FormModel, requestedLabel: string): Field[] {
   const requested = requestedLabel.trim().toLocaleLowerCase();
   if (requested === "") return [];

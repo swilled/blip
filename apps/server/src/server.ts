@@ -37,6 +37,8 @@ export type StartServerOptions = {
   /** Clock and timer seams keep the confirmation barrier deterministic in server tests. */
   clock?: () => number;
   schedule?: (callback: () => void, delayMs: number) => unknown;
+  /** Test-only seam for exercising the bounded Claude intent watchdog offline. */
+  intentWatchdog?: { schedule(callback: () => void, delayMs: number): unknown; cancel(handle: unknown): void };
   /** Optional static roots (voice build, form fixtures). Behind the same Host check as everything else. */
   staticRoots?: StaticRoot[];
 };
@@ -120,14 +122,6 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     });
   }
 
-  // Plan 04-06 replaces this closed legacy turn seam with the privacy-gated projection router.
-  // Until then, never pass a raw utterance straight from turn.ts to the production provider.
-  const turnBrain: IntentBrain = claudeProvider === null ? brain : {
-    async parseIntent() {
-      throw new Error("Claude intent calls require the privacy-gated router.");
-    },
-  };
-
   const session = new Session(brainMode, clock);
 
   // Turns run one at a time so busy/state pushes and reply order stay coherent.
@@ -141,9 +135,11 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
           session: s,
           freshnessMs,
           refresher,
-          brain: turnBrain,
+          brain,
+          ...(claudeProvider !== null ? { claudeProvider } : {}),
           clock,
           ...(schedule !== undefined ? { schedule } : {}),
+          ...(options.intentWatchdog !== undefined ? { intentWatchdog: options.intentWatchdog } : {}),
         }),
       );
       turnQueue = run.catch(() => {}); // a failed turn is logged by the hub and must not block the next one
