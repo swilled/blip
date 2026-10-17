@@ -161,4 +161,26 @@ describe("npm run dev (D-21)", () => {
       killTree(r);
     }
   }, 60000);
+
+  it("--no-fake-extension keeps the REPL available while waiting for a real browser extension", async () => {
+    const r = run("--no-fake-extension --port 0");
+    try {
+      const listening = await waitFor(r, /listening on ws:\/\/127\.0\.0\.1:(\d+)\/ws/);
+      const port = Number(listening[1]);
+      await waitFor(r, /^fake extension disabled; waiting for the real extension$/m);
+      await waitFor(r, /^ready\. type an utterance, or \/quit$/m);
+      const voice = await bindClient(port, "voice", { origin: undefined });
+      try {
+        const state = voice.frames.find((frame) => frame.type === "state");
+        expect(state?.payload.extensionConnected).toBe(false);
+      } finally {
+        voice.ws.terminate();
+      }
+      r.child.stdin?.write("/quit\n");
+      expect(await exitWithin(r, 10000)).toBe(0);
+      expect(await portIsOpen(port)).toBe(false);
+    } finally {
+      killTree(r);
+    }
+  }, 60000);
 });
