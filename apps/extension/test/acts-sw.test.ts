@@ -30,6 +30,32 @@ function field(id: string, frameId: number, overrides: Partial<RawElement> = {})
   };
 }
 
+function submitButton(id: string, frameId: number): RawElement {
+  return {
+    id,
+    frameId,
+    category: "action",
+    tag: "button",
+    role: "button",
+    labelCandidates: [{ text: "Submit", source: "label", confidence: 1 }],
+    required: false,
+    requiredSource: "none",
+    invalid: false,
+    errorText: null,
+    value: null,
+    hasValue: false,
+    sensitive: "none",
+    disabled: false,
+    visible: true,
+    order: 1,
+    text: "Submit",
+    buttonType: "submit",
+    inForm: true,
+    kind: "submit",
+    kindReasons: [],
+  };
+}
+
 function snapshot(version: number, elements: RawElement[] = [field("f7e1", 7)]): SnapshotData {
   return {
     snapshotId: `snapshot-${version}`,
@@ -120,10 +146,8 @@ describe("service-worker act routing", () => {
     ["empty grant id", { gate: { grantId: "", kind: "submit" as const } }],
     ["mismatched grant kind", { gate: { grantId: "grant-1", kind: "pay" as const } }],
   ])("refuses a gated click with %s before dispatch", async (_name, gate) => {
-    const submitButton = field("f7e1", 7, {
-      category: "button", tag: "button", inputType: null, role: "button", kind: "submit",
-    });
-    const setupState = setup([snapshot(1, [submitButton])], { t: "act.result", result: { actId: "act-1", ok: true } });
+    const target = submitButton("f7e1", 7);
+    const setupState = setup([snapshot(1, [target])], { t: "act.result", result: { actId: "act-1", ok: true } });
     const message = request(1, {
       action: { op: "click", targetId: "f7e1" },
       expectedKind: "submit",
@@ -169,11 +193,9 @@ describe("service-worker act routing", () => {
   });
 
   it("routes a gated click only after its frame guard is verified", async () => {
-    const submitButton = field("f7e1", 7, {
-      category: "button", tag: "button", inputType: null, role: "button", kind: "submit",
-    });
+    const target = submitButton("f7e1", 7);
     const setupState = setup(
-      [snapshot(1, [submitButton]), snapshot(2, [submitButton])],
+      [snapshot(1, [target]), snapshot(2, [target])],
       { t: "act.result", result: { actId: "act-1", ok: true } },
     );
     const message = request(1, {

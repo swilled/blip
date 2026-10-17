@@ -4,9 +4,11 @@ import type { ActRequest, ActionKind } from "@blip/protocol";
 import { executeAct } from "../src/content/act.js";
 import { getHighlightOverlay, openOverlayForContentTest } from "../src/content/overlay.js";
 import { captureFrameSnapshot } from "../src/content/snapshot.js";
+import { installPersistentSubmitGuard } from "../src/content/submit-guard.js";
 
 beforeEach(() => {
   document.documentElement.replaceChildren(document.createElement("head"), document.createElement("body"));
+  installPersistentSubmitGuard(document);
 });
 
 afterEach(() => {

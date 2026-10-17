@@ -109,6 +109,8 @@ describe("content message listener installation", () => {
 
   it("captures a snapshot baseline and answers an act message asynchronously", async () => {
     document.body.innerHTML = '<label for="name">Name</label><input id="name">';
+    const { installPersistentSubmitGuard } = await import("../src/content/submit-guard.js");
+    installPersistentSubmitGuard(document);
     await import("../src/content/index.js");
     const sender = { id: "blip-extension-id", frameId: 0 };
     const snapshotResponse = vi.fn();
