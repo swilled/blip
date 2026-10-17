@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 05-06-PLAN.md; warning state reaches accepted page state and REPL
-last_updated: "2026-10-17T18:20:52.163Z"
+status: Phase 05 local work complete; final acceptance pending Phase 04 live-provider evidence and external integration targets
+stopped_at: Completed 05-07-PLAN.md; final acceptance remains gated on Phase 4 and external integrations
+last_updated: "2026-10-17T18:23:32.381Z"
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 50
-  completed_plans: 48
+  completed_plans: 49
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 05 (hostile-pages-real-web-and-freeze) — EXECUTING
-Plan: 4 of 9
+Plan: 9 of 9 (05-09 is the only incomplete Phase 05 plan)
 
 ## Performance Metrics
 
@@ -78,6 +78,7 @@ Plan: 4 of 9
 | Phase 05 P04 | 1 min | 2 tasks | 1 files |
 | Phase 05 P05 | 8 min | 2 tasks | 4 files |
 | Phase 05 P06 | 15 min | 2 tasks | 11 files |
+| Phase 05 P07 | 6 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,7 @@ Recent decisions affecting current work:
 - [Phase 05]: The user reported that the voice-track owner approved the exact optional GATE-07 warning fields on 2026-10-17; DLG-14 speech and UI remain voice-owned.
 - [Phase 05]: Add only the approved optional boolean fields to Snapshot and voice page state; legacy payloads remain valid and the signal grants no authority.
 - [Phase 05]: Aggregate the warning across captured frames and page-change signatures so child-frame and detector-only changes reach accepted state.
+- [Phase 05]: Real Edge E2E observed the accepted boolean before the next action and preserved the no-grant refusal; this does not verify voice speech.
 
 ### Pending Todos
 
@@ -127,9 +129,8 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; voice's `Effect` union remains a cross-track integration item
-- [Phase 4] The bounded `outputFormat` + `startup()` probe failed the required empty-tool check for both roles, including with `disallowedTools: ["*"]`; no model prompt was sent. Live streaming initialization and Windows SDK cancellation/recreation remain unverified, so do not claim live provider success.
-- [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
+- [Phase 5] 05-09 final acceptance is gated on successful Phase 4 live-provider evidence, the team-owned form URL, the voice client target, and the exact demo repair identity; do not create `demo-safe` while these are missing.
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
 - [Phase 4] The 04-08 approved live check timed out during provider initialization after 900 seconds; that historical approval is consumed.
 - [Phase 4] The separate 04-10 approved bootstrap check failed during initialization after 6,454 ms, with one intent bootstrap, no repair bootstrap, no ordinary probes, and no role/tool result. Its approval is consumed. BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04 remain pending; Phase 4 stays open.
@@ -144,6 +145,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T18:20:52.158Z
-Stopped at: Completed 05-06-PLAN.md; warning state reaches accepted page state and REPL
+Last session: 2026-10-17T18:23:32.377Z
+Stopped at: Completed 05-07-PLAN.md; final acceptance remains gated on Phase 4 and external integrations
 Resume file: None

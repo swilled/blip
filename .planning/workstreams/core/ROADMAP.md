@@ -172,7 +172,7 @@ Plans:
   5. Freeze (~h30): `main` is tagged `demo-safe`, demo-form repairs are pre-warmed in the cache, and the full demo script also runs with `--brain=fake` as plan B.
 
 **Research**: Spike needed: real-site widgets (Google Forms ARIA radios and listboxes, React fills on the live form); one-command Chrome launch now that branded Chrome 137 removed `--load-extension` (load unpacked once into a dedicated `--user-data-dir` profile).
-**Plans**: 7/9 complete; the approved boolean reaches accepted server state and the REPL; local demo smoke passed
+**Plans**: 8/9 complete; Core warning delivery and hostile-page E2E passed; 05-09 remains gated on Phase 4 and external integration evidence
 Plans:
 - [x] 05-01-PLAN.md — Add the synthetic hostile-page fixture and deterministic refusal assertions
 - [x] 05-02-PLAN.md — Implement the bounded local warning detector
@@ -180,7 +180,7 @@ Plans:
 - [x] 05-04-PLAN.md — Prepare the warning-field proposal and obtain voice-owner sign-off
 - [x] 05-05-PLAN.md — Add approved warning fields to the shared protocol
 - [x] 05-06-PLAN.md — Carry the accepted warning boolean through extension, server, and REPL
-- [ ] 05-07-PLAN.md — Verify hostile-page refusal and warning flow end to end
+- [x] 05-07-PLAN.md — Verify hostile-page refusal and warning flow end to end
 - [x] 05-08-PLAN.md — Build and smoke-test the isolated one-command local demo
 - [ ] 05-09-PLAN.md — Record evidence and apply the local freeze tag only when eligible
 **UI hint**: no
@@ -196,7 +196,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. Claude Brain and Label Repair | 10/10 | In Progress |  |
-| 5. Hostile Pages, Real Web and Freeze | 7/9 | In Progress | - |
+| 5. Hostile Pages, Real Web and Freeze | 8/9 | In Progress | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 
