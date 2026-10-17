@@ -1,6 +1,6 @@
 ---
 phase: 04-claude-brain-and-label-repair
-verified: 2026-10-17T18:38:48Z
+verified: 2026-10-17T18:45:16Z
 status: gaps_found
 score: 5/10 must-haves verified
 re_verification:
@@ -8,7 +8,7 @@ re_verification:
   previous_score: 5/10
   gaps_closed: []
   gaps_remaining:
-    - "The 04-10 approved provider attempt failed during initialization after 6,454 ms and one synthetic intent bootstrap; no role result or tool count was observed."
+    - "The 04-11 approved provider attempt failed during initialization after 7,157 ms and one synthetic intent bootstrap; no role result or tool count was observed."
     - "No live grammar-miss Intent or production latency measurement exists."
     - "The pinned Windows SDK cancellation and role-recreation path remains untested against the production provider."
     - "No live repair output or real-model cache reuse has been observed."
@@ -16,7 +16,7 @@ re_verification:
 gaps:
   - truth: "The production Claude provider initializes on the developer subscription with zero tools for both roles."
     status: partial
-    reason: "The 04-08 attempt timed out at 900 seconds before either role init result. The separate 04-10 attempt failed during initialization after 6,454 ms and one synthetic intent bootstrap, before a role result or tool count; the earlier startup()+outputFormat spike reported one init tool for each role."
+    reason: "The 04-08 attempt timed out at 900 seconds before either role init result. The 04-10 attempt failed during initialization after 6,454 ms, and the 04-11 attempt failed after 7,157 ms; each dispatched one synthetic intent bootstrap but observed no role result or tool count. The earlier startup()+outputFormat spike reported one init tool for each role."
     artifacts:
       - path: "apps/server/src/brain/claude/session.ts"
         issue: "Fail-closed empty-tool configuration and refusal are covered offline, but the production streaming init has no live evidence."
@@ -40,7 +40,7 @@ gaps:
       - "A bounded production cancellation, role recreation, and recovery check."
   - truth: "Claude repairs eligible labels asynchronously and a later visit reuses a validated cache entry."
     status: partial
-    reason: "Offline repair validation, cache persistence, and reload pass. The 04-08 attempt timed out before prompts; the 04-10 attempt stopped after one intent bootstrap without a repair bootstrap or repair probe, so no live patch or real-model cache hit exists."
+    reason: "Offline repair validation, cache persistence, and reload pass. The 04-08 attempt timed out before prompts; the 04-10 and 04-11 attempts each stopped after one intent bootstrap without a repair bootstrap or repair probe, so no live patch or real-model cache hit exists."
     artifacts:
       - path: "apps/server/src/brain/claude/repair-coordinator.ts"
         issue: "The production repair path is wired, but no real-model patch has been observed."
@@ -146,10 +146,10 @@ The 04-08 production provider-creation attempt was made under its exact approval
 
 | Requirement | Source Plans | Description | Status | Evidence |
 |---|---|---|---|---|
-| BRAIN-01 | 04-01, 04-02, 04-08 | Isolated subscription provider; refuses unexpected init tools | BLOCKED / PENDING | Offline configuration and refusal pass. The 04-08 approved streaming startup timed out before a role init result; the earlier spike reported one tool per role. |
-| BRAIN-02 | 04-03, 04-04, 04-06, 04-08 | Free-form requests become structured current-page Intents | BLOCKED / PENDING | Offline grammar/privacy/schema/current-ID path passes. No live Intent or latency exists. |
-| BRAIN-03 | 04-01, 04-02, 04-06, 04-07, 04-08 | Prewarm and recover from failed/hung calls with spoken fallback | BLOCKED / PENDING | Watchdog and fake-adapter recovery pass; production SDK cancellation/recreation is unverified. |
-| PAGE-04 | 04-03, 04-05, 04-07, 04-08 | Background label repair and structural cache | BLOCKED / PENDING | Offline repair/cache behavior passes; no live patch or real-model cache hit exists. |
+| BRAIN-01 | 04-01, 04-02, 04-08, 04-11 | Isolated subscription provider; refuses unexpected init tools | BLOCKED / PENDING | Offline configuration and refusal pass. 04-08 timed out; 04-10 and 04-11 each failed during initialization before a role init result or tool count. The earlier spike reported one tool per role. |
+| BRAIN-02 | 04-03, 04-04, 04-06, 04-08, 04-11 | Free-form requests become structured current-page Intents | BLOCKED / PENDING | Offline grammar/privacy/schema/current-ID path passes. No live Intent or latency exists. |
+| BRAIN-03 | 04-01, 04-02, 04-06, 04-07, 04-08, 04-11 | Prewarm and recover from failed/hung calls with spoken fallback | BLOCKED / PENDING | Watchdog and fake-adapter recovery pass; production SDK cancellation/recreation is unverified. |
+| PAGE-04 | 04-03, 04-05, 04-07, 04-08, 04-11 | Background label repair and structural cache | BLOCKED / PENDING | Offline repair/cache behavior passes; the 04-10 and 04-11 attempts dispatched no repair probe, so no live patch or real-model cache hit exists. |
 
 All Phase 4 requirements declared by plans are represented above; no orphaned Phase 4 requirement was found. REQUIREMENTS.md still lists all four as Pending. This is consistent with the evidence.
 
@@ -164,9 +164,9 @@ All Phase 4 requirements declared by plans are represented above; no orphaned Ph
 
 ### 1. Production Agent SDK integration
 
-**Test:** Only after fresh, separate authorization is recorded in the existing report, run one bounded check using synthetic data. The 2026-10-17 approval has been consumed.
+**Test:** Any further provider check needs a new plan and fresh, precise authorization. The approvals for 04-08, 04-10, and 04-11 are consumed.
 **Expected:** Both production streaming roles initialize with zero tools; current-ID Intents and latency are recorded; cancellation/recreation recovers; a validated repair patch reloads from cache.
-**Why human:** This consumes the developer subscription and exercises the external SDK plus Windows process behavior. The 04-08 and 04-10 approved attempts stopped during initialization; any further attempt requires fresh authorization.
+**Why human:** This consumes the developer subscription and exercises the external SDK plus Windows process behavior. The 04-08, 04-10, and 04-11 approved attempts stopped during initialization. Any further attempt requires a new plan and fresh precise authorization.
 
 ### 2. End-to-end repair and recovery behavior
 
@@ -204,7 +204,30 @@ The latest 04-10 result supersedes the earlier live-attempt status described abo
 _Plan 04-10 verification timestamp: 2026-10-17T16:16:11Z_
 _Verifier: GSD phase verifier_
 
-## Offline Recheck — 2026-10-17
+## Plan 04-11 Re-verification
+
+The user's fresh approval enabled exactly one no-retry production check with synthetic inputs, an eight-dispatch ceiling, and a 900-second ceiling. The runner claimed the approval with exclusive file creation before provider startup. The single invocation failed during initialization after 7,157 ms, having dispatched one intent bootstrap. It observed no role result or tool count and dispatched no repair bootstrap or ordinary probe. No retry was made. The bounded attempt yielded no production evidence that closes a Phase 4 requirement, so Phase 4 remains `gaps_found`.
+
+- Focused live-check gate tests passed before invocation: 1 file, 16 tests.
+- Workspace typecheck passed before invocation.
+- Full repository suite passed before invocation: 79 files passed, 13 skipped; 850 tests passed, 22 skipped.
+- Offline CLI gate returned `status=offline`, `stage=not_started`, and zero prompt, bootstrap, or total dispatches.
+- Exactly one production invocation ran: `status=failed`, `stage=initialization`, 7,157 ms; 1 intent bootstrap, 0 repair bootstraps, 0 intent/repair probes, and 1 total dispatch. No role result, tool count, or detailed failure cause was observed.
+- The one-time approval is consumed. No credentials or environment values were inspected, and no real page/user data was sent.
+- The 04-08 and 04-10 historical reports remain byte-identical; their SHA-256 hashes are `6A2F47AFF7BA65CA753991EF62A61022A9D14033E2A06905D7695EA3CFF0DF45` and `7800A857CB6B43F21AA230DED8615448F2374F23DD1EB446EA3DC01840EEA782`, respectively.
+- Post-invocation full-suite, typecheck, and offline CLI results are recorded in `04-11-SUMMARY.md`; no second SDK invocation is permitted by this plan.
+
+| Requirement | Current status | Remaining evidence |
+|---|---|---|
+| BRAIN-01 | BLOCKED / PENDING | Production initialization that observes and accepts zero tools for both roles. |
+| BRAIN-02 | BLOCKED / PENDING | A live grammar-miss Intent for a current synthetic ID plus measured latency. |
+| BRAIN-03 | BLOCKED / PENDING | Production cancellation, role recreation, and next-call recovery evidence. |
+| PAGE-04 | BLOCKED / PENDING | A live validated synthetic repair patch and real-model cache reload evidence. |
+
+_Plan 04-11 verification timestamp: 2026-10-17T18:45:16Z_
+_Verifier: GSD phase verification performed inline_
+
+## Offline Recheck Before 04-11 — 2026-10-17
 
 The local implementation and safety harness still pass without starting the production SDK:
 
@@ -214,4 +237,15 @@ The local implementation and safety harness still pass without starting the prod
 - `npm test` — 79 files passed, 13 skipped; 847 tests passed, 22 skipped.
 - Local runtime check: SDK `@anthropic-ai/claude-agent-sdk@0.3.302` is installed; `claude --version` reports `2.1.280`. Authentication and credentials were not inspected.
 
-No new live invocation was made. The 04-10 approval remains consumed; a future provider invocation requires a new plan-specific run and fresh, precise authorization. This offline recheck does not close BRAIN-01, BRAIN-02, BRAIN-03, or PAGE-04. Phase 4 remains `gaps_found` with production initialization, live Intent/latency, Windows SDK recovery, and live repair/cache evidence unverified.
+No new live invocation was made during this earlier offline recheck. It did not close BRAIN-01, BRAIN-02, BRAIN-03, or PAGE-04. Phase 4 remained `gaps_found` with production initialization, live Intent/latency, Windows SDK recovery, and live repair/cache evidence unverified.
+
+## Offline Postcheck After 04-11 — 2026-10-17
+
+The final local checks after recording the 04-11 result passed without another production SDK call:
+
+- `npx vitest run --project @blip/server apps/server/test/claude-sdk-live-check.test.ts` — 1 file, 17 tests passed.
+- `npm test` — 79 files passed, 13 skipped; 851 tests passed, 22 skipped.
+- `npm run typecheck` — passed.
+- `npm run claude:live-check --workspace @blip/server -- --offline --max-seconds 900` — `status=offline`, `stage=not_started`, zero prompt, bootstrap, or total dispatches.
+
+The 04-11 report records the single consumed attempt and sanitized result. Its one-time claim remains as a consumed tombstone after `approvalUsed: true` was recorded, preventing accidental reuse if the report is edited. Historical 04-08 and 04-10 report hashes were verified unchanged. All four production evidence gaps remain open; Phase 4 is not complete.

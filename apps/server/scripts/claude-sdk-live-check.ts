@@ -12,13 +12,15 @@ export const LIVE_CHECK_MAX_SECONDS = 900;
 export const LIVE_CHECK_PROMPT_LIMITS = { intent: 4, repair: 1, total: 5 } as const;
 export const LIVE_CHECK_BOOTSTRAP_LIMITS = { intent: 2, repair: 1, total: 3 } as const;
 export const LIVE_CHECK_TOTAL_DISPATCH_LIMIT = 8;
-export const LIVE_CHECK_APPROVAL_LINE = "phase04FollowupApproval: approve-04-10-bootstrap-check";
+export const LIVE_CHECK_APPROVAL_LINE = "phase04FollowupApproval: approve-04-11-live-check";
+const LIVE_CHECK_APPROVAL_UNUSED_LINE = "approvalUsed: false";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPORT_PATH = resolve(
   SCRIPT_DIR,
-  "../../../.planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-10-LIVE-CHECK.md",
+  "../../../.planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-11-LIVE-CHECK.md",
 );
+const APPROVAL_CLAIM_PATH = REPORT_PATH.replace(/\.md$/u, ".used");
 
 export type LiveCheckArguments = { live: boolean; maxSeconds: number };
 
@@ -71,6 +73,8 @@ export type LiveCheckResult = LiveCheckProbeEvidence & {
 export type LiveCheckDependencies = {
   /** Read only the plan-specific report; this callback is not called in offline mode. */
   readReport(): Promise<string>;
+  /** Atomically claim the one-time approval before importing or starting the production SDK. */
+  consumeApproval(): Promise<boolean>;
   /** The production implementation dynamically imports the SDK only after approval passes. */
   createProvider(
     signal: AbortSignal,
@@ -424,6 +428,24 @@ function emptyDispatchCounts(): LiveCheckResult["dispatchCounts"] {
   return { intent: 0, repair: 0, total: 0 };
 }
 
+/** Exclusive file creation makes an approval token single-use, including across concurrent processes. */
+export async function claimOneTimeApproval(claimPath: string): Promise<boolean> {
+  const { open } = await import("node:fs/promises");
+  let claim: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    claim = await open(claimPath, "wx");
+    await claim.writeFile("consumed\n", "utf8");
+    return true;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST") {
+      return false;
+    }
+    throw error;
+  } finally {
+    await claim?.close();
+  }
+}
+
 export async function runOfflineFirstLiveCheck(
   args: LiveCheckArguments,
   dependencies: LiveCheckDependencies,
@@ -459,7 +481,12 @@ export async function runOfflineFirstLiveCheck(
 
   const report = await dependencies.readReport();
   const approvalLines = report.split(/\r?\n/).filter((line) => /phase04FollowupApproval/i.test(line));
-  if (approvalLines.length !== 1 || approvalLines[0] !== LIVE_CHECK_APPROVAL_LINE) {
+  const unusedApprovalLines = report.split(/\r?\n/).filter((line) => /^approvalUsed:/i.test(line));
+  if (approvalLines.length !== 1 || approvalLines[0] !== LIVE_CHECK_APPROVAL_LINE ||
+    unusedApprovalLines.length !== 1 || unusedApprovalLines[0] !== LIVE_CHECK_APPROVAL_UNUSED_LINE) {
+    return result("externally_blocked");
+  }
+  if (!await dependencies.consumeApproval()) {
     return result("externally_blocked");
   }
 
@@ -567,6 +594,7 @@ async function main(): Promise<void> {
   const args = parseLiveCheckArguments(process.argv.slice(2));
   const result = await runOfflineFirstLiveCheck(args, {
     readReport: () => import("node:fs/promises").then(({ readFile }) => readFile(REPORT_PATH, "utf8")),
+    consumeApproval: () => claimOneTimeApproval(APPROVAL_CLAIM_PATH),
     async createProvider(startupSignal, beforeBootstrapDispatch) {
       const { createClaudeProvider } = await import("../src/brain/claude/provider");
       return createClaudeProvider({ startupSignal, beforeBootstrapDispatch });

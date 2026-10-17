@@ -9,6 +9,7 @@ import {
   LIVE_CHECK_PROMPT_LIMITS,
   LIVE_CHECK_TOTAL_DISPATCH_LIMIT,
   LIVE_CHECK_APPROVAL_LINE,
+  claimOneTimeApproval,
   parseLiveCheckArguments,
   runApprovedProbeSequence,
   runOfflineFirstLiveCheck,
@@ -18,7 +19,7 @@ import {
 import { RepairCache } from "../src/brain/claude/repair-cache";
 import { UnexpectedClaudeToolsError } from "../src/brain/claude/session";
 
-const APPROVED_REPORT = `${LIVE_CHECK_APPROVAL_LINE}\n`;
+const APPROVED_REPORT = `${LIVE_CHECK_APPROVAL_LINE}\napprovalUsed: false\n`;
 const SYNTHETIC_URL = "https://synthetic.example/form/contact";
 const SYNTHETIC_STRUCTURE = "synthetic-structure-v1";
 const FIELD_ID = "synthetic-field";
@@ -195,6 +196,7 @@ async function runFakeProbe(
     { live: true, maxSeconds: options.maxSeconds ?? LIVE_CHECK_MAX_SECONDS },
     {
       readReport: async () => APPROVED_REPORT,
+      consumeApproval: async () => true,
       createProvider,
       verify,
       ...(options.now === undefined ? {} : { now: options.now }),
@@ -206,12 +208,13 @@ async function runFakeProbe(
 describe("Claude SDK approved-mode synthetic verifier", () => {
   it("keeps offline mode ahead of report reads, provider creation, and probe dispatch", async () => {
     const readReport = vi.fn(async () => APPROVED_REPORT);
+    const consumeApproval = vi.fn(async () => true);
     const createProvider = vi.fn(async () => fakeProvider());
     const verify = vi.fn(async () => {});
 
     const result = await runOfflineFirstLiveCheck(
       parseLiveCheckArguments(["--offline"]),
-      { readReport, createProvider, verify },
+      { readReport, consumeApproval, createProvider, verify },
     );
 
     expect(result).toMatchObject({
@@ -222,6 +225,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       dispatchCounts: { intent: 0, repair: 0, total: 0 },
     });
     expect(readReport).not.toHaveBeenCalled();
+    expect(consumeApproval).not.toHaveBeenCalled();
     expect(createProvider).not.toHaveBeenCalled();
     expect(verify).not.toHaveBeenCalled();
   });
@@ -232,8 +236,9 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       deferredReport,
       "sdkPinApproval: @anthropic-ai/claude-agent-sdk@0.3.302\nownerLiveUse: confirmed\n",
       "No approval line is present.\n",
-      `${LIVE_CHECK_APPROVAL_LINE} \n`,
-      `${LIVE_CHECK_APPROVAL_LINE}\nphase04FollowupApproval: defer-04-08-live-check\n`,
+      `${LIVE_CHECK_APPROVAL_LINE} \napprovalUsed: false\n`,
+      `${LIVE_CHECK_APPROVAL_LINE}\napprovalUsed: false\nphase04FollowupApproval: defer-04-08-live-check\n`,
+      `${LIVE_CHECK_APPROVAL_LINE}\napprovalUsed: true\n`,
     ];
 
     for (const report of reports) {
@@ -241,7 +246,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       const verify = vi.fn(async () => {});
       const result = await runOfflineFirstLiveCheck(
         { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
-        { readReport: async () => report, createProvider, verify },
+        { readReport: async () => report, consumeApproval: async () => true, createProvider, verify },
       );
 
       expect(result).toMatchObject({
@@ -255,29 +260,100 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     }
   });
 
-  it("does not reuse the actual consumed approval for provider creation or prompt dispatch", async () => {
-    const report = await readFile(resolve(
-      process.cwd(),
-      ".planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-08-LIVE-CHECK.md",
-    ), "utf8");
+  it("does not reuse either actual consumed live-check approval", async () => {
+    for (const reportName of ["04-08-LIVE-CHECK.md", "04-10-LIVE-CHECK.md"]) {
+      const report = await readFile(resolve(
+        process.cwd(),
+        `.planning/workstreams/core/phases/04-claude-brain-and-label-repair/${reportName}`,
+      ), "utf8");
+      const provider = fakeProvider();
+      const consumeApproval = vi.fn(async () => true);
+      const createProvider = vi.fn(async () => provider);
+      const verify = vi.fn(async () => {});
+
+      const result = await runOfflineFirstLiveCheck(
+        { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
+        { readReport: async () => report, consumeApproval, createProvider, verify },
+      );
+
+      expect(result).toMatchObject({
+        status: "externally_blocked",
+        stage: "not_started",
+        promptCounts: { intent: 0, repair: 0, total: 0 },
+      });
+      expect(consumeApproval).not.toHaveBeenCalled();
+      expect(createProvider).not.toHaveBeenCalled();
+      expect(verify).not.toHaveBeenCalled();
+      expect(provider.parseIntent).not.toHaveBeenCalled();
+      expect(provider.repairFormModel).not.toHaveBeenCalled();
+    }
+  });
+
+  it("accepts the exact fresh Phase 04-11 marker while unused", async () => {
     const provider = fakeProvider();
+    const consumeApproval = vi.fn(async () => true);
     const createProvider = vi.fn(async () => provider);
     const verify = vi.fn(async () => {});
 
     const result = await runOfflineFirstLiveCheck(
       { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
-      { readReport: async () => report, createProvider, verify },
+      { readReport: async () => APPROVED_REPORT, consumeApproval, createProvider, verify },
     );
 
-    expect(result).toMatchObject({
-      status: "externally_blocked",
-      stage: "not_started",
-      promptCounts: { intent: 0, repair: 0, total: 0 },
-    });
+    expect(result.status).toBe("completed");
+    expect(consumeApproval).toHaveBeenCalledOnce();
+    expect(createProvider).toHaveBeenCalledOnce();
+    expect(verify).toHaveBeenCalledOnce();
+    expect(provider.parseIntent).not.toHaveBeenCalled();
+    expect(provider.repairFormModel).not.toHaveBeenCalled();
+  });
+
+  it("refuses the actual 04-11 report after the single approved invocation", async () => {
+    const report = await readFile(resolve(
+      process.cwd(),
+      ".planning/workstreams/core/phases/04-claude-brain-and-label-repair/04-11-LIVE-CHECK.md",
+    ), "utf8");
+    const provider = fakeProvider();
+    const consumeApproval = vi.fn(async () => true);
+    const createProvider = vi.fn(async () => provider);
+    const verify = vi.fn(async () => {});
+
+    const result = await runOfflineFirstLiveCheck(
+      { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
+      { readReport: async () => report, consumeApproval, createProvider, verify },
+    );
+
+    expect(result.status).toBe("externally_blocked");
+    expect(consumeApproval).not.toHaveBeenCalled();
     expect(createProvider).not.toHaveBeenCalled();
     expect(verify).not.toHaveBeenCalled();
     expect(provider.parseIntent).not.toHaveBeenCalled();
-    expect(provider.repairFormModel).not.toHaveBeenCalled();
+  });
+
+  it("refuses a previously claimed one-time approval before provider creation", async () => {
+    const provider = fakeProvider();
+    const consumeApproval = vi.fn(async () => false);
+    const createProvider = vi.fn(async () => provider);
+    const verify = vi.fn(async () => {});
+    const result = await runOfflineFirstLiveCheck(
+      { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
+      { readReport: async () => APPROVED_REPORT, consumeApproval, createProvider, verify },
+    );
+
+    expect(result.status).toBe("externally_blocked");
+    expect(consumeApproval).toHaveBeenCalledOnce();
+    expect(createProvider).not.toHaveBeenCalled();
+    expect(verify).not.toHaveBeenCalled();
+    expect(provider.parseIntent).not.toHaveBeenCalled();
+  });
+
+  it("atomically claims a one-time token and refuses a second claim", async () => {
+    const directory = await temporaryCacheDirectory();
+    const claimPath = join(directory, "check.used");
+
+    await expect(claimOneTimeApproval(claimPath)).resolves.toBe(true);
+    await expect(claimOneTimeApproval(claimPath)).resolves.toBe(false);
+    await expect(readFile(claimPath, "utf8")).resolves.toBe("consumed\n");
   });
 
   it("runs two grammar misses through routeIntent and caches a validated synthetic repair", async () => {
@@ -353,7 +429,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     ) => runApprovedProbeSequence(guarded, signal, evidence, { cacheDirectory, cancellationDelayMs: 500 }));
     const resultPromise = runOfflineFirstLiveCheck(
       { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
-      { readReport: async () => APPROVED_REPORT, createProvider: async () => provider, verify },
+      { readReport: async () => APPROVED_REPORT, consumeApproval: async () => true, createProvider: async () => provider, verify },
     );
 
     await provider.cancellationStarted;
@@ -419,6 +495,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
       {
         readReport: async () => APPROVED_REPORT,
+        consumeApproval: async () => true,
         createProvider: async () => provider,
         verify: (guarded, signal, evidence) => runApprovedProbeSequence(guarded, signal, evidence, {
           cacheDirectory,
@@ -455,6 +532,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       { live: true, maxSeconds: 1 },
       {
         readReport: async () => APPROVED_REPORT,
+        consumeApproval: async () => true,
         createProvider: async () => provider,
         verify: (guarded, signal, evidence) => runApprovedProbeSequence(guarded, signal, evidence, { cacheDirectory }),
       },
@@ -499,7 +577,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     });
     const result = await runOfflineFirstLiveCheck(
       { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
-      { readReport: async () => APPROVED_REPORT, createProvider, verify },
+      { readReport: async () => APPROVED_REPORT, consumeApproval: async () => true, createProvider, verify },
     );
 
     expect(result).toMatchObject({
@@ -535,7 +613,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     });
     const result = await runOfflineFirstLiveCheck(
       { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
-      { readReport: async () => APPROVED_REPORT, createProvider, verify },
+      { readReport: async () => APPROVED_REPORT, consumeApproval: async () => true, createProvider, verify },
     );
 
     expect(result).toMatchObject({
