@@ -4,6 +4,7 @@ import { DEFAULT_PORT, EXTENSION_ID, LOOPBACK_HOST, WS_PATH } from "@blip/protoc
 import { log } from "./log";
 import { createHub, type Handlers, type Hub } from "./hub/hub";
 import { hostAllowed, parseAllowedOrigin } from "./hub/guard";
+import { createStaticHandler, type StaticRoot } from "./hub/static";
 import { Session, type Brain } from "./session/session";
 
 export type StartServerOptions = {
@@ -19,6 +20,8 @@ export type StartServerOptions = {
   handlers?: Handlers;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
   snapshotTimeoutMs?: number;
+  /** Optional static roots (voice build, form fixtures). Behind the same Host check as everything else. */
+  staticRoots?: StaticRoot[];
 };
 
 /** Resolved settings the later plans read (fake brain delay, snapshot timeout). */
@@ -52,6 +55,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const extraVoiceOrigins = (options.extraVoiceOrigins ?? []).map(parseAllowedOrigin);
   const session = new Session(options.brain ?? "fake");
   let boundPort = options.port ?? DEFAULT_PORT;
+  const serveStatic =
+    options.staticRoots && options.staticRoots.length > 0 ? createStaticHandler(options.staticRoots) : undefined;
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     if (!hostAllowed(req.headers.host, boundPort, dev)) {
@@ -64,8 +69,17 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     } catch {
       return json(res, 404, { ok: false });
     }
+    // /healthz stays ahead of static roots so a static file can never shadow it.
     if (req.method === "GET" && pathname === "/healthz") return json(res, 200, { ok: true });
-    return json(res, 404, { ok: false });
+    if (serveStatic === undefined) return json(res, 404, { ok: false });
+    serveStatic(req, res)
+      .then((served) => {
+        if (!served && !res.headersSent) json(res, 404, { ok: false });
+      })
+      .catch(() => {
+        if (!res.headersSent) json(res, 500, { ok: false });
+        else res.end();
+      });
   });
 
   const hub = createHub({
