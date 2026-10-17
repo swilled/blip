@@ -64,7 +64,11 @@ Git:
 - Pull `main` often and merge small pieces often.
 - Don't edit core-owned code (`apps/extension`, `packages/policy`, the server's Executor and brain) without asking. Changes to `packages/protocol` need both of you to agree.
 
-## 5. Rules that protect the demo
+## 5. How we work together
+
+The full rules are in [CONTRIBUTING.md](../CONTRIBUTING.md). The short version: branch as `voice/<name>`, merge small and often, open a PR for each merge, and get Pranav's review on anything that touches `packages/protocol` or the safety gate.
+
+## 6. Rules that protect the demo
 
 - Blip never submits without a full read-back and the exact phrase. A bare "yes" never counts.
 - The mic is off while Blip is speaking, so Blip can't confirm itself.
