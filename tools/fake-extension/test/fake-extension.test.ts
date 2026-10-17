@@ -168,8 +168,8 @@ describe("refusals, in order", () => {
 
 describe("clicks fail closed (T-01-27)", () => {
   it.each([
-    ["e10", "submit", "Book room"],
-    ["e12", "navigate-cross-domain", "Privacy policy"],
+    ["e10", "submit"],
+    ["e12", "navigate-cross-domain"],
   ] as const)("%s (%s) returns gate-required with liveKind and mutates nothing", async (id, kind) => {
     await setup();
     const before = JSON.stringify(ext!.elements());

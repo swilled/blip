@@ -1,10 +1,12 @@
 // One utterance, start to finish: transcript, routing, snapshot fetch, reply, state pushes (D-23, D-24).
 // Nothing in here acts on the page. The fake and (later) real brain can only produce an Intent, and
-// no Intent causes an act.request in Phase 1 (GATE-05 foundation, T-01-26).
-import { newId, type Message, type PayloadOf } from "@blip/protocol";
+// no Intent causes an act.request or a confirm.armed in Phase 1: the Executor does not exist until
+// Phase 3 (GATE-05 foundation, T-01-26).
+import { newId, type Intent, type Message, type PayloadOf } from "@blip/protocol";
+import type { IntentBrain } from "./brain/fake-brain";
+import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { HubRequestError, type Hub } from "./hub/hub";
-import { matchGrammar } from "./brain/grammar";
-import { describeReply } from "./reply";
+import { describeReply, readFormReply, requiredReply } from "./reply";
 import type { Session } from "./session/session";
 
 export type TurnContext = {
@@ -13,6 +15,8 @@ export type TurnContext = {
   session: Session;
   /** How long a snapshot.request may take before the turn gives up. */
   snapshotTimeoutMs: number;
+  /** Resolves model-routed utterances to an Intent (the fake brain in Phase 1). */
+  brain: IntentBrain;
 };
 
 type SpeakCategory = PayloadOf<"speak">["category"];
@@ -20,10 +24,29 @@ type SpeakCategory = PayloadOf<"speak">["category"];
 export const MSG_NO_EXTENSION = "I can't see the page because the browser extension is not connected.";
 export const MSG_READ_FAILED = "I couldn't read the page.";
 export const MSG_NOT_YET = "I can't do that yet.";
+export const MSG_NOTHING_TO_REPEAT = "There's nothing to repeat.";
+export const MSG_STOPPED = "Stopped.";
+export const MSG_UNKNOWN = "I didn't understand that.";
+export const MSG_BRAIN_FAILED = "Something went wrong on my side.";
+export const MSG_FILLER = "One moment.";
 
-function speak(ctx: TurnContext, text: string, category: SpeakCategory, interrupt = false): void {
-  if (category !== "filler") ctx.session.lastSpoken = text;
-  ctx.hub.send("voice", "speak", { speakId: newId(), text, category, interrupt });
+type SpeakOptions = { interrupt?: boolean; record?: boolean };
+
+function speak(hub: Hub, session: Session, text: string, category: SpeakCategory, opts: SpeakOptions = {}): void {
+  // Filler is never repeated, and "repeat"/"stop" must not overwrite what the user wants repeated.
+  if (category !== "filler" && opts.record !== false) session.lastSpoken = text;
+  hub.send("voice", "speak", { speakId: newId(), text, category, interrupt: opts.interrupt === true });
+}
+
+/** `stop`: cut off whatever the voice UI is saying. */
+export function sayStop(hub: Hub, session: Session): void {
+  speak(hub, session, MSG_STOPPED, "answer", { interrupt: true, record: false });
+}
+
+/** `repeat`: re-send the last spoken text. */
+export function sayRepeat(hub: Hub, session: Session): void {
+  if (session.lastSpoken === null) speak(hub, session, MSG_NOTHING_TO_REPEAT, "answer", { record: false });
+  else speak(hub, session, session.lastSpoken, "answer", { record: false });
 }
 
 /**
@@ -52,6 +75,43 @@ async function ensureSnapshot(ctx: TurnContext): Promise<{ ok: true } | { ok: fa
   }
 }
 
+/** The intents that read the form back. Everything here is built from labels and counts only. */
+async function readOut(ctx: TurnContext, build: (model: NonNullable<Session["model"]>) => string): Promise<void> {
+  const ready = await ensureSnapshot(ctx);
+  if (!ready.ok) speak(ctx.hub, ctx.session, ready.reply, "error");
+  else speak(ctx.hub, ctx.session, build(ctx.session.model!), "answer");
+}
+
+/**
+ * Carry out an Intent (from the grammar or the brain). The only intents Phase 1 understands are the
+ * read-only ones. Every other type, including request_action, click_safe and set_fields, is refused
+ * out loud and causes no act.request and no confirm.armed.
+ */
+async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promise<void> {
+  const { hub, session } = ctx;
+  switch (intent.type) {
+    case "describe":
+      return readOut(ctx, describeReply);
+    case "whats_required":
+      return readOut(ctx, requiredReply);
+    case "read_form":
+      return readOut(ctx, readFormReply);
+    case "stop":
+      return sayStop(hub, session);
+    case "repeat":
+      return sayRepeat(hub, session);
+    case "clarify":
+      return speak(hub, session, intent.question, "answer");
+    case "answer":
+      return speak(hub, session, intent.text, "answer");
+    case "unknown":
+      return speak(hub, session, MSG_UNKNOWN, "answer");
+    default:
+      // request_action, click_safe, set_fields, fill_profile, ...: nothing acts in Phase 1 (T-01-26).
+      return speak(hub, session, MSG_NOT_YET, "answer");
+  }
+}
+
 export async function handleUtterance(ctx: TurnContext): Promise<void> {
   const { message, hub, session } = ctx;
   if (message.type !== "utterance") return;
@@ -64,12 +124,20 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
   session.dialogue = "describing";
   hub.pushState();
   try {
-    if (command?.type === "describe") {
-      const ready = await ensureSnapshot(ctx);
-      if (!ready.ok) speak(ctx, ready.reply, "error");
-      else speak(ctx, describeReply(session.model!), "answer");
+    if (command !== null) {
+      await runIntent(ctx, command);
     } else {
-      speak(ctx, MSG_NOT_YET, "answer");
+      hub.send("voice", "earcon", { name: "thinking" });
+      speak(hub, session, MSG_FILLER, "filler");
+      let intent: Intent;
+      try {
+        intent = await ctx.brain.parseIntent(text);
+      } catch {
+        hub.send("voice", "earcon", { name: "error" });
+        speak(hub, session, MSG_BRAIN_FAILED, "error");
+        return;
+      }
+      await runIntent(ctx, intent);
     }
   } finally {
     session.busy = false;

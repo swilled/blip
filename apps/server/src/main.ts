@@ -2,7 +2,10 @@
 //   --port <n>            default 7777 (0 = ephemeral)
 //   --dev                 allow no-Origin clients and the dev voice origins
 //   --brain=fake|claude   default fake; claude arrives in Phase 4
-//   --fake-delay <ms>     default 1500 (behavior lands in plan 01-05)
+//   --fake-delay <ms>     default 1500: how long a model-routed turn waits (the fake brain "thinking")
+//   --fake-request-action <actionId>
+//                         TEST ONLY: the fake brain answers model-routed turns with request_action for
+//                         this id. The server still refuses it (no act.request, no confirm.armed).
 //   --allow-origin <o>    repeatable; requires --dev; loopback http origins; grants voice only
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -35,13 +38,14 @@ async function main(): Promise<void> {
         dev: { type: "boolean", default: false },
         brain: { type: "string", default: "fake" },
         "fake-delay": { type: "string" },
+        "fake-request-action": { type: "string" },
         "allow-origin": { type: "string", multiple: true },
       },
       strict: true,
       allowPositionals: false,
     }));
   } catch (err) {
-    die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake] [--fake-delay <ms>] [--allow-origin <origin>]...`, 2);
+    die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
   }
 
   const dev = values.dev === true;
@@ -76,7 +80,15 @@ async function main(): Promise<void> {
 
   let running;
   try {
-    running = await startServer({ port, dev, brain, fakeDelayMs, extraVoiceOrigins, staticRoots });
+    running = await startServer({
+      port,
+      dev,
+      brain,
+      fakeDelayMs,
+      extraVoiceOrigins,
+      staticRoots,
+      ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
+    });
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
       die(`port ${port} is already in use; stop the other process or pick another with --port <n>`, 1);
