@@ -181,6 +181,18 @@ header {
   min-height: var(--space-banner);
 }
 
+#banner-slot [data-blocked="true"] {
+  display: flex;
+  align-items: center;
+  min-height: var(--space-banner);
+  margin: 0;
+  padding: var(--space-md);
+  background: var(--color-danger);
+  color: var(--color-bg);
+  border-radius: var(--space-sm);
+  font-weight: 600;
+}
+
 #caption {
   background: var(--color-surface);
   padding: var(--space-md);
