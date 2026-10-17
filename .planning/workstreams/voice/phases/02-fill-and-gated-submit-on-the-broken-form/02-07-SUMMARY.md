@@ -14,7 +14,7 @@ affects: [voice-phase-2, voice-phase-3, core-executor-integration]
 actuals:
   tokens: 13879
   tasks: 3
-  commits: 6
+  commits: 8
 tech-stack:
   added: []
   patterns:
@@ -49,7 +49,7 @@ coverage:
         ref: dev/mock-server/src/reset.test.ts
         status: pass
       - kind: manual_procedural
-        ref: npm.cmd run reset -w @blip/mock-server; user confirmed survey opens and reload clears entries
+        ref: npm.cmd run reset -w @blip/mock-server; user confirmed survey opens and reload/back/tab-restore leave entries empty
         status: pass
     human_judgment: false
   - id: D2
@@ -89,31 +89,33 @@ status: complete
 - **Started:** 2026-10-17
 - **Completed:** 2026-10-17
 - **Tasks:** 3
-- **Files modified:** 18 across the implementation commits
+- **Files modified:** 19 across the implementation and safety follow-up commits
 
 ## Accomplishments
 
 - Added a fictional profile template and a reset command that restores the working profile, restarts the local demo server, and launches a fresh form session.
 - Added a local Chrome extension bridge for reading live fields and performing safe fill/select/focus actions with page-value read-back; the bridge still refuses clicks.
 - Corrected Chrome profile detection so reset finds an unpacked bridge installed in the regular Chrome profile, and documented the one-time manual installation required by Chrome 137+.
-- Human UAT passed for form reading, filling, read-back, required-field feedback, exact-phrase gating, refusal of other phrases, cancellation, change invalidation, and reload reset.
+- Human UAT passed for form reading, filling, read-back, required-field feedback, exact-phrase gating, refusal of other phrases, cancellation with visible banner clearing, change invalidation, reload reset, Back navigation, and closed-tab restoration.
 
 ## Task Commits
 
 1. **Task 1: Demo profile and reset/Chrome bridge** - `308152e` (RED), `ae4af76` (reset/profile), `b53356b` (bridge), `6f488e2` and `2c5e6e2` (Chrome install/profile detection fixes).
 2. **Task 2: Automated gate and feedback fixes** - `63065e7`.
 3. **Task 3: Human I2 run** - completed from the user's reported Chrome and microphone results; no source change.
+4. **Safety follow-up:** `e71e783` (identity-safe reset and history invalidation), `e1a8d46` (managed direct runner lifecycle).
 
 **Plan metadata:** this summary is committed separately after verification.
 
 ## Human Run Results
 
-- Focused reset/bridge and dialogue checks passed; the full suite passed with 761 tests, and `npm.cmd run typecheck` passed.
+- Focused reset/bridge and dialogue checks passed; the final full suite passed with 769 tests across 57 files, and `npm.cmd run typecheck` passed.
 - Re-running the survey form model generator produced no fixture drift; no core-owned files changed.
 - `npm.cmd run reset -w @blip/mock-server` reported that the fictional profile was restored, the server was ready, and the broken form opened in Chrome.
 - The user confirmed “read the form” works, completed the form, and confirmed the read-back and required-field feedback work. “What's missing” lists empty required email, phone, and “How did you hear about us?” fields; name, age, and satisfaction are optional and are correctly omitted.
 - Submit produced the full read-back and requested the distinct phrase with the BLOCKED banner. Other phrases did not submit. The exact phrase reached the stand-in gate, which said “Blocked. The safety gate is not connected, so nothing was submitted.” and left the page unsubmitted, as expected.
-- The user reported that changing the form after read-back causes Blip to say the form changed and asks for a new confirmation; reload leaves the form empty; `cancel` receives “Okay, not submitting.”
+- The user confirmed that changing the form invalidates the pending confirmation; `cancel` clears the BLOCKED banner and replies “Okay, not submitting”; reload, Back navigation, and closed-tab restoration all leave the form empty.
+- The final code review is clean. The security audit verified all 40 planned threats; 36 implementation mitigations are present and the four plan-accepted risks are documented in `02-SECURITY.md`, with zero blocking threats.
 - **Human-needed dependency:** successful production submission remains unverified until core implements HO-8 (tracked speak IDs, tracked stop/repeat speech, `survey` phrase-table support, and the grant-bound Gate/Executor). HO-9 remains separate and non-blocking.
 
 ## Decisions Made
