@@ -1,6 +1,10 @@
 # Phase 4 Follow-up Live SDK Check
 
-phase04FollowupApproval: pending
+phase04FollowupApproval: defer-04-08-live-check
+
+## Decision provenance
+
+The user delegated the `$gsd-next` choice to the executor. The executor selected `defer-04-08-live-check` because the separate live check could consume subscription allowance and no fresh explicit authorization was provided. The user did not send the exact token directly.
 
 ## Approval scope
 
@@ -22,20 +26,24 @@ The pinned SDK declarations document `tools: []` as disabling built-in tools, `s
 
 ## Result
 
-status: pending
+status: externally_blocked
 stage: not_started
-elapsedMs:
-intentPromptCount:
-repairPromptCount:
-totalPromptCount:
-initialIntentToolCount:
-initialRepairToolCount:
-rejectingRole:
-subsequentPromptsAfterBlock:
+blockingReason: fresh live-use approval was deferred
+sdkInitializationCount: 0
+elapsedMs: 0
+intentPromptCount: 0
+repairPromptCount: 0
+totalPromptCount: 0
+initialIntentToolCount: not_run
+initialRepairToolCount: not_run
+rejectingRole: none
+subsequentPromptsAfterBlock: 0
 intentLatenciesMs: []
 intentSchemaValid: []
 currentSyntheticIdMatched: []
-cancellationVerified:
-recreatedIntentToolCount:
-repairSchemaValid:
-repairCacheReloaded:
+cancellationVerified: not_run
+recreatedIntentToolCount: not_run
+repairSchemaValid: not_run
+repairCacheReloaded: not_run
+
+Requirements pending: BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04.
