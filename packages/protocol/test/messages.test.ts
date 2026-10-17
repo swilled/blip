@@ -132,6 +132,14 @@ describe("state payload", () => {
     const page = { url: "u", title: "t", step: "Step 1 of 2", fieldCount: 4, requiredEmpty: 2 };
     expect(parseFrame(JSON.stringify(buildRawFrame("state", { ...base, page, focusFieldId: "e2" }))).ok).toBe(true);
   });
+  it("preserves the optional warning-only page flag", () => {
+    const page = { url: "u", title: "t", fieldCount: 1, requiredEmpty: 1, untrustedInstructionDetected: true };
+    const parsed = parseFrame(JSON.stringify(buildRawFrame("state", { ...base, page })));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok && parsed.message.type === "state") {
+      expect(parsed.message.payload.page?.untrustedInstructionDetected).toBe(true);
+    }
+  });
   it("rejects a page without requiredEmpty", () => {
     expect(invalid("state", { ...base, page: { url: "u", title: "t", fieldCount: 1 } })).toBe(true);
   });

@@ -16,7 +16,7 @@ import { createDialogueHandlers, sendSpeakEffect } from "../../../apps/server/sr
 import type { SpeakEffect } from "@blip/dialogue";
 import { Session } from "../../../apps/server/src/session/session";
 import type { HandlerContext, Hub } from "../../../apps/server/src/hub/hub";
-import { echoText, requiredEmptyText, spellValueText } from "../../../packages/dialogue/src/templates";
+import { echoText, requiredEmptyText, spellValueText, untrustedInstructionWarningText } from "../../../packages/dialogue/src/templates";
 import fixtureJson from "../../../fixtures/forms/broken-form.model.json" with { type: "json" };
 import { startReal } from "./run-real";
 
@@ -119,14 +119,25 @@ describe("real voice dialogue runner", () => {
       await waitFor(() => stateCount() >= beforeStates + 2 ? stateCount() : undefined, "utterance completion state");
       return speak;
     };
+    const doneIds = new Set<string>();
     const done = async (speak: Speak): Promise<void> => {
+      doneIds.add(speak.payload.speakId);
       const beforeStates = stateCount();
       send(ws, "speak.done", { speakId: speak.payload.speakId, interrupted: false });
       await waitFor(() => stateCount() > beforeStates ? stateCount() : undefined, "speak.done completion state");
     };
+    const finishRemainingSpeeches = async (start: number): Promise<void> => {
+      let index = start;
+      while (index < speaks(frames).length) {
+        const candidate = speaks(frames)[index]!;
+        index += 1;
+        if (!doneIds.has(candidate.payload.speakId)) await done(candidate);
+      }
+    };
 
     const read = await utter("read the form");
-    expect(read.payload.text).toMatch(/^Field 1:/);
+    expect(read.payload.text).toMatch(/^I guessed /);
+    expect(read.payload.text).toContain("Field 1:");
     await done(read);
 
     const textTypes = new Set(["text", "email", "tel", "url", "number", "date", "time", "textarea", "unknown"]);
@@ -174,8 +185,10 @@ describe("real voice dialogue runner", () => {
             : "A clear answer";
       const fieldNumber = form.fields.filter((candidate) => !candidate.disabled).sort((a, b) => a.order - b.order).findIndex((candidate) => candidate.id === field.id) + 1;
       const label = field.label.trim() || `field ${fieldNumber}`;
+      const speechStart = speaks(frames).length;
       const filled = await utter(`${label} is ${value}`);
       await done(filled);
+      await finishRemainingSpeeches(speechStart);
     }
 
     const readback = await utter("submit");
@@ -425,6 +438,61 @@ describe("real voice dialogue runner", () => {
     expect(acts).toHaveLength(1);
     expect(element!.value).toBe("edited-by-user@example.test");
   }, 15_000);
+
+  it("projects the approved GATE-07 bit and warns before page responses on entry and changed snapshots", async () => {
+    let clock = 9_000;
+    let snapshot: Snapshot = {
+      ...loadSnapshot("gate-07"),
+      title: "Submit survey",
+      untrustedInstructionDetected: true,
+    };
+    const sent: Sent[] = [];
+    let gateArms = 0;
+    const session = new Session("fake");
+    session.extensionConnected = true;
+    const hub = {
+      send(role: string, type: string, payload: unknown) { sent.push({ role, type, payload }); return true; },
+      async request(_role: string, type: string) {
+        if (type !== "snapshot.request") throw new Error(`unexpected request: ${type}`);
+        const response = message("snapshot.result", { ok: true, snapshot });
+        if (response.type !== "snapshot.result") throw new Error("snapshot result frame was not built");
+        return { payload: response.payload };
+      },
+      pushState() { return true; },
+      close() {},
+    } as unknown as Hub;
+    const handlers = createDialogueHandlers({
+      now: () => clock,
+      gate: {
+        async arm() { gateArms += 1; return { ok: false, reason: "not-gated" }; },
+        async clear() {},
+        async redeem() { throw new Error("unexpected redeem"); },
+      },
+    });
+    const utter = async (id: string, text: string) => handlers.utterance?.(voiceContext(hub, session, message("utterance", {
+      utteranceId: id, text, source: "typed",
+    })));
+
+    await utter("injection-entry", "what's here");
+    expect(session.statePayload().page?.untrustedInstructionDetected).toBe(true);
+    let spoken = sent.filter((frame) => frame.type === "speak").map((frame) => (frame.payload as { text: string }).text);
+    expect(spoken[0]).toBe(untrustedInstructionWarningText());
+    expect(spoken[1]).toContain("Submit survey");
+    expect(gateArms).toBe(0);
+
+    const speakCount = spoken.length;
+    snapshot = { ...snapshot, version: snapshot.version + 1 };
+    const changed = voiceContext(hub, session, message("page.changed", {
+      tabId: snapshot.tabId, url: snapshot.url, reason: "mutation", structuralHash: snapshot.structuralHash,
+    }));
+    changed.role = "extension";
+    await handlers["page.changed"]?.(changed);
+    spoken = sent.filter((frame) => frame.type === "speak").map((frame) => (frame.payload as { text: string }).text);
+    expect(spoken.slice(speakCount)[0]).toBe(untrustedInstructionWarningText());
+    expect(gateArms).toBe(0);
+    expect(sent.some((frame) => frame.type === "confirm.armed")).toBe(false);
+    expect(clock).toBe(9_000);
+  });
 
   it("passes only value-free form metadata to the intent parser", async () => {
     let clock = 0;

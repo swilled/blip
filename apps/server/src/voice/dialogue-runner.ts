@@ -104,7 +104,16 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
   ): Promise<void> {
     const session = context?.session ?? activeSession!;
     const form = formOverride !== undefined ? formOverride : currentForm(session);
-    const result = reduce(state, event, { form, now: now(), profile: profileTemplate });
+    const injectionDetected = form !== null && session.page?.untrustedInstructionDetected === true;
+    const result = reduce(state, event, {
+      form,
+      now: now(),
+      profile: profileTemplate,
+      untrustedInstructionDetected: injectionDetected,
+      ...(injectionDetected
+        ? { pageInjectionKey: `${lastSnapshotTabId ?? "unknown"}:${form.snapshotVersion}` }
+        : {}),
+    });
     state = result.state;
     const hub = context?.hub ?? sessionHub;
 
@@ -370,10 +379,11 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
           }
           context.hub.send("voice", "confirm.cleared", { grantId, reason: "page-changed" });
           await dispatch({ type: "confirm.cleared", grantId, reason: "page-changed" }, context);
-        } else {
-          if (state.mode === "reading-back") await refreshSnapshot(context.session, "user");
-          await dispatch({ type: "form.changed" }, context);
         }
+        // Re-snapshot on a page change so the warning-only GATE-07 bit can be spoken before
+        // the next page response. Snapshot text remains data and never enters gate matching.
+        await refreshSnapshot(context.session, "user");
+        await dispatch({ type: "form.changed" }, context);
       });
     },
     control(context) {

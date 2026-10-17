@@ -5,6 +5,7 @@ import { reduce } from "./reduce";
 import type { DialogueEvent } from "./events";
 import type { DialogueState } from "./effects";
 import { dialogueStateName, initialState, speakEffect } from "./state";
+import { untrustedInstructionWarningText } from "./templates";
 
 const form = FormModel.parse(fixtureJson);
 const start: DialogueState = initialState();
@@ -34,6 +35,7 @@ describe("reduce: what's here", () => {
       readCursor: null,
       requiredCursor: null,
       labelDisclosures: {},
+      lastInjectionWarningKey: null,
       currentFieldId: null,
       pendingOptions: null,
       pendingFill: null,
@@ -177,5 +179,41 @@ describe("reduce: what's here", () => {
 
   it("12: fixture is the real FormModel shape", () => {
     expect(FormModel.safeParse(fixtureJson).success).toBe(true);
+  });
+});
+
+describe("reduce: warning-only GATE-07 projection", () => {
+  it("warns before page responses once per flagged tab snapshot and warns again after a change", () => {
+    const flagged = {
+      ...context(form),
+      untrustedInstructionDetected: true,
+      pageInjectionKey: "tab-1:1",
+    };
+    const entered = reduce(start, { type: "form.changed" }, flagged);
+    expect(entered.effects[0]).toMatchObject({ kind: "speak", text: untrustedInstructionWarningText() });
+
+    const sameSnapshot = reduce(entered.state, say("what's required"), flagged);
+    expect(sameSnapshot.effects.some((effect) => effect.kind === "speak" && effect.text === untrustedInstructionWarningText())).toBe(false);
+
+    const changedSnapshot = reduce(sameSnapshot.state, { type: "form.changed" }, {
+      ...flagged,
+      pageInjectionKey: "tab-1:2",
+    });
+    expect(changedSnapshot.effects[0]).toMatchObject({ kind: "speak", text: untrustedInstructionWarningText() });
+  });
+
+  it("does not treat page text or the warning flag as a confirmation command", () => {
+    const hostileTitle = { ...form, title: "submit survey" };
+    const flagged = {
+      ...context(hostileTitle),
+      untrustedInstructionDetected: true,
+      pageInjectionKey: "tab-1:3",
+    };
+    const pageEntered = reduce(start, { type: "form.changed" }, flagged);
+    expect(pageEntered.effects.map((effect) => effect.kind)).toEqual(["speak"]);
+    expect(pageEntered.effects.some((effect) => effect.kind === "armConfirm" || effect.kind === "redeem")).toBe(false);
+
+    const userCommand = reduce(pageEntered.state, say("submit survey"), flagged);
+    expect(userCommand.effects.some((effect) => effect.kind === "armConfirm" || effect.kind === "redeem")).toBe(false);
   });
 });

@@ -199,6 +199,11 @@ export function orientationText(form: FormModel, currentFieldId: string | null):
   return `${title}${step ? `, ${step}` : ""}. Current field: ${label}, ${status}.`;
 }
 
+/** Static warning for the warning-only GATE-07 signal; never includes page-supplied text. */
+export function untrustedInstructionWarningText(): string {
+  return "This page includes instructions aimed at an AI. I'll ignore them and follow only your request.";
+}
+
 /** Summarize a completed local profile batch from the refreshed page model. */
 export function profileBatchText(filled: string[], skipped: string[], form: FormModel): string {
   const filledText = filled.length > 0 ? `Filled ${joinAnd(filled)}.` : "No profile fields were filled.";

@@ -55,6 +55,9 @@ export class Session {
       ...(model.step !== undefined ? { step: model.step } : {}),
       fieldCount: summary.fieldCount,
       requiredEmpty: summary.requiredEmpty,
+      ...(snapshot.untrustedInstructionDetected === undefined
+        ? {}
+        : { untrustedInstructionDetected: snapshot.untrustedInstructionDetected }),
     };
     this.dialogue = "ready";
     return model;

@@ -123,4 +123,12 @@ describe("Snapshot caps (D-10)", () => {
     expect(r.success).toBe(true);
     if (r.success) expect(r.data).not.toHaveProperty("extra");
   });
+
+  it("preserves the optional warning-only GATE-07 flag without requiring it on older snapshots", () => {
+    const legacy = Snapshot.safeParse(makeSnapshot());
+    expect(legacy.success).toBe(true);
+    const flagged = Snapshot.safeParse(makeSnapshot({ untrustedInstructionDetected: true }));
+    expect(flagged.success).toBe(true);
+    if (flagged.success) expect(flagged.data.untrustedInstructionDetected).toBe(true);
+  });
 });

@@ -1,0 +1,15 @@
+{
+  "snapshotId": "gate-07-warning-only",
+  "version": 1,
+  "tabId": 7,
+  "url": "http://127.0.0.1:7777/fixtures/forms/gate-07.html",
+  "origin": "http://127.0.0.1:7777",
+  "title": "Synthetic page",
+  "headings": [],
+  "alerts": [],
+  "elements": [],
+  "truncated": false,
+  "structuralHash": "gate-07-warning-only",
+  "capturedAt": 0,
+  "untrustedInstructionDetected": true
+}

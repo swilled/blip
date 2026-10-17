@@ -44,6 +44,17 @@ describe("booking fixture composition", () => {
   });
 });
 
+describe("GATE-07 warning fixture", () => {
+  it("carries only the warning signal, not page text or action authority", () => {
+    const snapshot = loadSnapshot("gate-07");
+    expect(snapshot.untrustedInstructionDetected).toBe(true);
+    expect(snapshot).not.toHaveProperty("pageText");
+    expect(snapshot).not.toHaveProperty("actionAuthority");
+    const frame = parseFrame(JSON.stringify(buildFrame("snapshot.result", { ok: true, snapshot })));
+    expect(frame.ok).toBe(true);
+  });
+});
+
 describe("fixture composition (counts are part of the contract)", () => {
   const counts = (name: (typeof FIXTURE_NAMES)[number]) => {
     const els = loadSnapshot(name).elements;
@@ -73,6 +84,6 @@ describe("fixture composition (counts are part of the contract)", () => {
   });
 
   it("covers every fixture name", () => {
-    expect([...FIXTURE_NAMES]).toEqual(["booking", "broken", "result-ok", "result-errors"]);
+    expect([...FIXTURE_NAMES]).toEqual(["booking", "broken", "result-ok", "result-errors", "gate-07"]);
   });
 });

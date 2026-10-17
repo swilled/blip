@@ -41,7 +41,7 @@ export const EXAMPLES: { [T in MessageType]: PayloadOf<T> } = {
   "confirm.cleared": { grantId: "g1", reason: "executed" },
   state: {
     dialogue: "ready",
-    page: { url: "http://127.0.0.1:7777/fixtures/forms/booking.html", title: "Booking", fieldCount: 6, requiredEmpty: 3 },
+    page: { url: "http://127.0.0.1:7777/fixtures/forms/booking.html", title: "Booking", fieldCount: 6, requiredEmpty: 3, untrustedInstructionDetected: true },
     busy: false,
     extensionConnected: true,
     brain: "fake",

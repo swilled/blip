@@ -2,7 +2,7 @@ import type { DialogueContext, DialogueState, Effect } from "./effects";
 import type { DialogueEvent } from "./events";
 import { cleanTitle, normalizeCommand, plural } from "./normalize";
 import { cancelEffect, discloseFieldLabel, speakEffect } from "./state";
-import { orientationText } from "./templates";
+import { orientationText, untrustedInstructionWarningText } from "./templates";
 import { fillableFields } from "./fields";
 import { continueProfileBatch, continueUndo, handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance, handleUndoUtterance } from "./read-fill";
 import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
@@ -36,6 +36,32 @@ function answer(state: DialogueState, text: string): { state: DialogueState; eff
 }
 
 export function reduce(
+  state: DialogueState,
+  event: DialogueEvent,
+  ctx: DialogueContext,
+): { state: DialogueState; effects: Effect[] } {
+  const injectionKey = ctx.form !== null && ctx.untrustedInstructionDetected === true
+    ? ctx.pageInjectionKey ?? `${ctx.form.url}:${ctx.form.snapshotVersion}`
+    : null;
+  const baseState = injectionKey === null && state.lastInjectionWarningKey !== null
+    ? { ...state, lastInjectionWarningKey: null }
+    : state;
+
+  if (injectionKey === null || injectionKey === baseState.lastInjectionWarningKey) {
+    return reduceEvent(baseState, event, ctx);
+  }
+
+  const warning = speakEffect(
+    { ...baseState, lastInjectionWarningKey: injectionKey },
+    untrustedInstructionWarningText(),
+    "answer",
+    { interruptible: true },
+  );
+  const result = reduceEvent(warning.state, event, ctx);
+  return { state: result.state, effects: [warning.effect, ...result.effects] };
+}
+
+function reduceEvent(
   state: DialogueState,
   event: DialogueEvent,
   ctx: DialogueContext,

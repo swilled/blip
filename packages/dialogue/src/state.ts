@@ -12,6 +12,7 @@ export type DialogueState = {
   readCursor: number | null;
   requiredCursor: number | null;
   labelDisclosures: Record<string, number>;
+  lastInjectionWarningKey: string | null;
   currentFieldId: string | null;
   pendingOptions: { fieldId: string } | null;
   pendingFill: { fieldId: string; replaced: boolean; previousValue?: string | null; undoPreviousValue?: string | null; profileBatch?: boolean; undoEntry?: UndoEntry } | null;
@@ -48,6 +49,7 @@ export function initialState(): DialogueState {
     readCursor: null,
     requiredCursor: null,
     labelDisclosures: {},
+    lastInjectionWarningKey: null,
     currentFieldId: null,
     pendingOptions: null,
     pendingFill: null,

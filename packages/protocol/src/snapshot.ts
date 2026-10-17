@@ -87,5 +87,7 @@ export const Snapshot = z.object({
   truncated: z.boolean(),
   structuralHash: z.string(), // hash of (tag,type,name,role,labelCandidate[0]) per element; EXCLUDES values
   capturedAt: z.number(),
+  // Warning-only GATE-07 signal. It contains neither page text nor action authority.
+  untrustedInstructionDetected: z.boolean().optional(),
 });
 export type Snapshot = z.infer<typeof Snapshot>;

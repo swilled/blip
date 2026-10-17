@@ -20,4 +20,12 @@ export type Effect =
 
 export type LocalProfile = Readonly<{ name: string; email: string; tel: string }>;
 
-export type DialogueContext = { form: FormModel | null; now: number; profile?: LocalProfile };
+export type DialogueContext = {
+  form: FormModel | null;
+  now: number;
+  profile?: LocalProfile;
+  /** Voice-local projection of StatePayload.page.untrustedInstructionDetected. */
+  untrustedInstructionDetected?: boolean;
+  /** Stable for a tab/snapshot pair so a changed flagged snapshot is warned once. */
+  pageInjectionKey?: string;
+};
