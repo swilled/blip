@@ -112,10 +112,15 @@ export function getHighlightOverlay(document: Document = globalThis.document): H
 
   const detachListeners = (): void => {
     if (listening) {
-      view?.removeEventListener("scroll", onViewportChange, true);
-      view?.removeEventListener("resize", onViewportChange);
-      view?.visualViewport?.removeEventListener("scroll", onViewportChange);
-      view?.visualViewport?.removeEventListener("resize", onViewportChange);
+      if (typeof view?.removeEventListener === "function") {
+        view.removeEventListener("scroll", onViewportChange, true);
+        view.removeEventListener("resize", onViewportChange);
+      }
+      const visualViewport = view?.visualViewport;
+      if (typeof visualViewport?.removeEventListener === "function") {
+        visualViewport.removeEventListener("scroll", onViewportChange);
+        visualViewport.removeEventListener("resize", onViewportChange);
+      }
       listening = false;
     }
     mutationObserver?.disconnect();
@@ -124,10 +129,15 @@ export function getHighlightOverlay(document: Document = globalThis.document): H
 
   const attachListeners = (): void => {
     if (listening) return;
-    view?.addEventListener("scroll", onViewportChange, true);
-    view?.addEventListener("resize", onViewportChange);
-    view?.visualViewport?.addEventListener("scroll", onViewportChange);
-    view?.visualViewport?.addEventListener("resize", onViewportChange);
+    if (typeof view?.addEventListener === "function") {
+      view.addEventListener("scroll", onViewportChange, true);
+      view.addEventListener("resize", onViewportChange);
+    }
+    const visualViewport = view?.visualViewport;
+    if (typeof visualViewport?.addEventListener === "function") {
+      visualViewport.addEventListener("scroll", onViewportChange);
+      visualViewport.addEventListener("resize", onViewportChange);
+    }
     listening = true;
     if (view && typeof view.MutationObserver === "function") {
       mutationObserver = new view.MutationObserver(onDocumentMutation);

@@ -7,6 +7,7 @@ import { actionFactsOf, resolveElementId, walkDocument } from "./walk.js";
 import { isSsn, luhnValid, safeValueOf, type SafeValue, type Sensitivity } from "./sensitive.js";
 import { isDisabled } from "./visibility.js";
 import { withSubmitEventsBlocked } from "./submit-guard.js";
+import { getHighlightOverlay } from "./overlay.js";
 
 const snapshotFingerprints = new WeakMap<Document, Map<string, string>>();
 
@@ -145,6 +146,7 @@ async function executeResolved(
           if (!outcome.ok) return failure(actId, "exception", { ...liveExtra, detail: outcome.detail });
           const post = safeValueForAct(element);
           if (post.sensitive !== "none") return failure(actId, "sensitive-field", { observedValue: null });
+          getHighlightOverlay(document).highlight(element);
           return success(actId, { ...liveExtra, observedValue: post.value, ...(outcome.detail ? { detail: outcome.detail } : {}) });
         }
         if (element.localName === "textarea") {
@@ -152,6 +154,7 @@ async function executeResolved(
           if (!outcome.ok) return failure(actId, "exception", { ...liveExtra, detail: outcome.detail });
           const post = safeValueForAct(element);
           if (post.sensitive !== "none") return failure(actId, "sensitive-field", { observedValue: null });
+          getHighlightOverlay(document).highlight(element);
           return success(actId, { ...liveExtra, observedValue: post.value, ...(outcome.detail ? { detail: outcome.detail } : {}) });
         }
         return failure(actId, "exception", { ...liveExtra, detail: unsupportedDetail() });
@@ -173,6 +176,7 @@ async function executeResolved(
         if (!outcome.ok) return failure(actId, "exception", { ...liveExtra, detail: outcome.detail });
         const post = safeValueForAct(valueElement);
         if (post.sensitive !== "none") return failure(actId, "sensitive-field", { observedValue: null });
+        getHighlightOverlay(document).highlight(element);
         return success(actId, { ...liveExtra, observedValue: post.value });
       }
       case "check": {
@@ -183,12 +187,14 @@ async function executeResolved(
         if (!outcome.ok) return failure(actId, "exception", { ...liveExtra, detail: outcome.detail });
         const post = safeValueForAct(element);
         if (post.sensitive !== "none") return failure(actId, "sensitive-field", { observedValue: null });
+        getHighlightOverlay(document).highlight(element);
         return success(actId, { ...liveExtra, observedValue: String((element as HTMLInputElement).checked) });
       }
       case "focus": {
         if (element instanceof (document.defaultView?.HTMLElement ?? HTMLElement)) {
           try { (element as HTMLElement).scrollIntoView?.({ block: "nearest", inline: "nearest" }); } catch { /* best effort */ }
           focusWithEvents(element as HTMLElement);
+          getHighlightOverlay(document).highlight(element);
         }
         return success(actId, { ...liveExtra, observedValue: null });
       }
