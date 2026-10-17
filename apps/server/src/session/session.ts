@@ -28,6 +28,7 @@ export class Session {
   lastSpoken: string | null = null;
 
   #extensionConnected = false;
+  #snapshotOrder: { tabId: number; version: number; capturedAt: number } | null = null;
 
   constructor(brain: Brain) {
     this.brain = brain;
@@ -48,17 +49,31 @@ export class Session {
    * until the next fetch, but `ensureSnapshot` refuses to speak about an unconnected page.
    */
   set extensionConnected(value: boolean) {
-    if (value) this.stale = true;
+    if (value) {
+      this.stale = true;
+      this.#snapshotOrder = null;
+    }
     this.#extensionConnected = value;
   }
 
   /** Build the baseline model for a fresh snapshot and refresh the page summary. */
   applySnapshot(snapshot: Snapshot, options: { updateDialogue?: boolean } = {}): boolean {
+    const previous = this.#snapshotOrder;
+    if (
+      previous !== null &&
+      previous.tabId === snapshot.tabId &&
+      (snapshot.version < previous.version ||
+        (snapshot.version === previous.version && snapshot.capturedAt < previous.capturedAt))
+    ) {
+      return false;
+    }
+
     const model = buildBaselineFormModel(snapshot);
     const summary = summarizeFormModel(model);
     this.model = model;
     this.tabId = snapshot.tabId;
     this.modelAt = Date.now();
+    this.#snapshotOrder = { tabId: snapshot.tabId, version: snapshot.version, capturedAt: snapshot.capturedAt };
     this.stale = false;
     this.page = {
       url: model.url,

@@ -5,16 +5,19 @@
 import { newId, type Intent, type Message, type PayloadOf } from "@blip/protocol";
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
-import { HubRequestError, type Hub } from "./hub/hub";
+import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
+import type { Refresher } from "./session/refresh";
 import type { Session } from "./session/session";
 
 export type TurnContext = {
   message: Message;
   hub: Hub;
   session: Session;
-  /** How long a snapshot.request may take before the turn gives up. */
-  snapshotTimeoutMs: number;
+  /** Maximum cached-model age for intents that explicitly read all field values. */
+  freshnessMs: number;
+  /** Shared page-change and read-intent snapshot path. */
+  refresher: Refresher;
   /** Resolves model-routed utterances to an Intent (the fake brain in Phase 1). */
   brain: IntentBrain;
 };
@@ -53,31 +56,32 @@ export function sayRepeat(hub: Hub, session: Session): void {
  * Make sure `session.model` matches the page. Returns an error reply to speak instead when it can't:
  * the extension is not connected, or the snapshot failed or timed out. Never throws.
  */
-async function ensureSnapshot(ctx: TurnContext): Promise<{ ok: true } | { ok: false; reply: string }> {
-  const { session, hub } = ctx;
-  if (!session.extensionConnected) return { ok: false, reply: MSG_NO_EXTENSION };
-  if (session.model !== null && !session.stale) return { ok: true };
-  try {
-    const result = await hub.request(
-      "extension",
-      "snapshot.request",
-      { reason: "user" },
-      { expect: "snapshot.result", timeoutMs: ctx.snapshotTimeoutMs },
-    );
-    if (!result.payload.ok) return { ok: false, reply: MSG_READ_FAILED };
-    session.applySnapshot(result.payload.snapshot);
-    return { ok: true };
-  } catch (err) {
-    if (err instanceof HubRequestError && (err.code === "disconnected" || err.code === "no-connection")) {
-      return { ok: false, reply: MSG_NO_EXTENSION };
-    }
-    return { ok: false, reply: MSG_READ_FAILED };
+async function ensureSnapshot(
+  ctx: TurnContext,
+  maxAgeMs?: number,
+): Promise<{ ok: true } | { ok: false; reply: string }> {
+  const { session } = ctx;
+  const freshEnough =
+    session.model !== null &&
+    !session.stale &&
+    (maxAgeMs === undefined || (session.modelAgeMs !== null && session.modelAgeMs <= maxAgeMs));
+  if (freshEnough) return { ok: true };
+
+  const result = await ctx.refresher.request("user");
+  if (!result.ok) {
+    return { ok: false, reply: result.kind === "no-extension" ? MSG_NO_EXTENSION : MSG_READ_FAILED };
   }
+  if (session.model === null || session.stale) return { ok: false, reply: MSG_READ_FAILED };
+  return { ok: true };
 }
 
 /** The intents that read the form back. Everything here is built from labels and counts only. */
-async function readOut(ctx: TurnContext, build: (model: NonNullable<Session["model"]>) => string): Promise<void> {
-  const ready = await ensureSnapshot(ctx);
+async function readOut(
+  ctx: TurnContext,
+  build: (model: NonNullable<Session["model"]>) => string,
+  maxAgeMs?: number,
+): Promise<void> {
+  const ready = await ensureSnapshot(ctx, maxAgeMs);
   if (!ready.ok) speak(ctx.hub, ctx.session, ready.reply, "error");
   else speak(ctx.hub, ctx.session, build(ctx.session.model!), "answer");
 }
@@ -93,9 +97,9 @@ async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promi
     case "describe":
       return readOut(ctx, describeReply);
     case "whats_required":
-      return readOut(ctx, requiredReply);
+      return readOut(ctx, requiredReply, ctx.freshnessMs);
     case "read_form":
-      return readOut(ctx, readFormReply);
+      return readOut(ctx, readFormReply, ctx.freshnessMs);
     case "stop":
       return sayStop(hub, session);
     case "repeat":

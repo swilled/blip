@@ -25,6 +25,8 @@ export type StartServerOptions = {
   handlers?: Handlers;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
   snapshotTimeoutMs?: number;
+  /** Maximum model age for read_form and what's_required. Default 2000. */
+  freshnessMs?: number;
   /** Optional static roots (voice build, form fixtures). Behind the same Host check as everything else. */
   staticRoots?: StaticRoot[];
 };
@@ -35,6 +37,7 @@ export type ServerConfig = {
   brain: Brain;
   fakeDelayMs: number;
   snapshotTimeoutMs: number;
+  freshnessMs: number;
   extensionId: string;
 };
 
@@ -100,6 +103,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   });
 
   const snapshotTimeoutMs = options.snapshotTimeoutMs ?? 5000;
+  const freshnessMs = options.freshnessMs ?? 2000;
   let refresher: Refresher;
 
   const fakeDelayMs = options.fakeDelayMs ?? 1500;
@@ -112,7 +116,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   let turnQueue: Promise<void> = Promise.resolve();
   const defaultHandlers: Handlers = {
     utterance: ({ message, hub: h, session: s }) => {
-      const run = turnQueue.then(() => handleUtterance({ message, hub: h, session: s, snapshotTimeoutMs, brain }));
+      const run = turnQueue.then(() =>
+        handleUtterance({ message, hub: h, session: s, freshnessMs, refresher, brain }),
+      );
       turnQueue = run.catch(() => {}); // a failed turn is logged by the hub and must not block the next one
       return run;
     },
@@ -172,6 +178,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       brain: session.brain,
       fakeDelayMs,
       snapshotTimeoutMs,
+      freshnessMs,
       extensionId: options.extensionId ?? EXTENSION_ID,
     },
     session,
