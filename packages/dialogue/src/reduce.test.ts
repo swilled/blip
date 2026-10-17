@@ -87,6 +87,17 @@ describe("reduce: what's here", () => {
     expect(r.state.lastSpoken).toBe("Customer survey. 5 fields, 2 required, 2 actions.");
   });
 
+  it("tracks each utterance speak with an incrementing id", () => {
+    const first = reduce(start, say("what's here"), { form });
+    expect((first.effects[0] as { speakId?: string }).speakId).toBe("b1");
+    expect((first.state as DialogueState & { outstanding?: string[] }).outstanding).toEqual(["b1"]);
+
+    const second = reduce(first.state, say("what's here"), { form });
+    expect((second.effects[0] as { speakId?: string }).speakId).not.toBe(
+      (first.effects[0] as { speakId?: string }).speakId,
+    );
+  });
+
   it("10: never speaks a label or value", () => {
     const text = (reduce(start, say("what's here"), { form }).effects[0] as { text: string }).text;
     for (const f of form.fields) {

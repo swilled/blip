@@ -1,0 +1,10 @@
+{
+  "command": "npm.cmd run --silent test -- --reporter=tap packages/dialogue/src/reduce.test.ts -t=tracks.each.utterance.speak.with.an.incrementing.id",
+  "exitCode": 1,
+  "output": "TAP version 13\n1..1\nnot ok 1 - src/reduce.test.ts # time=6.62ms {\n    1..1\n    not ok 1 - reduce: what's here # time=5.92ms {\n        1..13\n        ok 1 - 1: answers with the pinned counts-first string # SKIP\n        ok 2 - 2: matches variants # SKIP\n        ok 3 - 3: singular wording # SKIP\n        ok 4 - 4: zero required and zero fields # SKIP\n        ok 5 - 5: no form # SKIP\n        ok 6 - 6: unmatched text goes to parseIntent # SKIP\n        ok 7 - 7: empty text yields nothing # SKIP\n        ok 8 - 8: title is capped at 80 and control chars removed # SKIP\n        ok 9 - 9: records lastSpoken # SKIP\n        not ok 10 - tracks each utterance speak with an incrementing id # time=5.43ms\n            ---\n            error:\n                name: \"AssertionError\"\n                message: \"expected undefined to be 'b1' // Object.is equality\"\n            at: \"C:/Users/befit/Documents/formvoice/packages/dialogue/src/reduce.test.ts:92:64\"\n            actual: \"undefined\"\n            expected: \"\\\"b1\\\"\"\n            ...\n        ok 11 - 10: never speaks a label or value # SKIP\n        ok 12 - 11: speak.done and form.changed are no-ops # SKIP\n        ok 13 - 12: fixture is the real FormModel shape # SKIP\n    }\n}\n",
+  "targetTest": "tracks each utterance speak with an incrementing id",
+  "targetFile": "packages/dialogue/src/reduce.test.ts",
+  "expected": "The reducer emits speakId b1, records b1 in state.outstanding, and mints a different id for the next speak.",
+  "actual": "The speak effect has no speakId and the state has no outstanding list.",
+  "semanticAssessment": "The named Vitest target executed and failed on the expected speakId assertion. The complete TAP report contains the test result and final plan; no setup, collection, or fixture error occurred."
+}
