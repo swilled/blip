@@ -14,7 +14,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "gen:extension-key": "tsx scripts/gen-extension-key.ts",
-    "fixtures:update": "tsx scripts/gen-golden.ts"
+    "fixtures:update": "tsx scripts/gen-golden.ts",
+    "protocol:lock": "tsx scripts/gen-lock.ts"
   },
   "devDependencies": {
     "@types/node": "^24",

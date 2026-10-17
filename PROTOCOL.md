@@ -1,6 +1,10 @@
 # Blip wire protocol
 
-**Status: DRAFT for M0 review.** The freeze stamp is added in plan 01-03. Until then the voice developer reviews this document and the schemas in `packages/protocol/src` together.
+Status: FROZEN v1 (M0)
+
+M0 approval: pending
+
+The freeze is provisional until the M0 PR is approved in writing by the voice developer. When that approval arrives, replace the line above with `M0 approval: received (<where the written approval lives>)` in the same PR, before it merges. Never write `received` without a location.
 
 The registry in `packages/protocol/src/messages.ts` is the source of truth. A test (`packages/protocol/test/protocol-md.test.ts`) fails if a message type or its from/to columns differ between this file and the registry.
 
@@ -175,6 +179,8 @@ The wire field `error.code` is an open string so a code added later never breaks
 - Enums are closed. Widening an enum needs both developers' agreement.
 - Never rename or remove a type, field or enum value.
 - Receivers ignore unknown keys (payload objects are non-strict), so an older peer tolerates an additive field.
+- The freeze is mechanical: `packages/protocol/protocol.lock.json` lists every message type with its senders and receivers, the Intent types, ActionKind members, DialogueStateName values and the fixture files. `packages/protocol/test/protocol-lock.test.ts` fails if any locked item is removed or a message's senders or receivers change. New types and members pass.
+- Edits to the lock file and to this document ride in the same PR as the additive change they describe. `npm run protocol:lock` regenerates the lock and may be run only inside a protocol PR that both developers approve.
 
 ## M0 sign-off items
 
@@ -197,4 +203,4 @@ Deliberate changes to the ARCHITECTURE.md draft, listed for the voice developer'
 ## Open items
 
 - CLAUDE.md still says port 8787 with `/ext` and `/ui` endpoints. This document supersedes that text. CLAUDE.md is a shared file, so it is not edited here; both developers must agree to update it.
-- Root `package.json` and `package-lock.json` are shared files. They were created in plan 01-01 and extended by the scripts added in this phase (`gen:extension-key`). They appear in the M0 PR diff and are listed in its checklist.
+- Root `package.json` and `package-lock.json` are shared files. They were created in plan 01-01 and extended by the scripts added in this phase (`gen:extension-key`, `fixtures:update`, `protocol:lock`). They appear in the M0 PR diff and are listed in its checklist.
