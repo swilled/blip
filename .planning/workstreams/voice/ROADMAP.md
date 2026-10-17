@@ -95,7 +95,7 @@ Plans:
 
 ### Phase 2: Fill and Gated Submit on the Broken Form
 
-**Goal**: On the self-hosted broken survey form, the user can hear the fields, fill them by dictation, hear a full read-back, and submit only by saying the distinct phrase. A bare "yes" never submits. This runs end to end at I2.
+**Goal**: As a person completing the self-hosted survey, I want to hear its fields, fill them by dictation, review my answers, and have submission accepted only after I say submit survey, so that a generic confirmation like yes can never submit the form.
 **Mode:** mvp
 **Depends on**: Phase 1
 **Needs from core**: The real extension with ACT-01/02/04 (fills plus the observed value for echo), PAGE-03 action kinds, and GATE-01..05 (grants, phrase table, values-hash binding).
@@ -112,7 +112,7 @@ Plans:
      - A bare "yes" is refused and the banner stays.
      - Only "submit survey" submits.
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans executed
 
 Plans:
 - [x] 02-01-PLAN.md — Broken survey form page, voice-owned snapshot and generated survey FormModel (DEMO-01)
@@ -121,7 +121,7 @@ Plans:
 - [x] 02-04-PLAN.md — Reducer contracts plus read-the-form, option pick and dictation fill with page-sourced echo
 - [x] 02-05-PLAN.md — Read-back, submit, arm-after-read-back, armed-mode refusal, seeded invariant test
 - [x] 02-06-PLAN.md — Dialogue runner, fail-closed stub gate, run-real wiring, end-to-end test, HO-8 hand-offs
-- [ ] 02-07-PLAN.md — One-command reset, demo profile, human I2 run
+- [x] 02-07-PLAN.md — One-command reset, demo profile, human I2 run
 
 **UI hint**: yes
 
