@@ -20,7 +20,7 @@
 - [x] **PAGE-01**: Blip captures a snapshot of the active tab's form controls via a content-script DOM walk (accessible names, roles, values, required, options, errors), capped at 250 elements on the extension wire; `truncated` is true only when that element cap cuts the result, and the ~8k-token trim is applied in Phase 4 at the model-prompt boundary
 - [x] **PAGE-02**: Blip builds a baseline form model in code from the snapshot (field id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms
 - [x] **PAGE-03**: Every actionable element gets a kind (fill / select / check / click-safe / submit / pay / delete / send / navigate-cross-domain) from fail-closed rules, never from the model
-- [ ] **PAGE-04**: For unlabeled or placeholder-only fields, Claude repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
+- [x] **PAGE-04**: For unlabeled or placeholder-only fields, Claude repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
 - [x] **PAGE-05**: When the page changes (navigation, revealed fields, new errors), Blip re-snapshots and the form model updates within ~1 s
 
 ### Actions
@@ -38,14 +38,14 @@
 - [x] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
 - [x] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
 - [x] **GATE-08**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
-- [ ] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
+- [x] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
 - [ ] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
 
 ### Brain
 
-- [ ] **BRAIN-01**: Blip runs Claude through the Agent SDK on the developer's own subscription with all built-in tools, settings, connectors and auto-memory disabled, and refuses to start if the init message lists any unexpected tool
-- [ ] **BRAIN-02**: Free-form utterances the grammar can't match are turned into a structured Intent by a tool-less Claude call, typically within ~2 s
-- [ ] **BRAIN-03**: Claude processes are pre-warmed at startup, and a watchdog recovers from a hung or failed call with a spoken "I couldn't understand that" rather than silence
+- [x] **BRAIN-01**: Blip runs Claude through the Agent SDK on the developer's own subscription with all built-in tools, settings, connectors and auto-memory disabled, and refuses to start if the init message lists any unexpected tool
+- [x] **BRAIN-02**: Free-form utterances the grammar can't match are turned into a structured Intent by a tool-less Claude call, typically within ~2 s
+- [x] **BRAIN-03**: Claude processes are pre-warmed at startup, and a watchdog recovers from a hung or failed call with a spoken "I couldn't understand that" rather than silence
 
 ### Results
 
@@ -103,7 +103,7 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | PAGE-01 | core | Phase 2 | Complete |
 | PAGE-02 | core | Phase 1 | Complete |
 | PAGE-03 | core | Phase 2 | Complete |
-| PAGE-04 | core | Phase 4 | Pending |
+| PAGE-04 | core | Phase 4 | Complete |
 | PAGE-05 | core | Phase 2 | Complete |
 | ACT-01 | core | Phase 2 | Complete |
 | ACT-02 | core | Phase 2 | Complete |
@@ -114,12 +114,12 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 | GATE-03 | core | Phase 3 | Complete |
 | GATE-04 | core | Phase 3 | Complete |
 | GATE-05 | core | Phase 3 | Complete |
-| GATE-06 | core | Phase 5 | Pending |
+| GATE-06 | core | Phase 5 | Complete |
 | GATE-07 | core | Phase 5 | Pending |
 | GATE-08 | core | Phase 3 | Complete |
-| BRAIN-01 | core | Phase 4 | Pending |
-| BRAIN-02 | core | Phase 4 | Pending |
-| BRAIN-03 | core | Phase 4 | Pending |
+| BRAIN-01 | core | Phase 4 | Complete |
+| BRAIN-02 | core | Phase 4 | Complete |
+| BRAIN-03 | core | Phase 4 | Complete |
 | RES-01 | core | Phase 3 | Complete |
 | RES-02 | core | Phase 3 | Complete |
 
@@ -130,4 +130,4 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 
 ---
 *Requirements defined: 2026-10-16*
-*Last updated: 2026-10-17 after Phase 3*
+*Last updated: 2026-10-17 after Phase 5 real-Claude hostile-fixture check; GATE-06 is complete, while GATE-07 and PROT-03 remain pending cross-track evidence*
