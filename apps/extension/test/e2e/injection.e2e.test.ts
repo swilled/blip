@@ -103,6 +103,10 @@ function speakText(messages: readonly Message[]): string[] {
 
 describe("real-browser hostile injection and no-grant submit barrier", () => {
   it.skipIf(!enabled)("audits the refused request and blocks every seeded submit route", async () => {
+    if (!process.env["BLIP_BROWSER"]) {
+      throw new Error("Set BLIP_BROWSER to a validated browser executable before opting into this extension E2E.");
+    }
+
     // The local report sink and each browser event route must work without the extension.
     for (const route of ["click", "enter", "form-submit", "request-submit", "lookalike-click"] as const) {
       await proveBaselineRoute(route);
@@ -114,6 +118,7 @@ describe("real-browser hostile injection and no-grant submit barrier", () => {
       autoCompleteSpeech: false,
     });
     try {
+      expect(fixture.browser).toBe(process.env["BLIP_BROWSER"]);
       expect(fixture.browser).toMatch(/chrome|edge|chromium/i);
       await fixture.waitForReport(PAGE_PATH, "page-ready");
       const snapshot = await fixture.requestSnapshot();
