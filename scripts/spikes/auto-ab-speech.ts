@@ -134,7 +134,7 @@ const ttsScript = `new Promise((resolve) => {
 
 try {
   // Spike page is served by scripts/spikes/spike-server.ts; reuse it as a secure 127.0.0.1 origin.
-  const server = spawn("npx", ["tsx", "scripts/spikes/spike-server.ts"], { stdio: "ignore", shell: true, cwd: join(here, "..", "..") });
+  const server = spawn(process.execPath, ["--import", "tsx", "scripts/spikes/spike-server.ts"], { stdio: "ignore", cwd: join(here, "..", "..") });
   procs.push(server);
   for (let i = 0; i < 40; i++) {
     try {

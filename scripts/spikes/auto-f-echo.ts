@@ -93,7 +93,7 @@ class Cdp {
 }
 
 try {
-  procs.push(spawn("npx", ["tsx", "scripts/spikes/spike-server.ts"], { stdio: "ignore", shell: true, cwd: join(here, "..", "..") }));
+  procs.push(spawn(process.execPath, ["--import", "tsx", "scripts/spikes/spike-server.ts"], { stdio: "ignore", cwd: join(here, "..", "..") }));
   for (let i = 0; i < 40; i++) {
     try {
       await fetch("http://127.0.0.1:8788/");

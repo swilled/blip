@@ -45,7 +45,7 @@ process.on("SIGINT", () => {
 });
 
 // 1) log server
-procs.push(spawn("npx", ["tsx", "scripts/spikes/spike-server.ts"], { stdio: "ignore", shell: true, cwd: root }));
+procs.push(spawn(process.execPath, ["--import", "tsx", "scripts/spikes/spike-server.ts"], { stdio: "ignore", cwd: root }));
 for (let i = 0; i < 40; i++) {
   try {
     await fetch("http://127.0.0.1:8788/");
