@@ -1,4 +1,5 @@
 import { ensureConnected } from "./socket.js";
+import { injectExistingTabs } from "./inject.js";
 
 function ensureReconnectAlarm(): void {
   void chrome.alarms.create("blip-reconnect", { periodInMinutes: 0.5 });
@@ -12,6 +13,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.runtime.onInstalled.addListener(() => {
   ensureReconnectAlarm();
   ensureConnected();
+  void injectExistingTabs();
 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "blip-reconnect") ensureConnected();

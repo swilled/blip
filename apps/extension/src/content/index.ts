@@ -2,6 +2,10 @@ type BlipContentGlobal = typeof globalThis & { __blipContentShellInstalled?: boo
 
 const isolatedWorld = globalThis as BlipContentGlobal;
 if (isolatedWorld.__blipContentShellInstalled !== true) {
-  // Later plans attach the DOM walker and observer here. This marker makes repeated injection inert.
   isolatedWorld.__blipContentShellInstalled = true;
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (sender.id !== chrome.runtime.id || typeof message !== "object" || message === null) return;
+    if (!("type" in message) || message.type !== "blip.ping") return;
+    sendResponse({ ok: true });
+  });
 }
