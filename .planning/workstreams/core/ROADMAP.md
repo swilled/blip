@@ -75,22 +75,36 @@ Plans:
 **Target window**: h3-h8
 **Shared milestones**: I1 (~h6-8)
 **Success Criteria** (what must be TRUE):
-  1. On a local test form in the dedicated Chrome profile, a snapshot returns every control with its accessible name, role, value, required flag, options and visible error text; a very large page is trimmed to about 8k tokens and marked truncated.
+  1. On a local test form in the dedicated browser profile, a snapshot returns every control with its accessible name, role, value, required flag, options and visible error text. The extension wire snapshot is capped at 250 elements and sets `truncated: true` only when that element cap cuts the result; the roughly 8k-token trim is applied in Phase 4 at the model-prompt boundary.
   2. Every button, link and div "button" in the snapshot carries a kind from the fail-closed rules (a typeless `<button>` in a form and anything unrecognized come out `submit`; an off-site link comes out `navigate-cross-domain`), and until Phase 3 the extension refuses to click anything gated.
   3. From the REPL, the developer fills a React-controlled text input and picks a select option, a radio and a checkbox: the site's own validation reacts, no Enter is ever sent, the active field is visibly highlighted, and each reply reports the value read back from the DOM (a maxlength-truncated value is reported truncated).
   4. When the page navigates, reveals new fields or shows new errors, the server's form model reflects it within about 1 s without a manual refresh, and the extension's socket survives an idle service worker (keepalive + reconnect).
   5. I1 (~h6-8): the voice developer's UI sends an utterance that travels through the server to the extension (real one preferred, fake acceptable) and comes back as a spoken reply.
 
 **Research**: Spike needed: React/Vue-safe fills (native value setter + bubbling `input`/`change`), MV3 service-worker keepalive and reconnect, shadow DOM and iframes. Check `--silent-debugger-extension-api` only if CDP gets used.
-**Plans:** 6 plans
+**Plans:** 20 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Dependency-pin gate, `@blip/extension` esbuild build and MV3 manifest, service-worker socket with keepalive/backoff/alarm, real-browser connect and reconnect harness (`npm run ext:smoke`)
-- [ ] 02-02-PLAN.md — Server freshness (single-flight refresh on `page.changed`, snapshot ordering) and the fail-closed `classifyAction`/`classifyField` rules in `@blip/policy` (PAGE-03)
-- [ ] 02-03-PLAN.md — Extension read path: content-script DOM walk, label/required/error/sensitive heuristics, fail-closed kinds, shadow DOM, frames, caps, versions (PAGE-01, PAGE-03)
-- [ ] 02-04-PLAN.md — Developer rig: REPL act path (`fill <label> with <value>`, `--no-fake-extension`), test pages server, `ext:chrome` launcher (ACT-01, ACT-02, ACT-04 server half)
-- [ ] 02-05-PLAN.md — React-safe fills with DOM read-back, gated-click and sensitive-write refusals, highlight overlay, page-change detection (ACT-01..ACT-04, PAGE-05)
-- [ ] 02-06-PLAN.md — Real-browser verification matrix, I1 voice-path check, manual Chrome/Edge checklist
+- [ ] 02-01-PLAN.md — Review exact dependency pins before installation
+- [ ] 02-02-PLAN.md — Register approved workspaces and extension TypeScript/test configuration
+- [ ] 02-03-PLAN.md — Build the MV3 identity and prove the production-Origin browser connection
+- [ ] 02-04-PLAN.md — Implement socket reconnect state and service-worker keepalive
+- [ ] 02-05-PLAN.md — Add idempotent reinjection and typed early replies
+- [ ] 02-06-PLAN.md — Add fail-closed action and field classification rules in `@blip/policy` (PAGE-03)
+- [ ] 02-07-PLAN.md — Add ordered server refresh and ~2-second read-intent freshness (PAGE-05)
+- [ ] 02-08-PLAN.md — Add hash, identity, bounded text and shared readonly/visibility helpers
+- [ ] 02-09-PLAN.md — Add label, required/error, sensitivity and option helpers, including Luhn detection
+- [ ] 02-10-PLAN.md — Implement the content DOM walker and per-frame 250-element snapshot
+- [ ] 02-11-PLAN.md — Route snapshots across frames, preserve ordering and prove baseline compatibility
+- [ ] 02-12-PLAN.md — Add deterministic REPL field phrases and the allowlisted server act path
+- [ ] 02-13-PLAN.md — Build the loopback-only fixture host and bounded report endpoint
+- [ ] 02-14-PLAN.md — Add React, vanilla, readonly and auto-submit form fixtures
+- [ ] 02-15-PLAN.md — Add dynamic/iframe/CSP/shadow fixtures and the dedicated browser launcher
+- [ ] 02-16-PLAN.md — Implement live field writes, post-write sensitivity recheck and submit-event blocking
+- [ ] 02-17-PLAN.md — Route acts through frames and prove privacy/auto-submit behavior in a browser
+- [ ] 02-18-PLAN.md — Add the closed-shadow highlight and structural mutation observer
+- [ ] 02-19-PLAN.md — Connect navigation/tab/structural changes to server freshness
+- [ ] 02-20-PLAN.md — Complete the browser matrix, voice-path privacy check and human-verify checklist
 **UI hint**: no
 
 ### Phase 3: Gated Submit and Result Reading
@@ -126,7 +140,7 @@ Plans:
   3. When a Claude call hangs, errors or returns invalid output, the user hears "I couldn't understand that" within the watchdog timeout instead of silence, and the next utterance works normally.
   4. On the broken demo form, unlabeled and placeholder-only fields get repaired labels in the background (marked model-sourced, with a confidence) without delaying the instant baseline answer; patches touch only existing ids and never kind, value or sensitivity; a second visit loads the repair from cache instantly.
 
-**Research**: Spike needed: `outputFormat` (json_schema) combined with `startup()` warm processes is unverified. Run a 30-minute standalone spike at the first natural pause, ideally before h8. Fallback: one streaming session per role, JSON-only prompt, `zod.safeParse` plus one retry, still `tools: []`. Watch subscription quota (Haiku-class intents, Sonnet-class repair, disk cache).
+**Research**: Spike needed: `outputFormat` (json_schema) combined with `startup()` warm processes is unverified. Run a 30-minute standalone spike at the first natural pause, ideally before h8. Fallback: one streaming session per role, JSON-only prompt, `zod.safeParse` plus one retry, still `tools: []`. Watch subscription quota (Haiku-class intents, Sonnet-class repair, disk cache). Apply the roughly 8k-token snapshot trim here, at the model-prompt boundary; Phase 2 only caps the extension wire snapshot at 250 elements.
 **Plans**: TBD
 **UI hint**: no
 
@@ -157,7 +171,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
-| 2. Real Page Read and Fill | 0/6 | Planned | - |
+| 2. Real Page Read and Fill | 0/20 | Planned | - |
 | 3. Gated Submit and Result Reading | 0/TBD | Not started | - |
 | 4. Claude Brain and Label Repair | 0/TBD | Not started | - |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |

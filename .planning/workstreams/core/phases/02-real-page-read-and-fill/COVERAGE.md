@@ -1,71 +1,72 @@
-No remote service or third-party API is integrated in Phase 2: the extension uses Chrome MV3 platform APIs (runtime, tabs, scripting, alarms, storage, webNavigation, dom), the existing loopback server, and local test pages. The only new packages are esbuild, jsdom, @types/chrome, react and react-dom, gated by the blocking-human checkpoint in plan 02-01.
+﻿# Phase 2 multi-source coverage audit
 
-# Phase 2 multi-source coverage audit
+Plans: 20 plans in 11 waves. The only planned user checkpoints are the exact dependency approval gate (02-01) and the final human-verify checklist (02-20).
 
-Plans: 02-01 extension foundation and service-worker connectivity (wave 1), 02-02 server freshness and classification rules (wave 1), 02-03 extension read path (wave 2), 02-04 developer rig: REPL act path, test pages, launcher (wave 2), 02-05 fills, overlay, refusals, change detection (wave 3), 02-06 verification matrix, I1, manual checklist (wave 4).
+| Wave | Plans | Scope |
+|---|---|---|
+| 1 | 02-01, 02-06, 02-07 | Pin approval, policy classifier, server refresher |
+| 2 | 02-02 | Workspace setup |
+| 3 | 02-03, 02-12, 02-13 | Extension build/connection tracer, server act path, fixture host |
+| 4 | 02-04, 02-08, 02-14 | Socket recovery, DOM helper core, base fixtures |
+| 5 | 02-05, 02-09, 02-15 | Reinjection, field metadata/privacy, dynamic fixtures |
+| 6 | 02-10 | Content walk and per-frame snapshot |
+| 7 | 02-11, 02-16 | Frame aggregation/snapshot tracer; live content acts and submit blocker |
+| 8 | 02-17 | Background act routing and browser regressions |
+| 9 | 02-18 | Highlight and structural mutation observer |
+| 10 | 02-19 | Navigation/tab signals and server freshness proof |
+| 11 | 02-20 | Integrated browser matrix and human verification |
 
-Lanes (no `files_modified` overlap inside a wave): lane A (extension) 02-01, 02-03, 02-05, 02-06; lane B (server, policy, rig) 02-02, 02-04. Wave 1: 02-01 and 02-02 in parallel. Wave 2: 02-03 and 02-04 in parallel.
+Dependencies: 02-02 â†’ 02-01; 02-03 â†’ 02-02; 02-04 â†’ 02-03; 02-05 â†’ 02-03 + 02-04; 02-08 â†’ 02-03 + 02-06; 02-09 â†’ 02-06 + 02-08; 02-10 â†’ 02-05 + 02-09 + 02-14; 02-11 â†’ 02-05 + 02-10 + 02-14; 02-12 â†’ 02-02 + 02-06 + 02-07; 02-13 â†’ 02-02; 02-14 â†’ 02-13; 02-15 â†’ 02-03 + 02-13 + 02-14; 02-16 â†’ 02-10 + 02-12 + 02-15; 02-17 â†’ 02-10 + 02-11 + 02-12 + 02-15 + 02-16; 02-18 â†’ 02-08 + 02-17; 02-19 â†’ 02-07 + 02-15 + 02-18; 02-20 â†’ 02-05 + 02-07 + 02-12 + 02-14 + 02-15 + 02-17 + 02-19.
 
-```
-SOURCE   | ID       | Feature/Requirement                                              | Plan        | Status  | Notes
--------- | -------- | ---------------------------------------------------------------- | ----------- | ------- | -----
-GOAL     | -        | Real page read and fill, only the value the page holds           | 02-01..06   | COVERED |
-REQ      | PAGE-01  | Content-script snapshot: names, roles, values, required, options | 02-03, 02-06| COVERED | "about 8k tokens" is applied at the Phase 4 prompt boundary per D-20/F10; Phase 2 sets truncated at the wire caps
-REQ      | PAGE-03  | Fail-closed kind for every actionable element                     | 02-02, 02-03, 02-05, 02-06 | COVERED | rules (02-02), wiring (02-03), live refusal (02-05), real pages (02-06)
-REQ      | PAGE-05  | Model follows page changes within about 1 s                       | 02-01, 02-02, 02-05, 02-06 | COVERED | keepalive (02-01), server refresh (02-02), signals (02-05), idle test (02-06)
-REQ      | ACT-01   | React/Vue-safe typing, never Enter                                | 02-04, 02-05, 02-06 | COVERED |
-REQ      | ACT-02   | Select, radio, checkbox                                           | 02-04, 02-05, 02-06 | COVERED |
-REQ      | ACT-03   | Active field visibly highlighted                                  | 02-05, 02-06 | COVERED | CSP visibility is manual row M12
-REQ      | ACT-04   | Read the DOM value back after every fill                          | 02-04, 02-05, 02-06 | COVERED |
-RESEARCH | F1       | Server act path, brain phrases, dev flag                          | 02-04       | COVERED |
-RESEARCH | F2       | maxlength clamp, truncated detail                                 | 02-05, 02-04 | COVERED |
-RESEARCH | F3       | Synthetic focus/blur when page not OS-focused                     | 02-05       | COVERED |
-RESEARCH | F4       | visible semantics (rendered, never viewport)                      | 02-03       | COVERED |
-RESEARCH | F5       | No server debounce, post-act refresh, age-based re-snapshot       | 02-02, 02-04 | COVERED |
-RESEARCH | F6       | Server trusts RawElement.kind; shared field-kind mapping          | 02-02       | COVERED |
-RESEARCH | F7       | exclude_matches, match_about_blank, match_origin_as_fallback      | 02-01       | COVERED |
-RESEARCH | F8       | Target-tab selection (Blip's own page excluded)                   | 02-03, 02-05 | COVERED |
-RESEARCH | F9       | Qualified ids f<frameId>e<N>                                      | 02-03       | COVERED |
-RESEARCH | F10      | 8k-token wording vs D-20                                          | 02-03       | COVERED | follows D-20
-RESEARCH | F11      | Chrome not installed, BLIP_BROWSER and Edge fallback              | 02-01, 02-04 | COVERED |
-RESEARCH | F12      | D-04 spike shrinks to a confirmation                              | 02-05       | COVERED | first task of the act lane, with a stop-and-report guard
-RESEARCH | -        | Zod-free content bundle (Pitfall 3), size gate                    | 02-01, 02-02, 02-03 | COVERED |
-RESEARCH | -        | Pure socket policy, alarm, dead-peer, replaced block (Pattern 6)   | 02-01       | COVERED |
-RESEARCH | -        | Reload re-injection and idempotent content script (Pattern 8)     | 02-01       | COVERED | manual row M10 confirms
-RESEARCH | -        | Frame fan-out, versions, fingerprint history (Pattern 4/5)        | 02-03, 02-05 | COVERED |
-RESEARCH | -        | Validation architecture, jsdom limits, e2e smoke without Playwright | 02-01, 02-03, 02-05, 02-06 | COVERED |
-RESEARCH | -        | Manual checklist M1-M16 (+ I1, Chrome repeat)                     | 02-06       | COVERED | M13 is automated at the hub because the server never sends click
-RESEARCH | S1-S11   | Security domain threats                                           | all plans   | COVERED | see each plan's threat model
-CONTEXT  | D-01     | Content-script DOM walk, no debugger (costly)                     | 02-01, 02-03 | COVERED |
-CONTEXT  | D-02     | Fill recipe                                                       | 02-05       | COVERED |
-CONTEXT  | D-03     | Verify-after-write                                                | 02-05       | COVERED |
-CONTEXT  | D-04     | CDP only as fallback; React spike first                           | 02-05       | COVERED | guard: stop and report, do not build CDP
-CONTEXT  | D-05     | classifyAction pure in policy                                     | 02-02       | COVERED |
-CONTEXT  | D-06     | Extension refuses gated clicks, kind-mismatch                     | 02-05, 02-06 | COVERED |
-CONTEXT  | D-07     | Sensitive fields classified in the extension                      | 02-03, 02-04, 02-05 | COVERED |
-CONTEXT  | D-08     | Plain esbuild, hand-written manifest, pinned key                  | 02-01       | COVERED |
-CONTEXT  | D-09     | Manifest permissions                                              | 02-01       | COVERED |
-CONTEXT  | D-10     | Dev loop: ext:build, ext:watch, ext:chrome, .chrome-profile       | 02-01, 02-04 | COVERED |
-CONTEXT  | D-11     | Core-owned test pages and server                                  | 02-04       | COVERED |
-CONTEXT  | D-12     | Socket, hello, ping/pong, backoff, alarm                          | 02-01       | COVERED |
-CONTEXT  | D-13     | MutationObserver, structural vs change signature                  | 02-03, 02-05 | COVERED |
-CONTEXT  | D-14     | Navigation signals                                                | 02-05       | COVERED |
-CONTEXT  | D-15     | Server issues snapshot.request; newSnapshotVersion after acts     | 02-02, 02-04, 02-05 | COVERED |
-CONTEXT  | D-16     | Monotonic per-tab version; stale only when target changed         | 02-02, 02-03, 02-05 | COVERED |
-CONTEXT  | D-17     | Coverage: inputs, radio groups, shadow DOM, iframes               | 02-03, 02-05, 02-06 | COVERED | cross-origin frames time-boxed with documented fallback
-CONTEXT  | D-18     | Unsupported widgets appear and refuse with detail                 | 02-03, 02-05 | COVERED |
-CONTEXT  | D-19     | Highlight overlay                                                 | 02-05       | COVERED |
-CONTEXT  | D-20     | Wire caps, truncated, hidden elements with visible false          | 02-03       | COVERED |
-CONTEXT  | A-01     | Server act path, phrases, --no-fake-extension                     | 02-04       | COVERED |
-CONTEXT  | A-02     | maxlength clamp                                                   | 02-05       | COVERED |
-CONTEXT  | A-03     | Synthetic focus/blur                                              | 02-05       | COVERED |
-CONTEXT  | A-04     | visible semantics                                                 | 02-03       | COVERED |
-CONTEXT  | A-05     | No server debounce; always re-snapshot after act; age rule        | 02-02, 02-04 | COVERED |
-CONTEXT  | A-06     | Zod-free classify module with parity test                         | 02-01, 02-02 | COVERED |
-CONTEXT  | A-07     | vitest + jsdom 29.1.1, ws smoke, no Playwright; gated installs    | 02-01       | COVERED |
-CONTEXT  | A-08     | BLIP_BROWSER and Edge fallback                                    | 02-01, 02-04 | COVERED |
+Shared-file edits are explicitly ordered by these dependencies. Plan 02-03 owns the initial extension shell; 02-04/05 extend it; read and act plans then build on that shell. The wire truncation rule is fixed at the extension boundary: 250 elements, and `truncated` only when that cap cuts the element list. The ~8k-token trim remains a Phase 4 model-prompt operation.
+
+```text
+SOURCE   | ID       | Feature / Requirement                                           | Plan(s)                 | Status  | Notes
+-------- | -------- | --------------------------------------------------------------- | ----------------------- | ------- | -----
+GOAL     | -        | Live-page read, fill, DOM read-back and safe refusal             | 02-01..20               | COVERED |
+REQ      | PAGE-01  | Snapshot names, roles, values, required, options, errors         | 02-08..11,13..15,20     | COVERED | Wire cap is 250 elements; `truncated` only signals an element list cut. ~8k prompt trimming is Phase 4.
+REQ      | PAGE-03  | Fail-closed kind per actionable element                          | 02-06,10,11,12,17,20    | COVERED | Rules, snapshot classification and live recheck.
+REQ      | PAGE-05  | Page changes update the model within about 1 s                   | 02-03..05,07,11,18..20  | COVERED | Socket, aggregation, server refresh, observer and e2e.
+REQ      | ACT-01   | React-safe typing and no Enter                                   | 02-12..17,20            | COVERED | Includes submit-event suppression for all acts.
+REQ      | ACT-02   | Native select, radio and checkbox actions                        | 02-12..17,20            | COVERED | Includes onchange auto-submit regression.
+REQ      | ACT-03   | Active field is visibly highlighted                              | 02-18,20                | COVERED | Plan 02-18 integrates fill/focus/select/check through the production act path and asserts each moves the overlay.
+REQ      | ACT-04   | Report the actual post-write DOM value                           | 02-12,16,17,20          | COVERED | Post-write sensitivity recheck prevents shape-classified values from returning.
+RESEARCH | F1       | REPL act path, phrases, no-fake-extension                        | 02-12                  | COVERED |
+RESEARCH | F2       | maxlength clamp and truncation detail                            | 02-12,16,17,20          | COVERED |
+RESEARCH | F3       | Synthetic focus/blur while page is not OS-focused                | 02-16,20                | COVERED |
+RESEARCH | F4       | Rendered visibility, not viewport intersection                   | 02-08,20                | COVERED |
+RESEARCH | F5       | Single-flight refresh, post-act refresh, age-based re-snapshot   | 02-07,12,19,20          | COVERED |
+RESEARCH | F6       | Shared field kind mapping; server trusts RawElement.kind         | 02-06,10,12             | COVERED |
+RESEARCH | F7       | Content-script exclusions plus `match_about_blank`/`match_origin_as_fallback` injection | 02-03 | COVERED | Manifest build test asserts both flags and the Blip-page exclusions.
+RESEARCH | F8       | Last non-Blip target tab                                          | 02-11,19                | COVERED |
+RESEARCH | F9       | Frame-qualified ids                                               | 02-11,17                | COVERED |
+RESEARCH | F10      | Wire-cap semantics vs Phase 4 token trim                          | 02-10,20                | COVERED | `truncated` only means the 250-element wire list was cut.
+RESEARCH | F11      | Edge 155 local browser; BLIP_BROWSER; teammate Chrome check      | 02-03,15,20             | COVERED |
+RESEARCH | F12      | Confirm native setter before considering CDP                     | 02-16                  | COVERED | Native setter is primary; no CDP implementation is planned.
+RESEARCH | Q1-Q5    | Browser, freshness, iframe order, cross-origin fallback, health  | 02-RESEARCH.md          | RESOLVED| Each question has a concrete decision and rationale.
+CONTEXT  | D-01..20 | Locked engine, act, build, freshness, coverage and wire decisions| all as below            | COVERED |
+CONTEXT  | A-01..08 | Research amendments                                              | 03,06..20               | COVERED |
+SAFE     | SW-01    | Post-write sensitive-shape recheck                               | 09,16,17,20             | COVERED | Luhn-valid 13â€“19 digit values and existing sensitive patterns are refused; no read-back escapes.
+SAFE     | SW-02    | Block submit events for the duration of every act                | 16,17,20                | COVERED | Ref-counted capture guard restores page behavior in `finally`.
+SAFE     | SW-03    | readonly treated as disabled in snapshot and live act            | 08,09,16,20             | COVERED |
+SAFE     | SW-04    | â€œClose and confirmâ€ and link href/target text remain gated        | 06,10,11,17,20          | COVERED |
 ```
 
-Exclusions (not gaps): CDP accessibility-tree snapshot and Input.insertText fill, custom ARIA combobox/listbox filling, contenteditable, file uploads, cross-origin iframe support beyond best effort, model-prompt token trimming (Phase 4), one-command startup and the injection page (Phase 5), and updating CLAUDE.md's stack table (needs both developers) are Deferred Ideas in 02-CONTEXT.md. The policy gate, Executor, grants and gated clicks are Phase 3.
+Decision traceability:
 
-Open items for the orchestrator: the M0 approval line in PROTOCOL.md remains `pending` and is not touched by any Phase 2 plan; typed failure codes `unsupported-page`, `no-target-tab`, `no-content`, `invalid-snapshot` and `not-ready` are new names in an open string field and are not added to PROTOCOL.md without the voice developer's agreement; whether Next, Continue and Save should ever be ungated click-safe kinds is a product decision (research assumption A8) that stays closed.
+| Decisions | Plan(s) |
+|---|---|
+| D-01, D-08..12 | 02-03..05 |
+| D-02..04, D-06..07, D-19 | 02-08..10, 02-16, 02-18 |
+| D-05, A-06 | 02-06 |
+| D-13..14 | 02-18..19 |
+| D-15..16, A-05 | 02-07, 02-10..12, 02-16..19 |
+| D-17..18, A-04 | 02-09..10, 02-15..17 |
+| D-20, F10 | 02-10, 02-20 |
+| A-01..03 | 02-12, 02-16..17 |
+| A-07..08 | 02-03, 02-15 |
+
+Excluded as agreed in `02-CONTEXT.md`: CDP AX snapshots and CDP typing, custom ARIA widget filling, contenteditable filling, file uploads, cross-origin iframe support beyond the time-boxed best effort, Phase 4 model-prompt trimming, and Phase 5 startup/injection hardening. No changes to `packages/protocol`, `PROTOCOL.md`, `CLAUDE.md`, or the core `STATE.md` are planned.
+
+*Last updated: 2026-10-16 â€” revision addresses plan checker findings.*
+

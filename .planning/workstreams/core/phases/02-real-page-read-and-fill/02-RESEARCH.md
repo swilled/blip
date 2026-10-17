@@ -1,4 +1,4 @@
-# Phase 2: Real Page Read and Fill - Research
+﻿# Phase 2: Real Page Read and Fill - Research
 
 **Researched:** 2026-10-16
 **Domain:** Chrome MV3 extension; content-script DOM snapshot, synthetic fills that satisfy React/Vue, page-change detection, service-worker WebSocket
@@ -10,7 +10,7 @@
 ### Locked Decisions
 
 **Read and fill engine**
-- **D-01:** Primary engine is a content-script DOM walk, not `chrome.debugger`/CDP. The frozen contract already assumes it: `RawElement.id` is a stamped `data-blip-id`, `labelCandidates` come from DOM heuristics, and `page.changed` is emitted by the extension. REQUIREMENTS PAGE-01 says "content-script DOM walk". This deliberately departs from the CLAUDE.md stack table (CDP AX tree primary); it removes the "started debugging" infobar, the `--silent-debugger-extension-api` dependency and a `debugger` permission warning from Phase 2. The manifest does NOT request `debugger` in Phase 2. — **Reversibility:** costly — the wire format would not change, but fill and snapshot internals live in the extension and a CDP path would be a second implementation behind the same `ActRequest`.
+- **D-01:** Primary engine is a content-script DOM walk, not `chrome.debugger`/CDP. The frozen contract already assumes it: `RawElement.id` is a stamped `data-blip-id`, `labelCandidates` come from DOM heuristics, and `page.changed` is emitted by the extension. REQUIREMENTS PAGE-01 says "content-script DOM walk". This deliberately departs from the CLAUDE.md stack table (CDP AX tree primary); it removes the "started debugging" infobar, the `--silent-debugger-extension-api` dependency and a `debugger` permission warning from Phase 2. The manifest does NOT request `debugger` in Phase 2. â€” **Reversibility:** costly â€” the wire format would not change, but fill and snapshot internals live in the extension and a CDP path would be a second implementation behind the same `ActRequest`.
 - **D-02:** Fill recipe (ACT-01): scroll into view, focus, native value setter (`HTMLInputElement`/`HTMLTextAreaElement` prototype), dispatch bubbling `InputEvent("input", {inputType:"insertText"})` then `change`, then `blur()` so on-blur validation fires. Never dispatch Enter or any key event that can submit. Select: set by option value, dispatch `input` + `change`. Checkbox/radio: call `el.click()` only when the state differs (fires native events React/Vue listen to), no-op when already correct.
 - **D-03:** Verify-after-write (ACT-04): after the events, wait two animation frames (about 32 ms) so controlled inputs re-render, then read the value from the DOM and return it as `ActResult.observedValue`. A maxlength-truncated or reset value is reported as it is, never as what was requested. If the DOM value differs from the requested one the result is still `ok: true` with `observedValue` set; the server/dialogue decides how to phrase it.
 - **D-04:** CDP is a documented fallback, not a Phase 2 deliverable. Escalate to a CDP `Input.insertText` fill only if the React/Vue spike (a real React-controlled input plus one real public form) shows the native-setter approach cannot be made to work. The planner should put that spike first.
@@ -35,7 +35,7 @@
 - **D-17:** In scope: text-like inputs (text, email, tel, url, search, number, date/time via ISO string), textarea, native select, checkbox, radio groups (one `RawElement` per group), open shadow DOM (walked), same-origin iframes and, because the content script runs with `all_frames`, cross-origin iframes on a best-effort basis. Elements carry `frameId`; element ids are unique per tab and resolved to (frame, node) by the background. Required: top frame and same-origin iframes. Cross-origin frames get a time-boxed spike; if it is not working by the Phase 2 midpoint it becomes a deferred item with a spoken "I can't read that part of the page".
 - **D-18:** Stubbed with an honest refusal rather than silent failure: custom ARIA combobox/listbox widgets, contenteditable, file inputs, canvas widgets. They appear in the snapshot (so Blip can say they exist) but `fill` returns `exception` with `detail: "unsupported-widget"`. The planner must not invent new error codes (the error enum is frozen; use `detail`).
 - **D-19:** Highlight (ACT-03): a fixed-position overlay box in a closed shadow root attached to `document.documentElement`, `pointer-events: none`, maximum z-index, high-contrast 3 px outline that follows scroll/resize. It does not touch the page's own styles or focus. `highlight {targetId: null}` clears it. Moved on every `fill`/`focus`/`select`/`check` automatically.
-- **D-20:** Snapshot size: the wire cap is 250 elements, 40 headings and 20 alerts (frozen). The roughly 8k-token trim belongs at the model-prompt boundary in Phase 4; Phase 2 only sets `truncated: true` when it hits the wire caps. Hidden/off-screen elements are included with `visible: false`.
+- **D-20:** Snapshot size: the wire cap is 250 elements, 40 headings and 20 alerts (frozen). Phase 2 sets `truncated: true` only when the 250-element cap cuts the element list; heading, alert, option or walk-time limits do not set this flag. The roughly 8k-token trim belongs at the model-prompt boundary in Phase 4. Hidden/off-screen elements are included with `visible: false`.
 
 ### Claude's Discretion
 - Exact label-candidate heuristics and confidence numbers (aria-labelledby, label[for], wrapping label, placeholder, nearby text, legend), as long as the server's baseline builder in `apps/server/src/baseline` stays unchanged.
@@ -91,7 +91,7 @@ Decisions D-01..D-20 are respected; the items below are places where a locked de
 | F7 | **Manifest additions D-09 does not list.** The content script also injects into Blip's own voice page and into `about:blank` iframes; the `tabs` permission is redundant with `<all_urls>`. | Voice UI is served at `http://127.0.0.1:7777/` (`guard.ts:51`). | Add `exclude_matches` for `127.0.0.1:7777`, `localhost:7777`, and the two Vite 5173 origins; add `match_about_blank` and `match_origin_as_fallback`. Keep `tabs` (harmless). |
 | F8 | **Target-tab trap.** "Active tab" via `tabs.query({active:true, lastFocusedWindow:true})` returns Blip's own voice window whenever it has focus. | CLAUDE.md voice window design (`--app=http://localhost:...` window in the same profile). | Track `targetTabId` = last activated non-Blip http(s) tab (exclude by origin), persisted in `chrome.storage.session`. |
 | F9 | **Id scheme.** `PROTOCOL.md` says ids are `e<N>`. One counter per frame collides across frames. | `snapshot.ts:31` `id: z.string(),` (no pattern); server src has no id parsing (grep found none). | Top frame: `e<N>`; other frames: `f<frameId>e<N>`, qualified by the background so content scripts stay frame-agnostic. Opaque to the server. |
-| F10 | **ROADMAP criterion 1 says the snapshot is "trimmed to about 8k tokens"; D-20 and `PROTOCOL.md` put that in Phase 4.** | `PROTOCOL.md` Conventions "Caps". | Follow D-20. Phase 2 verifies `truncated: true` at the 250-element wire cap with a 300-field test page. |
+| F10 | **ROADMAP criterion 1 says the snapshot is "trimmed to about 8k tokens"; D-20 and `PROTOCOL.md` put that in Phase 4.** | `PROTOCOL.md` Conventions "Caps". | Follow D-20. Phase 2 verifies `truncated: true` only when the 250-element wire cap cuts the element list; Phase 4 trims to about 8k tokens at the model-prompt boundary. |
 | F11 | **Chrome is not installed on this machine** (only Edge 155). CONTEXT, CLAUDE.md and the voice demo assume Chrome. | `Program Files*\Google\Chrome` and `%LOCALAPPDATA%` probes found nothing; `msedge.exe` 155 is present. | `ext:chrome` must accept `BLIP_BROWSER` and fall back to Edge. The pinned key yields the same id in Edge (see Environment Availability). Confirm on the teammate's Chrome before I1. |
 | F12 | **D-04's spike is already answered for the native-setter question.** Naive `el.value=` + `input` worked in the isolated world too, and the prototype setter works in both worlds. | Chromium 155 spike; React 18.3.1 jsdom. | The "put the spike first" step shrinks to a 30-minute confirmation on real Chrome using the React test page; CDP stays deferred. |
 
@@ -115,9 +115,9 @@ The largest piece of unplanned work is server-side (F1): the repo has no act pat
 | Frame fan-out, id qualification, snapshot version, target-tab choice | Service worker | `chrome.storage.session` | Only the SW sees all frames (`webNavigation.getAllFrames`) and tabs; state must survive SW termination |
 | WebSocket, hello, ping/pong, reconnect | Service worker | `chrome.alarms` | Content scripts cannot hold the socket (their Origin is the page's); SW lifetime is extended by socket traffic |
 | Zod validation of outbound snapshot | Service worker | Server (parse on receipt) | Content script output is page-derived and untrusted; the SW fails closed before sending |
-| Page-change signal source | Content script (MutationObserver) + SW (`webNavigation`, tab events) | — | Per D-13/D-14 |
-| Refresh policy, model cache, act dispatch, spoken reply | Server | — | Server owns policy (D-15); extension never decides what to say |
-| Gate / grant | (Phase 3) server Executor + extension live re-check | — | Out of scope; Phase 2 refuses gated clicks |
+| Page-change signal source | Content script (MutationObserver) + SW (`webNavigation`, tab events) | â€” | Per D-13/D-14 |
+| Refresh policy, model cache, act dispatch, spoken reply | Server | â€” | Server owns policy (D-15); extension never decides what to say |
+| Gate / grant | (Phase 3) server Executor + extension live re-check | â€” | Out of scope; Phase 2 refuses gated clicks |
 
 ## Standard Stack
 
@@ -182,63 +182,63 @@ All package names above came from CLAUDE.md, the repo, or official docs and were
 
 ```
  voice UI / REPL (role voice)                 Blip server  127.0.0.1:7777/ws                Chrome (dedicated profile)
- ────────────────────────────                 ───────────────────────────────                ─────────────────────────────────────────
- utterance "fill name with Jane" ───────────► grammar / fake brain ─► Intent set_fields
-                                                    │
-                                                    ▼
-                                              executeUngated (NEW)  ── act.request{actId,tabId,snapshotVersion,
-                                                    │                     action, expectedKind} ───────────────┐
-                                                    │                                                          ▼
-                                                    │                                   SERVICE WORKER (background.js)
-                                                    │                                   • socket: hello, ping/20s, pong, backoff, alarm 30s
-                                                    │                                   • parseFrame every inbound frame (zod)
-                                                    │                                   • resolve id → (frameId, localId)
-                                                    │                                   • tabs.sendMessage(tabId, msg, {frameId})
-                                                    │                                                          │
-                                                    │                                                          ▼
-                                                    │                       CONTENT SCRIPT (content.js, every frame incl. cross-origin)
-                                                    │                       • walk DOM + open/closed shadow roots → RawElement[]
-                                                    │                       • classifyAction/classifyField (zod-free policy module)
-                                                    │                       • live re-check: sensitive? disabled? kind == expectedKind?
-                                                    │                       • fill: focus → clamp maxlength → prototype setter →
-                                                    │                         input → change → blur (+ synthetic events) → settle → read DOM
-                                                    │                       • overlay (closed shadow root, text-free)
-                                                    │                       • MutationObserver → change signature → "mutated" msg
-                                                    │                                                          │
-              act.result{observedValue,…} ◄─────────────────────────────────────────────────────────────────┘
-                                                    │
- speak "Name is now Jane" ◄───────────────────── reply built from observedValue (non-sensitive only)
-                                                    │
-   page changes (user, SPA, reveal) ─► content "mutated" ─► SW debounce 500 ms ─► page.changed ─►│ server single-flight
-                                                    │                                              │ snapshot.request{refresh}
-                                                    ◄──────────── snapshot.result (aggregated frames, zod-checked in SW)
-                                              session.applySnapshot → state push to voice
+ â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€                 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€                â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ utterance "fill name with Jane" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â–º grammar / fake brain â”€â–º Intent set_fields
+                                                    â”‚
+                                                    â–¼
+                                              executeUngated (NEW)  â”€â”€ act.request{actId,tabId,snapshotVersion,
+                                                    â”‚                     action, expectedKind} â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                                                    â”‚                                                          â–¼
+                                                    â”‚                                   SERVICE WORKER (background.js)
+                                                    â”‚                                   â€¢ socket: hello, ping/20s, pong, backoff, alarm 30s
+                                                    â”‚                                   â€¢ parseFrame every inbound frame (zod)
+                                                    â”‚                                   â€¢ resolve id â†’ (frameId, localId)
+                                                    â”‚                                   â€¢ tabs.sendMessage(tabId, msg, {frameId})
+                                                    â”‚                                                          â”‚
+                                                    â”‚                                                          â–¼
+                                                    â”‚                       CONTENT SCRIPT (content.js, every frame incl. cross-origin)
+                                                    â”‚                       â€¢ walk DOM + open/closed shadow roots â†’ RawElement[]
+                                                    â”‚                       â€¢ classifyAction/classifyField (zod-free policy module)
+                                                    â”‚                       â€¢ live re-check: sensitive? disabled? kind == expectedKind?
+                                                    â”‚                       â€¢ fill: focus â†’ clamp maxlength â†’ prototype setter â†’
+                                                    â”‚                         input â†’ change â†’ blur (+ synthetic events) â†’ settle â†’ read DOM
+                                                    â”‚                       â€¢ overlay (closed shadow root, text-free)
+                                                    â”‚                       â€¢ MutationObserver â†’ change signature â†’ "mutated" msg
+                                                    â”‚                                                          â”‚
+              act.result{observedValue,â€¦} â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                                                    â”‚
+ speak "Name is now Jane" â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ reply built from observedValue (non-sensitive only)
+                                                    â”‚
+   page changes (user, SPA, reveal) â”€â–º content "mutated" â”€â–º SW debounce 500 ms â”€â–º page.changed â”€â–ºâ”‚ server single-flight
+                                                    â”‚                                              â”‚ snapshot.request{refresh}
+                                                    â—„â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ snapshot.result (aggregated frames, zod-checked in SW)
+                                              session.applySnapshot â†’ state push to voice
 ```
 
 ### Recommended Project Structure
 ```
 packages/policy/src/
-├── classify.ts          # classifyAction, classifyField, UNGATED parity set. ONLY `import type` from protocol (zod-free)
-├── index.ts             # existing re-export; ADD `export * from "./classify"` and package.json exports "./classify"
+â”œâ”€â”€ classify.ts          # classifyAction, classifyField, UNGATED parity set. ONLY `import type` from protocol (zod-free)
+â”œâ”€â”€ index.ts             # existing re-export; ADD `export * from "./classify"` and package.json exports "./classify"
 apps/extension/
-├── package.json         # name @blip/extension, private, type module, devDeps (pinned)
-├── tsconfig.json        # extends ../../tsconfig.base.json, types ["chrome"], include src + test
-├── vitest.config.ts     # include test/**/*.test.ts (jsdom chosen per file by docblock)
-├── manifest.template.json
-├── build.ts             # esbuild + manifest (key, version) -> dist/ ; --watch
-├── scripts/chrome.ts    # ext:chrome launcher
-├── src/shared/messages.ts   # SW <-> content message types (type-only imports of protocol)
-├── src/content/{index,walk,labels,sensitive,required,errors,visibility,hash,fill,overlay,observer,ids}.ts
-├── src/background/{index,socket,frames,tabs,versions,navigation}.ts
-└── test/...             # jsdom tests (walk, labels, fill vs real React/Vue not required), node tests (hash, ids)
+â”œâ”€â”€ package.json         # name @blip/extension, private, type module, devDeps (pinned)
+â”œâ”€â”€ tsconfig.json        # extends ../../tsconfig.base.json, types ["chrome"], include src + test
+â”œâ”€â”€ vitest.config.ts     # include test/**/*.test.ts (jsdom chosen per file by docblock)
+â”œâ”€â”€ manifest.template.json
+â”œâ”€â”€ build.ts             # esbuild + manifest (key, version) -> dist/ ; --watch
+â”œâ”€â”€ scripts/chrome.ts    # ext:chrome launcher
+â”œâ”€â”€ src/shared/messages.ts   # SW <-> content message types (type-only imports of protocol)
+â”œâ”€â”€ src/content/{index,walk,labels,sensitive,required,errors,visibility,hash,fill,overlay,observer,ids}.ts
+â”œâ”€â”€ src/background/{index,socket,frames,tabs,versions,navigation}.ts
+â””â”€â”€ test/...             # jsdom tests (walk, labels, fill vs real React/Vue not required), node tests (hash, ids)
 tools/test-pages/
-├── package.json         # react, react-dom pinned
-├── serve.ts             # node:http + sirv on fixed port, two hostnames for cross-origin
-├── build.ts             # esbuild react-app.jsx -> public/react-app.js (gitignored dist)
-└── public/*.html        # react-form, vanilla, enter-submit, delayed-reveal, spa, frame-same, frame-cross, csp, large
+â”œâ”€â”€ package.json         # react, react-dom pinned
+â”œâ”€â”€ serve.ts             # node:http + sirv on fixed port, two hostnames for cross-origin
+â”œâ”€â”€ build.ts             # esbuild react-app.jsx -> public/react-app.js (gitignored dist)
+â””â”€â”€ public/*.html        # react-form, vanilla, enter-submit, delayed-reveal, spa, frame-same, frame-cross, csp, large
 apps/server/src/
-├── session/refresh.ts   # NEW single-flight refresher
-├── act/ungated.ts       # NEW executeUngated (replaced by the Executor in Phase 3)
+â”œâ”€â”€ session/refresh.ts   # NEW single-flight refresher
+â”œâ”€â”€ act/ungated.ts       # NEW executeUngated (replaced by the Executor in Phase 3)
 ```
 
 ### Pattern 1: Fill recipe (verified)
@@ -250,11 +250,11 @@ apps/server/src/
 ### Pattern 2: Snapshot walk (per frame)
 1. `collect(root)`: `root.querySelectorAll(FIELD_AND_ACTION_SELECTOR)` for candidates; separately find shadow hosts: elements whose `localName` contains `-` or that have `shadowRoot`; use `chrome.dom.openOrClosedShadowRoot(host)` to reach closed roots (exists in content scripts and returned the root of a **closed** shadow host in the spike). Recurse into each root. Skip the Blip overlay host.
 2. Fields: `input` except `type` in `hidden|submit|button|image|reset`, `select`, `textarea`; stub-as-unsupported (still reported, `category: "field"`, role preserved): `[contenteditable]`, `[role=combobox|listbox|textbox|searchbox|slider|spinbutton|switch]` on non-native elements, `input[type=file]`. **Never read `type=hidden` inputs** (CSRF tokens, session ids).
-3. Actions: `button`, `input[type=submit|button|image|reset]`, `a[href]`, `summary`, `[role=button|link|menuitem]`, `[onclick]`, plus the div-"button" heuristic: leaf-ish element, text length 1-40, `getComputedStyle(el).cursor === "pointer"`, not inside an already-collected action. Time-box the heuristic (stop at ~150 ms total walk budget and set `truncated`).
+3. Actions: `button`, `input[type=submit|button|image|reset]`, `a[href]`, `summary`, `[role=button|link|menuitem]`, `[onclick]`, plus the div-"button" heuristic: leaf-ish element, text length 1-40, `getComputedStyle(el).cursor === "pointer"`, not inside an already-collected action. Time-box the heuristic (stop at ~150 ms total walk budget); this alone does not set Snapshot.truncated.
 4. Radio group = ONE element: group key = `form || root` + `name`; `inputType: "radio"`, `role: "radiogroup"`, `options[]` per radio with `selected`, `value` = selected option value or `null` (matches `booking.snapshot.json` e6: `value=null`, 2 options). Every radio in the group maps to the same id in the content script's id table.
 5. Per-element: `visible` (F4), `disabled` (`el.disabled || ancestor fieldset[disabled]`), `value`/`hasValue`/`checked`, `options` (cap 200, always include the selected one; label clamp), `required`/`requiredSource`, `invalid`/`errorText`, `describedBy`, `autocomplete`, `name`, `group`, `order`, sensitive, `kind`/`kindReasons`.
 6. Headings (`h1-h6`, `[role=heading]`, cap 40), alerts (`[role=alert|status]`, `[aria-live]` regions with visible non-empty text, cap 20), `title`, `url`, `origin`.
-7. Selection under the 250 cap: keep every visible field first, then buttons, then links (links capped at ~40); preserve document order inside the kept set; set `truncated: true` if anything was dropped (including option trimming).
+7. Selection under the 250-element cap: keep every visible field first, then buttons, then links (links capped at ~40); preserve document order inside the kept set. Set Snapshot.truncated true only if the 250-element cap cuts the output. Dropped headings, alerts, options or walk-time heuristic candidates do not set this flag.
 
 ### Pattern 3: Label heuristics mapped to `RawElement`
 Confidence values follow the existing fixtures (`booking`/`broken` use 0.95 aria/label, 0.6 nearby-text, 0.5 placeholder, 0.3 inferred). Candidates are emitted for every source that yields text, best first; the server picks. Text clamp 200 (`snapshot.ts:40` `text: z.string().max(200),`). Strip control characters, collapse whitespace, remove a trailing `*` / `(required)` and record it for `requiredSource`.
@@ -384,7 +384,7 @@ See F8. Warning sign: the REPL describes the Blip voice page ("Press Space to st
 
 ### Pitfall 6: Snapshot rejected by the server
 **What goes wrong:** one over-long label (10 000 chars), a 5 000-option `<select>`, or a leaked sensitive value makes `Snapshot` invalid or exceeds the 2 MiB frame cap (`constants.ts:15` `export const MAX_FRAME_BYTES = 2 * 1024 * 1024;`), and the hub closes the socket with 1009 (`maxPayload` in `hub.ts`).
-**How to avoid:** clamp every string to its schema cap in the content script (`text` 200, `describedBy` 300, `errorText` 300, `group` 120, `title` 200, headings 200, alerts 300, `stepHint` 100); cap options at 200 (selected always kept) with label clamp 120 and set `truncated`; the SW checks `JSON.stringify(frame).length < 1.5e6` before sending and trims options further; the SW builds the frame with `buildFrame` inside `try`, replying `{ok:false, error:{code:"invalid-snapshot", message}}` on failure (fail closed, typed reply, no timeout).
+**How to avoid:** clamp every string to its schema cap in the content script (`text` 200, `describedBy` 300, `errorText` 300, `group` 120, `title` 200, headings 200, alerts 300, `stepHint` 100); cap options at 200 (selected always kept) with label clamp 120; option trimming does not set Snapshot.truncated. The SW checks `JSON.stringify(frame).length < 1.5e6` before sending and trims options further; only cutting the 250-element list sets the Snapshot.truncated flag. The SW builds the frame with `buildFrame` inside `try`, replying `{ok:false, error:{code:"invalid-snapshot", message}}` on failure (fail closed, typed reply, no timeout).
 
 ### Pitfall 7: Orphaned content scripts after "reload"
 See Pattern 8. Warning sign: after reload, `tabs.sendMessage` fails "Receiving end does not exist" on already-open tabs until they are refreshed.
@@ -683,7 +683,7 @@ Verified in a scratch project: vitest 5.0.5 + jsdom 29.1.1, docblock environment
 | A1 | Branded Chrome (not Edge) behaves like the Edge 155 spike for every measured item (Origin, id from key, setter, maxlength, unfocused events, `checkVisibility`, `chrome.dom`) | Summary, Pattern 1, F3 | Medium: re-run the React test page and the smoke script on the teammate's Chrome before I1 |
 | A2 | `--disable-features=DisableLoadExtensionCommandLineSwitch` restores `--load-extension` on branded Chrome 137+ (worked on Edge 155 headless; the SeleniumBase thread says it helped but may not for every mode) | Pattern 8 | Low: only affects the optional smoke script; humans use Load unpacked |
 | A3 | A page CSP `style-src` can block extension-created `<style>` elements and style attributes, but not CSSOM property writes | Anti-patterns, S7 | Low-Medium: overlay invisible on strict-CSP sites; the CSP test page checks it |
-| A4 | Chrome's Local Network Access prompt does not gate an extension service worker's WebSocket to `127.0.0.1` (Edge spike connected with no prompt; Chrome's own post lists WebSockets as not yet gated, dated June 2025) | Pattern 6 | Medium: would block all traffic; first step of plan 2 proves it on Chrome |
+| A4 | Chrome's Local Network Access prompt does not gate an extension service worker's WebSocket to `127.0.0.1` (Edge spike connected with no prompt; Chrome's own post lists WebSockets as not yet gated, dated June 2025) | Pattern 6 | Medium: would block all traffic; plan 02-03 proves the local Edge connection, and the teammate Chrome repeat is retained in 02-20 before I1 |
 | A5 | A `chrome.alarms` event wakes a terminated service worker (not stated on the alarms page; standard MV3 behavior) | Pattern 6 | Medium: reconnect after long idle; manual check in the checklist |
 | A6 | After "reload" in `chrome://extensions`, Chrome does not re-inject content scripts into open tabs | Pattern 8, Pitfall 7 | Low: only costs a re-injection helper |
 | A7 | `maxlength` counts UTF-16 code units in Chrome | Example 1 | Low: emoji at the boundary |
@@ -692,22 +692,22 @@ Verified in a scratch project: vitest 5.0.5 + jsdom 29.1.1, docblock environment
 | A10 | Mutation volume on typical forms is low enough that a 500 ms-throttled full walk is cheap | Pattern 5 | Low: measure on the "large" test page |
 | A11 | `requestAnimationFrame` is throttled for hidden or fully occluded windows (observed to fire for visible-but-unfocused) | Example 1 | Low: `settle()` races a timer anyway |
 
-## Open Questions
+## Resolved Questions
 
 1. **Which browser is the demo browser on Pranav's machine?**
    - Known: only Edge 155 is installed here; CLAUDE.md, TEAM-SETUP.md and the demo assume Chrome with NVDA.
    - Unclear: whether Chrome will be installed; the voice workstream's docked-window plan was also written for Chrome.
-   - Recommendation: install Chrome before the I1 integration, keep `BLIP_BROWSER` override, treat Edge as a fully working fallback (same key, same id, verified).
+   - **Decision â€” RESOLVED:** Edge 155 is the local demo browser because Chrome is absent here. Keep `BLIP_BROWSER` and the Edge fallback; a teammate repeats connection and fill checks on Chrome before I1. The pinned key/id and WebSocket Origin are verified on Edge, so local progress does not depend on installing Chrome here.
 2. **Freshness of values the user types themselves** (F5b).
    - Known: D-13 forbids value-only `page.changed`.
    - Unclear: whether to add an optional additive field later.
-   - Recommendation: server re-snapshots on read-back/requirements intents when the model is older than ~2 s; revisit only if the voice track needs push updates.
+   - **Decision â€” RESOLVED:** retain D-13's no-value-change `page.changed` rule. Re-snapshot on `read_form` and `whats_required` when the cached model is older than about 2 seconds. This catches manual edits when the user asks for fresh information without a protocol change or a value-change push channel.
 3. **Where iframe elements sit in document order.**
-   - Recommendation: append frames after the top frame in Phase 2; splice by iframe position only if the demo form uses an embedded payment frame.
+   - **Decision â€” RESOLVED:** append iframe elements after all top-frame elements, preserving order within each frame. This is deterministic and sufficient for the current demo; splice at iframe positions only if a selected demo form requires it.
 4. **Cross-origin iframe midpoint decision (D-17).**
    - Known: the same content script runs in each frame, so reading works by construction; the unknowns are `getAllFrames` coverage of late-created frames and fill inside them.
-   - Recommendation: build the cross-origin test page first inside plan 5; the "spoken I can't read that part" fallback is one string.
-5. **Does the real extension need a `/healthz` style readiness signal for `ext:chrome`?** Not required; the server log line `connection bound role=extension` is enough for a human.
+   - **Decision â€” RESOLVED:** make one time-boxed best-effort implementation and test of cross-origin read and fill. If unsupported or still failing by the Phase 2 midpoint, retain same-origin support, return `Part of this page could not be read.` once per unreachable visible frame, and record the limitation without blocking Phase 2.
+5. **Does `ext:chrome` need a `/healthz` readiness signal? â€” RESOLVED.** Do not add `/healthz`; the server log line `connection bound role=extension` is the readiness evidence for the human checklist.
 
 ## Environment Availability
 
@@ -716,13 +716,13 @@ Verified in a scratch project: vitest 5.0.5 + jsdom 29.1.1, docblock environment
 | Node.js | everything | yes | 24.14.0 | - |
 | npm | workspaces | yes | 11.9.0 | - |
 | esbuild | extension build | yes (transitive) | 0.28.2 | - |
-| Google Chrome | Load unpacked, demo | **no** (not found under `Program Files`, `Program Files (x86)`, `%LOCALAPPDATA%`; no App Paths registry key) | - | Microsoft Edge 155 at `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe` (works: same key gives the same extension id, content scripts, SW WebSocket; spike ran on it) |
+| Google Chrome | teammate I1 check | **no on this machine** (not found under `Program Files`, `Program Files (x86)`, `%LOCALAPPDATA%`; no App Paths registry key) | - | Microsoft Edge 155 is the local demo browser; teammate repeats connection and fill checks on Chrome before I1 |
 | NVDA | not needed this phase | not checked | - | - |
 | jsdom, @types/chrome, react, react-dom | tests, typecheck, test page | not installed yet | - | pins above after checkpoint |
 | Port 7777 / test-page port | server / test pages | free at research time | - | pick a fixed test-page port (suggest 7790) |
 
 **Missing dependencies with no fallback:** none.
-**Missing dependencies with fallback:** Chrome (use Edge until installed; confirm on the teammate's Chrome).
+**Missing dependencies with fallback:** Chrome (use Edge 155 for local demo work and confirm on the teammate's Chrome before I1).
 
 ## Validation Architecture
 
@@ -771,7 +771,7 @@ jsdom limits to design around: no layout (all rects zero), no `checkVisibility`,
 | M12 | Strict-CSP page (`style-src 'self'`) | highlight outline still visible |
 | M13 | Click a div "button", an `<a>` to another origin, a typeless `<button>` via REPL | all three refused `gate-required`; page unchanged |
 | M14 | Password field: `focus` only; type by hand; `/state` shows `hasValue` true, value never in any log | no value in server logs or replies |
-| M15 | 300-field page | snapshot `truncated: true`, fields prioritized over links |
+| M15 | 300-field page | snapshot has 250 elements and `truncated: true` only because the 250-element cap cut the page; fields are prioritized over links |
 | M16 | Open the voice page in a tab of the same profile and switch to it | REPL still describes the form tab, not the voice page |
 
 ### Automated real-browser smoke (optional, recommended, no new dependency)
@@ -857,3 +857,4 @@ jsdom limits to design around: no layout (all rects zero), no `checkVisibility`,
 
 **Research date:** 2026-10-16
 **Valid until:** 2026-10-23 for dependency versions (fast-moving registry), 30 days for the MV3 mechanics
+
