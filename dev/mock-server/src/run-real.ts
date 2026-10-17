@@ -2,6 +2,9 @@
 // Imports core modules read-only. The fake extension is the default; --browser-extension selects local DOM bridge mode.
 //   node --import tsx dev/mock-server/src/run-real.ts [--fixture=booking|broken] [--port=7777] [--fake-delay=1500] [--browser-extension]
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { spawn as nodeSpawn } from "node:child_process";
+import type { EventEmitter } from "node:events";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -29,6 +32,30 @@ export interface RealOptions {
   onActRequest?: (request: ActRequest) => void;
   /** Use the dedicated Chrome profile and expect the manually installed local bridge. */
   browserExtension?: boolean;
+}
+
+export function buildManagedRunnerArgs(args: string[], repoRoot: string, runId: string): string[] {
+  const managed: string[] = [];
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index]!;
+    if (argument === "--demo-root") {
+      index++;
+      continue;
+    }
+    if (argument.startsWith("--demo-root=")) continue;
+    managed.push(argument);
+  }
+  return [...managed, `--demo-run-id=${runId}`, `--demo-root=${repoRoot}`];
+}
+
+export function installManagedShutdownHandlers(events: Pick<EventEmitter, "on" | "once">, shutdown: () => void): void {
+  events.once("SIGINT", shutdown);
+  events.once("SIGTERM", shutdown);
+  events.on("message", (message: unknown) => {
+    if (typeof message === "object" && message !== null && "type" in message && message.type === "shutdown") {
+      shutdown();
+    }
+  });
 }
 
 export async function startReal(opts: RealOptions = {}): Promise<{
@@ -94,42 +121,79 @@ if (entry?.endsWith("/run-real.ts")) {
     process.exit(2);
   }
   const repoRoot = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
+  if (values["demo-root"] !== undefined && values["demo-root"] !== repoRoot) {
+    console.error("--demo-root must match the repository containing run-real.ts");
+    process.exit(2);
+  }
   if (values["demo-run-id"] && values["demo-root"] !== repoRoot) {
     console.error("--demo-root must match the repository containing run-real.ts");
     process.exit(2);
   }
-  const real = await startReal({
-    fixture: values.fixture as FixtureName,
-    ...(values.port !== undefined ? { port: Number(values.port) } : {}),
-    ...(values["fake-delay"] !== undefined ? { fakeDelayMs: Number(values["fake-delay"]) } : {}),
-    ...(values["browser-extension"] ? { browserExtension: true } : {}),
-  });
-  console.log(`blip real server (fake brain, ${values.fixture}${values["browser-extension"] ? ", live Chrome form bridge" : ""}): http://127.0.0.1:${real.server.port}/`);
-  const stopPtt = await startPttWire(real.server.port);
-  await launchVoiceWindow({ port: real.server.port, demoExtension: Boolean(values["browser-extension"]) });
-  const pidFile = join(repoRoot, ".demo-pid");
-  const readyFile = join(repoRoot, ".demo-ready");
-  const runRecord = values["demo-run-id"]
-    ? JSON.stringify({ pid: process.pid, runId: values["demo-run-id"], repoRoot })
-    : null;
-  if (runRecord !== null) {
+  if (!values["demo-run-id"]) {
+    const runId = randomUUID();
+    const child = nodeSpawn(
+      process.execPath,
+      [
+        ...process.execArgv,
+        join(repoRoot, "dev", "mock-server", "src", "run-real.ts"),
+        ...buildManagedRunnerArgs(process.argv.slice(2), repoRoot, runId),
+      ],
+      { cwd: process.cwd(), stdio: ["inherit", "inherit", "inherit", "ipc"] },
+    );
+    for (const signal of ["SIGINT", "SIGTERM"] as const) {
+      process.once(signal, () => {
+        if (child.connected) child.send({ type: "shutdown", signal });
+      });
+    }
+    await new Promise<void>((resolveChild) => {
+      child.once("error", (error) => {
+        console.error(`could not start managed demo runner: ${error.message}`);
+        process.exitCode = 1;
+        resolveChild();
+      });
+      child.once("exit", (code, signal) => {
+        process.exitCode = code ?? (signal ? 1 : 0);
+        resolveChild();
+      });
+    });
+  } else {
+    const pidFile = join(repoRoot, ".demo-pid");
+    const readyFile = join(repoRoot, ".demo-ready");
+    const runRecord = JSON.stringify({ pid: process.pid, runId: values["demo-run-id"], repoRoot });
+    let real: Awaited<ReturnType<typeof startReal>> | undefined;
+    let stopPtt: (() => Promise<void>) | undefined;
+    let shutdownStarted = false;
+    const removeOwnMarker = (path: string): void => {
+      try {
+        if (readFileSync(path, "utf8") === runRecord) rmSync(path, { force: true });
+      } catch {
+        // Marker files may already be gone or replaced by a newer reset run.
+      }
+    };
+    const shutdown = (): void => {
+      if (shutdownStarted) return;
+      shutdownStarted = true;
+      void (async () => {
+        try { await stopPtt?.(); } catch { /* Continue closing the demo server. */ }
+        try { await real?.close(); } catch { /* Remove our markers even if close fails. */ }
+        removeOwnMarker(pidFile);
+        removeOwnMarker(readyFile);
+        process.exit(0);
+      })();
+    };
+    installManagedShutdownHandlers(process, shutdown);
+
+    real = await startReal({
+      fixture: values.fixture as FixtureName,
+      ...(values.port !== undefined ? { port: Number(values.port) } : {}),
+      ...(values["fake-delay"] !== undefined ? { fakeDelayMs: Number(values["fake-delay"]) } : {}),
+      ...(values["browser-extension"] ? { browserExtension: true } : {}),
+    });
+    console.log(`blip real server (fake brain, ${values.fixture}${values["browser-extension"] ? ", live Chrome form bridge" : ""}): http://127.0.0.1:${real.server.port}/`);
+    stopPtt = await startPttWire(real.server.port);
+    await launchVoiceWindow({ port: real.server.port, demoExtension: Boolean(values["browser-extension"]) });
     writeFileSync(pidFile, runRecord, "utf8");
     writeFileSync(readyFile, runRecord, "utf8");
+    console.log("ready. Press Ctrl+C to stop");
   }
-  console.log("ready. Press Ctrl+C to stop");
-  const removeOwnMarker = (path: string): void => {
-    if (runRecord === null) return;
-    try {
-      if (readFileSync(path, "utf8") === runRecord) rmSync(path, { force: true });
-    } catch {
-      // Marker files may already be gone or replaced by a newer reset run.
-    }
-  };
-  const shutdown = (): void => void stopPtt().then(() => real.close()).finally(() => {
-    removeOwnMarker(pidFile);
-    removeOwnMarker(readyFile);
-    process.exit(0);
-  });
-  process.once("SIGINT", shutdown);
-  process.once("SIGTERM", shutdown);
 }
