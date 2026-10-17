@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Blip",
+  "version": "0.0.0",
+  "minimum_chrome_version": "116",
+  "key": "__EXTENSION_PUBLIC_KEY__",
+  "permissions": ["tabs", "scripting", "alarms", "storage", "webNavigation"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "exclude_matches": [
+        "http://127.0.0.1:7777/*",
+        "http://localhost:7777/*",
+        "http://127.0.0.1:5173/*",
+        "http://localhost:5173/*"
+      ],
+      "js": ["content.js"],
+      "all_frames": true,
+      "run_at": "document_idle",
+      "match_about_blank": true,
+      "match_origin_as_fallback": true
+    }
+  ]
+}
