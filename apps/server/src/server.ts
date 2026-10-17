@@ -18,6 +18,16 @@ import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "
 import { createGatePort } from "./act/gate-port";
 import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
 
+function clearPendingThroughVoiceGate(
+  ctx: GatedContext,
+  reason: "cancelled" | "page-changed",
+  code: string,
+): void {
+  const grantId = ctx.session.pendingGatedAction?.grantId;
+  if (grantId !== undefined && createVoiceGateAdapter(ctx).clear(grantId, reason)) return;
+  invalidateGatedAction(ctx, reason, code);
+}
+
 export type StartServerOptions = {
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
   port?: number;
@@ -211,17 +221,17 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     ptt: ({ message, hub: h, session: s }) => {
       if (message.type !== "ptt" || message.payload.state !== "start") return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
-      invalidateGatedAction(gatedContext, "cancelled", "push-to-talk-interrupted");
+      clearPendingThroughVoiceGate(gatedContext, "cancelled", "push-to-talk-interrupted");
     },
     control: ({ message, hub: h, session: s }) => {
       if (message.type !== "control") return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       if (message.payload.cmd === "stop") {
-        invalidateGatedAction(gatedContext, "cancelled", "stop-command");
+        clearPendingThroughVoiceGate(gatedContext, "cancelled", "stop-command");
         return sayStop(h, s);
       }
       if (message.payload.cmd === "repeat") {
-        invalidateGatedAction(gatedContext, "cancelled", "repeat-command");
+        clearPendingThroughVoiceGate(gatedContext, "cancelled", "repeat-command");
         return sayRepeat(h, s);
       }
       // reconnect-browser has nothing to reconnect yet.
@@ -234,7 +244,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     },
     "page.changed": ({ hub: h, session: s }) => {
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
-      invalidateGatedAction(gatedContext, "page-changed", "page-changed");
+      clearPendingThroughVoiceGate(gatedContext, "page-changed", "page-changed");
       s.stale = true;
       void refresher.request("refresh").then((result) => {
         if (result.ok) repairCoordinator?.schedulePending();

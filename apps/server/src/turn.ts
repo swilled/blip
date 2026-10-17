@@ -11,6 +11,7 @@ import type { ClaudeProvider } from "./brain/claude/provider";
 import type { Snapshot } from "@blip/protocol";
 import { executeUngated } from "./act/ungated";
 import { executeGatedAction, type GatedCommand } from "./act/gated";
+import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
 import { formatResultErrors, interpretCurrentErrors } from "./results/interpret";
 import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
@@ -267,6 +268,7 @@ async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promi
       return speak(hub, session, result.text, result.category);
     }
     case "request_action":
+      return createVoiceGateAdapter(ctx).arm({ actionId: intent.actionId });
     case "click_safe":
       return executeGatedAction(ctx, intent);
     default:

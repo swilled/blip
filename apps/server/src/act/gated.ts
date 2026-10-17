@@ -34,6 +34,11 @@ export type GatedContext = {
 
 export type GatedIntent = Extract<Intent, { type: "request_action" | "click_safe" }>;
 export type GatedCommand = GatedIntent | {
+  /** Internal voice adapter command. The Executor still owns read-back and grant creation. */
+  type: "voice-arm";
+  actionId: string;
+  expectedKind?: NonNullable<Session["model"]>["actions"][number]["kind"];
+} | {
   type: "confirmation";
   text: string;
   /** Present for the reducer protocol; legacy typed/recognized utterances use the server session. */
@@ -88,6 +93,7 @@ function buildReadback(model: NonNullable<Session["model"]>, targetLabel: string
 }
 
 type WireClearReason = "executed" | "cancelled" | "expired" | "page-changed" | "value-changed";
+export type GatedClearReason = Exclude<WireClearReason, "executed">;
 
 function finishPending(
   ctx: GatedContext,
@@ -115,6 +121,18 @@ export function invalidateGatedAction(
   const pending = ctx.session.pendingGatedAction;
   if (pending === null) return;
   finishPending(ctx, pending, code, { wireReason: reason });
+}
+
+/** Clear only the exact grant currently owned by the voice reducer. */
+export function clearVoiceGatedAction(
+  ctx: GatedContext,
+  grantId: string,
+  reason: GatedClearReason,
+): boolean {
+  const pending = ctx.session.pendingGatedAction;
+  if (pending === null || pending.grantId !== grantId) return false;
+  finishPending(ctx, pending, reason, { wireReason: reason });
+  return true;
 }
 
 function safeBinding(session: Session, targetId: string, kind: NonNullable<Session["model"]>["actions"][number]["kind"]) {
@@ -161,6 +179,11 @@ export async function executeGatedAction(ctx: GatedContext, command: GatedComman
   if (target === undefined) {
     audit("refused", "target-not-found", undefined, command.actionId);
     speak(ctx, MSG_ACTION_MISSING, "error");
+    return;
+  }
+  if (command.type === "voice-arm" && command.expectedKind !== undefined && target.kind !== command.expectedKind) {
+    audit("refused", "kind-mismatch", target.kind, target.id);
+    speak(ctx, MSG_NOT_GATED, "error");
     return;
   }
   if (!isGatedKind(target.kind) || phraseForKind(target.kind) === undefined) {
