@@ -84,7 +84,7 @@ Plans:
 - [ ] 01-05-PLAN.md — Broken-form model fixture, dialogue reducer, mock server on the frozen protocol
 - [ ] 01-06-PLAN.md — Voice status machine, speech queue with per-speak completion, window markup and styles
 - [ ] 01-07-PLAN.md — Protocol client, speak.done bridge, earcons, main wiring, Vite build
-- [ ] 01-08-PLAN.md — Listening/barge-in state, echo filter, STT wrapper, global PTT hook wrapper
+- [ ] 01-08-PLAN.md — Listening/barge-in state (forced ptt-only until GATE_08_PRESENT), echo filter, STT wrapper, global PTT hook wrapper (wave 6, after 07)
 - [ ] 01-09-PLAN.md — Talk controller, hold delivery (ptt.hold or sidecar), window wiring
 - [ ] 01-10-PLAN.md — Window launcher, in-process dev and real runners, manual PTT run
 - [ ] 01-11-PLAN.md — I1 hand-offs and real-server cutover run
