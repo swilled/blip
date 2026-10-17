@@ -18,6 +18,10 @@ export class Session {
   busy = false;
   /** The latest baseline form model built from a snapshot, or null before the first one. */
   model: FormModel | null = null;
+  /** The tab whose snapshot currently backs `model`. */
+  tabId: number | null = null;
+  /** Local time at which the currently cached model was accepted. */
+  modelAt: number | null = null;
   /** True when the cached model may no longer match the page (page.changed, new extension). */
   stale = true;
   /** The text of the last `speak` the server sent, for "repeat". */
@@ -33,6 +37,11 @@ export class Session {
     return this.#extensionConnected;
   }
 
+  /** Age of the cached model, or null before the first accepted snapshot. */
+  get modelAgeMs(): number | null {
+    return this.modelAt === null ? null : Math.max(0, Date.now() - this.modelAt);
+  }
+
   /**
    * Whenever an extension binds (even a replacement), whatever model we cached belongs to a previous
    * connection, so mark it stale. Setting false changes nothing else: the cached model stays readable
@@ -44,10 +53,12 @@ export class Session {
   }
 
   /** Build the baseline model for a fresh snapshot and refresh the page summary. */
-  applySnapshot(snapshot: Snapshot): FormModel {
+  applySnapshot(snapshot: Snapshot, options: { updateDialogue?: boolean } = {}): boolean {
     const model = buildBaselineFormModel(snapshot);
     const summary = summarizeFormModel(model);
     this.model = model;
+    this.tabId = snapshot.tabId;
+    this.modelAt = Date.now();
     this.stale = false;
     this.page = {
       url: model.url,
@@ -56,8 +67,8 @@ export class Session {
       fieldCount: summary.fieldCount,
       requiredEmpty: summary.requiredEmpty,
     };
-    this.dialogue = "ready";
-    return model;
+    if (options.updateDialogue !== false || this.dialogue === "no-page") this.dialogue = "ready";
+    return true;
   }
 
   statePayload(): StatePayload {

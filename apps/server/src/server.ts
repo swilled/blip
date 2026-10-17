@@ -6,6 +6,7 @@ import { createHub, type Handlers, type Hub } from "./hub/hub";
 import { hostAllowed, parseAllowedOrigin } from "./hub/guard";
 import { createStaticHandler, type StaticRoot } from "./hub/static";
 import { Session, type Brain } from "./session/session";
+import { createRefresher, type Refresher } from "./session/refresh";
 import { createFakeBrain } from "./brain/fake-brain";
 import { handleUtterance, sayRepeat, sayStop } from "./turn";
 
@@ -99,6 +100,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   });
 
   const snapshotTimeoutMs = options.snapshotTimeoutMs ?? 5000;
+  let refresher: Refresher;
 
   const fakeDelayMs = options.fakeDelayMs ?? 1500;
   const brain = createFakeBrain({
@@ -133,6 +135,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     },
     "page.changed": ({ session: s }) => {
       s.stale = true;
+      void refresher.request("refresh");
     },
   };
 
@@ -146,6 +149,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     ...(options.helloTimeoutMs !== undefined ? { helloTimeoutMs: options.helloTimeoutMs } : {}),
     handlers: { ...defaultHandlers, ...options.handlers },
   });
+
+  refresher = createRefresher({ hub, session, timeoutMs: snapshotTimeoutMs });
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
