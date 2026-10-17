@@ -10,18 +10,18 @@
 
 ### Voice I/O
 
-- [ ] **VOX-01**: User can press a global push-to-talk key that works while the form tab has focus
-- [ ] **VOX-02**: User's speech is transcribed per push-to-talk press (Web Speech API) and sent to the server as an utterance
-- [ ] **VOX-03**: User can type any command instead of speaking it
-- [ ] **VOX-04**: Blip speaks replies with its own voice, plays earcons (listening / thinking / blocked), and says "one moment" when a reply takes over ~1.5 s
-- [ ] **VOX-05**: The user can interrupt Blip by speaking (barge-in). The confirm phrase is never accepted while Blip is speaking or within 1 s after it stops, so Blip's own speech can't confirm a submit. Echo handling is settled by a Phase 1 spike.
-- [ ] **VOX-06**: User can say "stop" to cut off speech immediately
+- [x] **VOX-01**: User can press a global push-to-talk key that works while the form tab has focus
+- [x] **VOX-02**: User's speech is transcribed per push-to-talk press (Web Speech API) and sent to the server as an utterance
+- [x] **VOX-03**: User can type any command instead of speaking it
+- [x] **VOX-04**: Blip speaks replies with its own voice, plays earcons (listening / thinking / blocked), and says "one moment" when a reply takes over ~1.5 s
+- [ ] **VOX-05** (PARTIAL: interrupt by holding push-to-talk or typed "stop" works; voice barge-in is built but forced off until core merges GATE-08, because Spike F showed Blip hears itself): The user can interrupt Blip by speaking (barge-in). The confirm phrase is never accepted while Blip is speaking or within 1 s after it stops, so Blip's own speech can't confirm a submit. Echo handling is settled by a Phase 1 spike.
+- [x] **VOX-06**: User can say "stop" to cut off speech immediately
 - [ ] **VOX-07**: User can say "faster" / "slower" to change Blip's speech rate
 - [ ] **VOX-08**: In screen-reader mode, Blip's replies are spoken through NVDA (controller client DLL) instead of Blip's own voice, without double speech
 
 ### Dialogue & Commands
 
-- [ ] **DLG-01**: User can ask "what's here" and hear a short counts-first summary (form title, step, number of fields, number required)
+- [x] **DLG-01**: User can ask "what's here" and hear a short counts-first summary (form title, step, number of fields, number required)
 - [ ] **DLG-02**: User can say "read the form" and hear each field in page order with its label and whether it's required
 - [ ] **DLG-03**: User can dictate a value into the current or a named field and hear it echoed back
 - [ ] **DLG-04**: User can say "spell X" and hear the field's value spelled letter by letter
@@ -38,7 +38,7 @@
 
 ### Visibility
 
-- [ ] **VIS-01**: The voice window shows a live transcript of what the user said and what Blip said
+- [x] **VIS-01**: The voice window shows a live transcript of what the user said and what Blip said
 - [ ] **VIS-02**: While a gated action awaits confirmation, a prominent "BLOCKED — say 'submit …'" banner is shown
 
 ### Demo

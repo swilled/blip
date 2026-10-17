@@ -42,7 +42,7 @@ Both workstreams hit these same checkpoints. Each one also appears in the succes
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Spikes and Push-to-Talk Loop** - Risk spikes in hours 0–3, then a voice window that listens on a held key, talks back, and answers "what's here" at I1
+- [x] **Phase 1: Spikes and Push-to-Talk Loop** - Risk spikes in hours 0–3, then a voice window that listens on a held key, talks back, and answers "what's here" at I1 (completed 2026-10-17)
 - [ ] **Phase 2: Fill and Gated Submit on the Broken Form** - Read the form, dictate values, full read-back, distinct confirm phrase and BLOCKED banner, end to end at I2
 - [ ] **Phase 3: Full Command Set with Real Claude** - Profile fill, spell / change / undo, where am I, guessed-label and injection warnings, sensitive-field handoff, verified at I3
 - [ ] **Phase 4: NVDA Mode and Demo-Safe** - Screen-reader mode through NVDA, speech rate, the real public form end to end, fallback kit and backup video
@@ -77,17 +77,17 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 11 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — M0 sign-off: review frozen protocol, ptt.hold request, GATE-08 reliance, Effect/Event types, doc fixes
-- [ ] 01-02-PLAN.md — Package gate (uiohook-napi, koffi), voice workspaces, additive root config, PTT state machine
-- [ ] 01-03-PLAN.md — Spike tooling (spike page, log server, PTT/pin/NVDA scripts)
-- [ ] 01-04-PLAN.md — Run spikes A-F and record 01-SPIKE-DECISIONS.md
-- [ ] 01-05-PLAN.md — Broken-form model fixture, dialogue reducer, mock server on the frozen protocol
-- [ ] 01-06-PLAN.md — Voice status machine, speech queue with per-speak completion, window markup and styles
-- [ ] 01-07-PLAN.md — Protocol client, speak.done bridge, earcons, main wiring, Vite build
-- [ ] 01-08-PLAN.md — Listening/barge-in state (forced ptt-only until GATE_08_PRESENT), echo filter, STT wrapper, global PTT hook wrapper (wave 6, after 07)
-- [ ] 01-09-PLAN.md — Talk controller, hold delivery (ptt.hold or sidecar), window wiring
-- [ ] 01-10-PLAN.md — Window launcher, in-process dev and real runners, manual PTT run
-- [ ] 01-11-PLAN.md — I1 hand-offs and real-server cutover run
+- [x] 01-01-PLAN.md — M0 sign-off: review frozen protocol, ptt.hold request, GATE-08 reliance, Effect/Event types, doc fixes
+- [x] 01-02-PLAN.md — Package gate (uiohook-napi, koffi), voice workspaces, additive root config, PTT state machine
+- [x] 01-03-PLAN.md — Spike tooling (spike page, log server, PTT/pin/NVDA scripts)
+- [x] 01-04-PLAN.md — Run spikes A-F and record 01-SPIKE-DECISIONS.md
+- [x] 01-05-PLAN.md — Broken-form model fixture, dialogue reducer, mock server on the frozen protocol
+- [x] 01-06-PLAN.md — Voice status machine, speech queue with per-speak completion, window markup and styles
+- [x] 01-07-PLAN.md — Protocol client, speak.done bridge, earcons, main wiring, Vite build
+- [x] 01-08-PLAN.md — Listening/barge-in state (forced ptt-only until GATE_08_PRESENT), echo filter, STT wrapper, global PTT hook wrapper (wave 6, after 07)
+- [x] 01-09-PLAN.md — Talk controller, hold delivery (ptt.hold or sidecar), window wiring
+- [x] 01-10-PLAN.md — Window launcher, in-process dev and real runners, manual PTT run
+- [x] 01-11-PLAN.md — I1 hand-offs and real-server cutover run
 
 **UI hint**: yes
 
@@ -162,7 +162,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Spikes and Push-to-Talk Loop | 0/TBD | Not started | - |
+| 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
 | 2. Fill and Gated Submit on the Broken Form | 0/TBD | Not started | - |
 | 3. Full Command Set with Real Claude | 0/TBD | Not started | - |
 | 4. NVDA Mode and Demo-Safe | 0/TBD | Not started | - |
