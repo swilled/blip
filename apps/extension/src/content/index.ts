@@ -9,6 +9,14 @@ export { resolveElementId, walkDocument } from "./walk.js";
 type BlipContentGlobal = typeof globalThis & { __blipContentShellInstalled?: boolean };
 
 const isolatedWorld = globalThis as BlipContentGlobal;
+
+function targetFrameId(targetId: string, fallback: number): number {
+  const match = /^f(0|[1-9]\d*)e[1-9]\d*$/.exec(targetId);
+  if (!match) return fallback;
+  const frameId = Number(match[1]);
+  return Number.isSafeInteger(frameId) ? frameId : fallback;
+}
+
 if (isolatedWorld.__blipContentShellInstalled !== true) {
   isolatedWorld.__blipContentShellInstalled = true;
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -39,7 +47,9 @@ if (isolatedWorld.__blipContentShellInstalled !== true) {
         sendResponse(response);
         return;
       }
-      void executeAct(request.request, { frameId: sender.frameId ?? 0 }).then((result) => {
+      void executeAct(request.request, {
+        frameId: targetFrameId(request.request.action.targetId, sender.frameId ?? 0),
+      }).then((result) => {
         const response: ContentResponse = { t: "act.result", result };
         sendResponse(response);
       });

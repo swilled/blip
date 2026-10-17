@@ -10,6 +10,8 @@ describe("withSubmitEventsBlocked", () => {
     const form = document.querySelector("form")!;
     const select = document.querySelector("select")!;
     let submitCount = 0;
+    let documentCaptureCount = 0;
+    document.addEventListener("submit", () => { documentCaptureCount += 1; }, true);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       submitCount += 1;
@@ -26,9 +28,11 @@ describe("withSubmitEventsBlocked", () => {
       expectedKind: "select",
     }, { document })).resolves.toMatchObject({ ok: true, observedValue: "b" });
     expect(submitCount).toBe(0);
+    expect(documentCaptureCount).toBe(0);
 
     form.requestSubmit();
     expect(submitCount).toBe(1);
+    expect(documentCaptureCount).toBe(1);
   });
 
   it("keeps the capture listener until the last overlapping act scope exits", async () => {
