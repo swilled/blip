@@ -115,6 +115,19 @@ describe("service-worker act routing", () => {
     expect(reply.payload).toMatchObject({ actId: "act-1", ok: false, error: "stale-snapshot", newSnapshotVersion: 2 });
   });
 
+  it("refreshes after a frame reports stale and returns the latest version", async () => {
+    const setupState = setup(
+      [snapshot(1), snapshot(3)],
+      { t: "act.result", result: { actId: "act-1", ok: false, error: "stale-snapshot" } },
+    );
+
+    const reply = await dispatchAndRead(setupState.sent, setupState.socket, setupState.dependencies);
+
+    expect(setupState.sendAct).toHaveBeenCalledTimes(1);
+    expect(setupState.capture).toHaveBeenCalledTimes(2);
+    expect(reply.payload).toMatchObject({ actId: "act-1", ok: false, error: "stale-snapshot", newSnapshotVersion: 3 });
+  });
+
   it("redacts a post-write card-shaped result and refreshes to a sanitized snapshot", async () => {
     const sanitizedCard = field("f7e1", 7, { value: null, hasValue: true, sensitive: "card-number" });
     const setupState = setup(
