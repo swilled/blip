@@ -11,7 +11,7 @@ const ctx = (form: FormModel | null) => ({ form, now: 0 });
 function say(text: string, sttConfidence?: number): DialogueEvent {
   return {
     type: "utterance",
-    utterance: { utteranceId: "u1", text, source: "speech", ...(sttConfidence === undefined ? {} : { sttConfidence }) },
+    utterance: { utteranceId: "u1", text, source: "voice", ...(sttConfidence === undefined ? {} : { sttConfidence }) },
   };
 }
 
@@ -94,7 +94,7 @@ describe("dialogue field fills and page-sourced echoes", () => {
     expect(uncertain.effects).toEqual([speak("I'm not sure I heard that. Say it again.", "b1", "error")]);
   });
 
-  it.each(["yes", "yeah", "no", "ok", "okay", "cancel", "nevermind", "sure"])(
+  it.each(["yes", "yeah", "no", "ok", "okay", "cancel", "nevermind", "never mind", "sure"])(
     "does not type the control word %s into the current field",
     (word) => {
       const result = reduce({ ...initialState(), currentFieldId: "e1" }, say(word), ctx(survey));
@@ -104,19 +104,39 @@ describe("dialogue field fills and page-sourced echoes", () => {
 
   it("does not turn command-leading, long, fieldless, or select text into fills", () => {
     const current = { ...initialState(), currentFieldId: "e1" };
-    for (const text of ["fill this in", "read something", "submit now", "jane doe with extra words in a sentence that is too long"]) {
+    for (const text of [
+      "fill this in", "spell this", "change something", "undo that", "where is it", "what is this", "whats next",
+      "read something", "submit now", "go there", "open it", "click it", "press it", "tap it", "book it", "pay now",
+      "delete it", "send it", "help me", "how now", "why now", "can you", "could you",
+      "set an unknown field", "enter something", "type something", "my phone", "cancel this",
+      "jane doe with extra words in a sentence that is too long",
+    ]) {
       expect(reduce(current, say(text), ctx(survey)).effects.some((effect) => effect.kind === "fill")).toBe(false);
     }
     expect(reduce(initialState(), say("jane doe"), ctx(survey)).effects.some((effect) => effect.kind === "fill")).toBe(false);
+    const disabled = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e1" ? { ...field, disabled: true } : field),
+    });
+    expect(reduce(current, say("jane doe"), ctx(disabled)).effects.some((effect) => effect.kind === "fill")).toBe(false);
     expect(reduce({ ...initialState(), currentFieldId: "e4" }, say("purple"), ctx(survey)).effects).toEqual([
       { kind: "parseIntent", text: "purple" },
     ]);
+    expect(reduce(current, say("email"), ctx(survey)).effects[0]?.kind).toBe("speak");
   });
 
   it("routes bare select values through option values and does not fill them", () => {
     const result = reduce({ ...initialState(), currentFieldId: "e4" }, say("Web search"), ctx(survey));
     expect(result.effects).toEqual([{ kind: "select", fieldId: "e4", optionValue: "web" }]);
     expect(result.effects.some((effect) => effect.kind === "fill")).toBe(false);
+  });
+
+  it("still accepts a bare value for the last read field while earlier choices are pending", () => {
+    const read = reduce(initialState(), say("read the form"), ctx(survey));
+    const next = reduce(read.state, say("continue"), ctx(survey));
+    expect(next.state.pendingOptions).toEqual({ fieldId: "e4" });
+    const value = reduce(next.state, say("twenty five"), ctx(survey));
+    expect(value.effects).toEqual([{ kind: "fill", fieldId: "e6", value: "25" }]);
   });
 
   it("focuses sensitive fields without filling or storing their dictated value", () => {
@@ -175,7 +195,7 @@ describe("dialogue field fills and page-sourced echoes", () => {
     const sensitive = reduce({
       ...initialState(), pendingFill: { fieldId: "password", replaced: true }, mode: "awaiting-value",
     }, {
-      type: "act.result", op: "fill", fieldId: "password", ok: false, error: "sensitive-field", observedValue: null,
+      type: "act.result", op: "fill", fieldId: "password", ok: false, error: "sensitive-field", observedValue: "SENSITIVE-MARKER",
     }, ctx(secretForm));
     const speech = sensitive.effects.filter((effect) => effect.kind === "speak").map((effect) => effect.text).join(" ");
     expect(sensitive.effects.map((effect) => effect.kind)).toEqual(["focus", "speak"]);
