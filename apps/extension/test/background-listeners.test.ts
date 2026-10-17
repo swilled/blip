@@ -3,7 +3,11 @@ import { buildFrame } from '@blip/protocol';
 import { ensureConnected } from '../src/background/socket.js';
 import { injectExistingTabs } from '../src/background/inject.js';
 
-vi.mock('../src/background/socket.js', () => ({ ensureConnected: vi.fn() }));
+vi.mock('../src/background/socket.js', () => ({
+  ensureConnected: vi.fn(),
+  onSocketWelcome: vi.fn(() => vi.fn()),
+  sendPageChanged: vi.fn(() => true),
+}));
 vi.mock('../src/background/inject.js', () => ({ injectExistingTabs: vi.fn().mockResolvedValue(undefined) }));
 
 describe('background service-worker listeners', () => {
