@@ -104,7 +104,7 @@ Plans:
 - [x] 02-17-PLAN.md — Route acts through frames and prove privacy/auto-submit behavior in a browser
 - [x] 02-18-PLAN.md — Add the closed-shadow highlight and structural mutation observer
 - [x] 02-19-PLAN.md — Connect navigation/tab/structural changes to server freshness
-- [ ] 02-20-PLAN.md — Complete the browser matrix, voice-path privacy check and human-verify checklist
+- [x] 02-20-PLAN.md — Complete the browser matrix, voice-path privacy check and human-verify checklist
 **UI hint**: no
 
 ### Phase 3: Gated Submit and Result Reading
@@ -172,7 +172,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
-| 3. Gated Submit and Result Reading | 6/6 | Complete   | 2026-10-17 |
+| 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. Claude Brain and Label Repair | 0/TBD | Not started | - |
 | 5. Hostile Pages, Real Web and Freeze | 0/TBD | Not started | - |
 

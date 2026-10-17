@@ -104,6 +104,10 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 | Recheck value shape after every write and redact sensitive-like results before read-back | A card-shaped value must not cross into replies or server state just because the destination field was not classified beforehand | Good |
 | Block submit events throughout every extension act; treat readonly fields as disabled and check gated text in labels and link targets | Prevents autofill-triggered submission and unsafe click classification before Phase 3 grants are implemented | Good |
 
+| Exact per-kind confirmation phrases and one-use grants | Bind approval to the spoken action and fresh page state; consume before dispatch | Phase 3 verified |
+| Persistent submit barriers with an independent extension re-check | Prevent native submit paths and stale server approval from bypassing the Executor | Phase 3 verified |
+| Report outcomes only from a fresh accepted page snapshot | Click success is not page success; field errors and page errors remain distinct | Phase 3 verified |
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
@@ -122,4 +126,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-17 after Phase 2*
+*Last updated: 2026-10-17 after Phase 3*

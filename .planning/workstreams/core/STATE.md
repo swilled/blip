@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to plan
-stopped_at: Completed 03-06-PLAN.md
-last_updated: "2026-10-17T07:22:35.293Z"
+stopped_at: Phase 3 complete; ready to discuss Phase 4
+last_updated: "2026-10-17T07:27:37.817Z"
 progress:
   total_phases: 5
   completed_phases: 3
@@ -24,8 +24,8 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 
 ## Current Position
 
-Phase: 03 (gated-submit-and-result-reading) — COMPLETE
-Plan: 6 of 6 (all plans complete)
+Phase: 4
+Plan: Not started
 
 ## Performance Metrics
 
@@ -108,9 +108,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 1] M0 needs voice sign-off on `@blip/protocol` by ~h0.75; the `Effect` union (voice's `packages/dialogue`) must freeze soon after, because core's effect runner consumes it
-- [Phase 1] Decide the port at M0 (7777 vs 8787); always bind 127.0.0.1, never `localhost`
-- [Phase 2] Spike: React/Vue-safe fills, MV3 service-worker keepalive, shadow DOM/iframes
+- [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; voice's `Effect` union remains a cross-track integration item
 - [Phase 4] `outputFormat` + `startup()` combination unverified; run a 30-minute spike before h8 if possible (fallback: streaming session + `zod.safeParse` + one retry)
 - [Phase 5] Branded Chrome 137 removed `--load-extension`, so one-command startup needs a dedicated `--user-data-dir` profile with the extension loaded unpacked once
 - [Phase 5] The real public form is not picked yet (voice picks by ~h11, DEMO-03); Google Forms uses ARIA widgets, not native inputs
@@ -126,6 +124,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T07:22:35.286Z
-Stopped at: Completed 03-06-PLAN.md
+Last session: 2026-10-17T07:27:37.817Z
+Stopped at: Phase 3 complete; ready to discuss Phase 4
 Resume file: None
