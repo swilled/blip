@@ -71,7 +71,7 @@ describe("gated Executor read-back preparation", () => {
     }
 
     for (const field of fields.filter((candidate) => candidate.sensitive !== "none")) {
-      expect(spoken).toContain(`${field.label} is present`);
+      expect(spoken).toContain(`${field.label} is present and ${field.hasValue ? "has a value" : "has no value"}`);
       expect(spoken).not.toContain(field.value ?? "sensitive-value-sentinel");
     }
     expect(spoken).toContain(rig.action.label);
@@ -89,6 +89,29 @@ describe("gated Executor read-back preparation", () => {
     expect(rig.session.pendingGatedAction?.speechCompletedAt).toBeNull();
     handleGatedSpeakDone(rig.session, { speakId, interrupted: true }, clock);
     expect(rig.session.pendingGatedAction).toBeNull();
-    expect(rig.session.grants.size).toBe(0);
+    expect(rig.outgoing.some((message) => message.type === "confirm.armed")).toBe(false);
+  });
+
+  it("clears the pending read-back when the page snapshot or extension connection changes", async () => {
+    const stale = preparationRig();
+    await executeGatedAction(
+      { hub: stale.hub, session: stale.session, refresher: stale.refresher, clock: () => 10_000 },
+      { type: "request_action", actionId: stale.action.id },
+    );
+    stale.session.applySnapshot({
+      ...stale.snapshot,
+      version: stale.snapshot.version + 1,
+      capturedAt: stale.snapshot.capturedAt + 1,
+    });
+    expect(stale.session.pendingGatedAction).toBeNull();
+
+    const disconnected = preparationRig();
+    await executeGatedAction(
+      { hub: disconnected.hub, session: disconnected.session, refresher: disconnected.refresher },
+      { type: "request_action", actionId: disconnected.action.id },
+    );
+    disconnected.session.extensionConnected = false;
+    expect(disconnected.session.pendingGatedAction).toBeNull();
+    expect(disconnected.outgoing.some((message) => message.type === "act.request")).toBe(false);
   });
 });

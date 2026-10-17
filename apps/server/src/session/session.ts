@@ -1,9 +1,27 @@
-import { newId, type DialogueStateName, type FormModel, type Snapshot, type StatePayload } from "@blip/protocol";
+import { newId, type ActionKind, type DialogueStateName, type FormModel, type Snapshot, type StatePayload } from "@blip/protocol";
+import { createGrantStore, type GrantBinding, type GrantStore } from "../act/grants";
 import { buildBaselineFormModel, summarizeFormModel } from "../baseline";
 
 export const SERVER_VERSION = "0.1.0";
 
 export type Brain = "claude" | "fake";
+
+/** The pending read-back contains only the grant fingerprint inputs; sensitive field values are null. */
+export type PendingGatedAction = {
+  targetId: string;
+  kind: ActionKind;
+  actionLabel: string;
+  phrase: string;
+  tabId: number;
+  url: string;
+  snapshotVersion: number;
+  speakId: string;
+  speechCompletedAt: number | null;
+  readyAt: number | null;
+  binding: GrantBinding;
+  grantId?: string;
+  expiresAt?: number;
+};
 
 /**
  * Per-process session state the hub reports to the voice UI. The turn handler mutates `dialogue`,
@@ -26,12 +44,17 @@ export class Session {
   stale = true;
   /** The text of the last `speak` the server sent, for "repeat". */
   lastSpoken: string | null = null;
+  /** Confirmation state is local to this voice session and never comes from an Intent. */
+  pendingGatedAction: PendingGatedAction | null = null;
+  /** Existing server-only one-use grant store from the Phase 3 foundation. */
+  readonly grants: GrantStore;
 
   #extensionConnected = false;
   #snapshotOrder: { tabId: number; version: number; capturedAt: number } | null = null;
 
-  constructor(brain: Brain) {
+  constructor(brain: Brain, clock: () => number = Date.now) {
     this.brain = brain;
+    this.grants = createGrantStore(clock);
   }
 
   get extensionConnected(): boolean {
@@ -50,10 +73,21 @@ export class Session {
    */
   set extensionConnected(value: boolean) {
     if (value) {
+      this.clearPendingGatedAction();
       this.stale = true;
       this.#snapshotOrder = null;
+    } else {
+      this.clearPendingGatedAction();
     }
     this.#extensionConnected = value;
+  }
+
+  /** Drop any pending confirmation and its inaccessible one-use grant. */
+  clearPendingGatedAction(): PendingGatedAction | null {
+    const pending = this.pendingGatedAction;
+    if (pending?.grantId !== undefined) this.grants.clear(pending.grantId);
+    this.pendingGatedAction = null;
+    return pending;
   }
 
   /** Build the baseline model for a fresh snapshot and refresh the page summary. */
@@ -69,6 +103,15 @@ export class Session {
     }
 
     const model = buildBaselineFormModel(snapshot);
+    const pending = this.pendingGatedAction;
+    if (pending !== null && (
+      snapshot.tabId !== pending.tabId ||
+      model.url !== pending.url ||
+      model.snapshotVersion !== pending.snapshotVersion ||
+      !model.actions.some((action) => action.id === pending.targetId && action.kind === pending.kind)
+    )) {
+      this.clearPendingGatedAction();
+    }
     const summary = summarizeFormModel(model);
     this.model = model;
     this.tabId = snapshot.tabId;
