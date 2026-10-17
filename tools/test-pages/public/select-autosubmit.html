@@ -10,9 +10,9 @@
     <main>
       <h1>Select auto-submit regression fixture</h1>
       <p>Changing the select calls requestSubmit from its native change handler.</p>
-      <form id="select-form">
+      <form id="select-form" action="/__submit-sink" method="get">
         <label for="room-type">Room type</label>
-        <select id="room-type" name="room" onchange="this.form.requestSubmit()">
+        <select id="room-type" name="room">
           <option value="">Choose a room</option>
           <option value="standard">Standard</option>
           <option value="deluxe">Deluxe</option>
@@ -21,10 +21,16 @@
       </form>
     </main>
     <script>
-      document.getElementById("select-form").addEventListener("submit", (event) => {
+      const form = document.getElementById("select-form");
+      const select = document.getElementById("room-type");
+      select.addEventListener("change", () => {
+        window.blipReport("direct-submit-attempt", {});
+        form.submit();
+        form.requestSubmit();
+      });
+      form.addEventListener("submit", (event) => {
         event.preventDefault();
-        const select = document.getElementById("room-type");
-        window.blipReport("select-autosubmit", { form: "select-form", room: select.value });
+        window.blipReport("select-autosubmit", { form: "select-form" });
       });
     </script>
   </body>
