@@ -11,6 +11,8 @@ export const LAYOUT: Layout = "pinned";
 export const WINDOW_TITLE = "Blip";
 export const WINDOW_WIDTH = 420;
 export const WINDOW_HEIGHT = 720;
+/** How often the topmost flag is re-applied after launch. */
+export const REPIN_MS = 1500;
 
 export type Layout = "pinned" | "docked";
 
@@ -65,6 +67,8 @@ export interface LaunchOptions {
   chromePath?: string;
   screenWidth?: number;
   log?: (line: string) => void;
+  /** Re-apply the pin this often (ms) so the window returns to the front after you click elsewhere. 0 disables. */
+  repinMs?: number;
 }
 
 export async function launchVoiceWindow(opts: LaunchOptions = {}): Promise<void> {
@@ -85,6 +89,15 @@ export async function launchVoiceWindow(opts: LaunchOptions = {}): Promise<void>
   const pin = opts.pin ?? (async (t: string) => (await import("../../../apps/server/src/voice/pin-topmost")).pinTopmost(t));
   const r = await pin(WINDOW_TITLE);
   log(r.ok ? "blip window: pinned on top" : `blip window: not pinned (${r.error ?? "SetWindowPos failed"}); leaving it docked`);
+  // Keep it on top: re-assert the topmost flag on a timer. SetWindowPos uses SWP_NOACTIVATE, so this raises the
+  // window without taking keyboard focus away from the form the user is typing in.
+  const repinMs = opts.repinMs ?? REPIN_MS;
+  if (r.ok && repinMs > 0) {
+    const timer = setInterval(() => {
+      void pin(WINDOW_TITLE).catch(() => undefined);
+    }, repinMs);
+    timer.unref();
+  }
 }
 
 const entry = process.argv[1]?.replace(/\\/g, "/");

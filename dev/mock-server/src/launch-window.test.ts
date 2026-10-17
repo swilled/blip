@@ -63,3 +63,31 @@ describe("launchVoiceWindow", () => {
     expect(WINDOW_TITLE).toBe("Blip");
   });
 });
+
+describe("keeping the window on top", () => {
+  it("5: re-applies the pin on a timer, and not at all when repinMs is 0 or the first pin failed", async () => {
+    vi.useFakeTimers();
+    try {
+      const mk = () => ({ unref: vi.fn() });
+      const spawn = vi.fn(() => mk());
+      const pin = vi.fn(async () => ({ ok: true }));
+      await launchVoiceWindow({ layout: "pinned", spawn, pin, chromePath: "c.exe", screenWidth: 1920, repinMs: 1000, log: () => {} });
+      expect(pin).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(3100);
+      expect(pin.mock.calls.length).toBeGreaterThanOrEqual(4);
+      expect(pin).toHaveBeenLastCalledWith(WINDOW_TITLE);
+
+      const pinOff = vi.fn(async () => ({ ok: true }));
+      await launchVoiceWindow({ layout: "pinned", spawn, pin: pinOff, chromePath: "c.exe", screenWidth: 1920, repinMs: 0, log: () => {} });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(pinOff).toHaveBeenCalledTimes(1);
+
+      const pinFail = vi.fn(async () => ({ ok: false, error: "window not found" }));
+      await launchVoiceWindow({ layout: "pinned", spawn, pin: pinFail, chromePath: "c.exe", screenWidth: 1920, repinMs: 1000, log: () => {} });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(pinFail).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
