@@ -141,7 +141,7 @@ Plans:
   4. On the broken demo form, unlabeled and placeholder-only fields get repaired labels in the background (marked model-sourced, with a confidence) without delaying the instant baseline answer; patches touch only existing ids and never kind, value or sensitivity; a second visit loads the repair from cache instantly.
 
 **Research**: A bounded local `outputFormat` + `startup()` spike reported one init tool for both roles, even with `tools: []` and `disallowedTools: ["*"]`; it stopped before any model prompt, so the structured-output path was not selected. Use the D-01 streaming/Zod fallback with explicit deny-all and a mandatory empty-tool init check; live streaming initialization remains unverified. Watch subscription quota (Haiku-class intents, Sonnet-class repair, disk cache). Apply the roughly 8k-token snapshot trim here, at the model-prompt boundary; Phase 2 only caps the extension wire snapshot at 250 elements.
-**Plans**: 9/9 complete. Offline verifier coverage is complete; Phase 4 remains in progress because production SDK initialization, live intent/recovery, and real-model repair/cache evidence remain pending (see `04-VERIFICATION.md`).
+**Plans**: 9/10 complete. Plan 04-10 closes the streaming initialization deadlock hypothesis under a fixed, value-free bootstrap exception and one newly authorized bounded live check; Phase 4 remains in progress until verification evidence closes its remaining gaps (see `04-VERIFICATION.md`).
 
 Plans:
 - [x] 04-01-PLAN.md — Approve the exact SDK pin and add a bounded, gated SDK lifecycle spike
@@ -153,6 +153,7 @@ Plans:
 - [x] 04-07-PLAN.md — Repair labels asynchronously and cache validated value-free patches
 - [x] 04-08-PLAN.md — Close Phase 4 live SDK verification gaps behind a fresh approval gate
 - [x] 04-09-PLAN.md — Complete the approved-mode synthetic verifier behind the existing approval gate
+- [ ] 04-10-PLAN.md — Resolve the SDK init gate with a capped bootstrap and one authorized synthetic live check
 **UI hint**: no
 
 ### Phase 5: Hostile Pages, Real Web and Freeze
