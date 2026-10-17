@@ -50,6 +50,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Spikes and Push-to-Talk Loop
+
 **Goal**: The user can hold a key while the form tab is focused, speak or type a command, and hear Blip answer in its own voice, with the transcript on screen. This works first against the voice track's own mock server, then against the real server at I1.
 **Mode:** mvp
 **Depends on**: Nothing (first phase; runs in parallel with core's protocol work)
@@ -74,6 +75,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   - uiohook-napi fails: use the `chrome.commands` toggle (press to start, press to stop).
   - NVDA DLL fails: route speech to an in-page live region through the extension's `announce` (decided in Phase 4).
 - Typed input is the safety net everywhere.
+
 **Plans**: 11 plans
 
 Plans:
@@ -92,6 +94,7 @@ Plans:
 **UI hint**: yes
 
 ### Phase 2: Fill and Gated Submit on the Broken Form
+
 **Goal**: On the self-hosted broken survey form, the user can hear the fields, fill them by dictation, hear a full read-back, and submit only by saying the distinct phrase. A bare "yes" never submits. This runs end to end at I2.
 **Mode:** mvp
 **Depends on**: Phase 1
@@ -108,19 +111,22 @@ Plans:
      - While Blip waits, the voice window shows a prominent "BLOCKED — say 'submit survey'" banner and the blocked earcon plays.
      - A bare "yes" is refused and the banner stays.
      - Only "submit survey" submits.
-**Plans**: 7 plans
+
+**Plans**: 1/7 plans executed
 
 Plans:
-- [ ] 02-01-PLAN.md — Broken survey form page, voice-owned snapshot and generated survey FormModel (DEMO-01)
+- [x] 02-01-PLAN.md — Broken survey form page, voice-owned snapshot and generated survey FormModel (DEMO-01)
 - [ ] 02-02-PLAN.md — Pure helpers: spoken-text normalizers, field/option resolver, phrase matcher, templates
 - [ ] 02-03-PLAN.md — BLOCKED banner model, renderer and window wiring (VIS-02)
 - [ ] 02-04-PLAN.md — Reducer contracts plus read-the-form, option pick and dictation fill with page-sourced echo
 - [ ] 02-05-PLAN.md — Read-back, submit, arm-after-read-back, armed-mode refusal, seeded invariant test
 - [ ] 02-06-PLAN.md — Dialogue runner, fail-closed stub gate, run-real wiring, end-to-end test, HO-8 hand-offs
 - [ ] 02-07-PLAN.md — One-command reset, demo profile, human I2 run
+
 **UI hint**: yes
 
 ### Phase 3: Full Command Set with Real Claude
+
 **Goal**: With real Claude in the loop, the user can fill from their profile, inspect and correct what Blip did, and always hear Blip be honest about guessed labels, sensitive fields and instructions planted in the page.
 **Mode:** mvp
 **Depends on**: Phase 2
@@ -139,9 +145,11 @@ Plans:
      - Opening the seeded injection page makes Blip speak the injection warning before anything else.
      - The confirm gate never arms from page text.
      - The team-owned public form (created by ~h12 so core can test it) can be described and filled by voice.
+
 **Plans**: TBD
 
 ### Phase 4: NVDA Mode and Demo-Safe
+
 **Goal**: Blip can be demoed live alongside NVDA and on a real public form, and the demo survives a failure of the voice input, the network or the live site.
 **Mode:** mvp
 **Depends on**: Phase 3
@@ -162,6 +170,7 @@ Plans:
 - Double-speech risk: NVDA's own focus announcements can overlap `speakText`. Tune this with the form tab focused.
 - If the NVDA path isn't solid by ~h30, demo in agent-voice mode and show NVDA only in the opening hook.
 - The demo script follows the four beats in research/FEATURES.md: hook, repair, fill, then the gate (bare "yes" blocked, injection ignored, phrase submits).
+
 **Plans**: TBD
 
 ## Progress
@@ -172,6 +181,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
-| 2. Fill and Gated Submit on the Broken Form | 0/7 | Planned | - |
+| 2. Fill and Gated Submit on the Broken Form | 1/7 | In Progress | - |
 | 3. Full Command Set with Real Claude | 0/TBD | Not started | - |
 | 4. NVDA Mode and Demo-Safe | 0/TBD | Not started | - |
