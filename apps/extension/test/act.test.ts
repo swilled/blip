@@ -241,6 +241,33 @@ describe("executeAct live safety checks", () => {
     expect(isPersistentSubmitGuardInstalled(document)).toBe(true);
   });
 
+  it("does not authorize a submit while dispatching a granted non-form click", async () => {
+    document.body.innerHTML = `
+      <form id="target"><button id="submit">Submit</button></form>
+      <a id="external" href="https://external.example/leave">Leave this site</a>
+    `;
+    const frame = capture();
+    const link = frame.elements.find((item) => item.tag === "a")!;
+    const form = document.querySelector<HTMLFormElement>("#target")!;
+    const submitter = document.querySelector<HTMLButtonElement>("#submit")!;
+    const submit = vi.fn((event: Event) => event.preventDefault());
+    form.addEventListener("submit", submit);
+    document.querySelector("#external")!.addEventListener("click", (event) => {
+      event.preventDefault();
+      form.requestSubmit(submitter);
+    });
+
+    await expect(executeAct(request(
+      link.id,
+      { op: "click", targetId: link.id },
+      "navigate-cross-domain",
+      0,
+      { grantId: "grant-1", kind: "navigate-cross-domain" },
+    ))).resolves.toMatchObject({ ok: true, liveKind: "navigate-cross-domain" });
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
   it("does not authorize a submit from an ungated select change", async () => {
     document.body.innerHTML = `
       <form id="target">

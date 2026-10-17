@@ -6,10 +6,13 @@ import { fingerprintOf } from "./fingerprint.js";
 import { actionFactsOf, resolveElementId, walkDocument } from "./walk.js";
 import { isSsn, luhnValid, safeValueOf, type SafeValue, type Sensitivity } from "./sensitive.js";
 import { isDisabled } from "./visibility.js";
-import { withSubmitEventsBlocked } from "./submit-guard.js";
+import { beginOneSubmitAllowance, withSubmitEventsBlocked } from "./submit-guard.js";
 import { getHighlightOverlay } from "./overlay.js";
 
 const snapshotFingerprints = new WeakMap<Document, Map<string, string>>();
+const GATED_ACTION_KINDS: ReadonlySet<ActionKind> = new Set([
+  "submit", "pay", "delete", "send", "navigate-cross-domain",
+]);
 
 /** Save only structural fingerprints for fields included in the last frame snapshot. */
 export function rememberSnapshotFingerprints(document: Document, elements: readonly RawElement[]): void {
@@ -71,6 +74,15 @@ function liveKind(element: Element, raw: RawElement, pageUrl: string): ActionKin
     role: raw.role,
     ...(fieldType ? { fieldType } : {}),
   }).kind;
+}
+
+function hasValidGate(request: ActRequest, liveKind: ActionKind): boolean {
+  const needsGate = request.action.op === "click" && GATED_ACTION_KINDS.has(liveKind);
+  if (!needsGate) return request.gate === undefined;
+  return request.gate !== undefined &&
+    request.gate.grantId.trim().length > 0 &&
+    request.gate.kind === request.expectedKind &&
+    request.gate.kind === liveKind;
 }
 
 function fieldSensitivity(element: Element, raw: RawElement): Sensitivity {
@@ -136,6 +148,7 @@ async function executeResolved(
   const kind = liveKind(element, raw, document.location.href);
   const liveExtra: Partial<ActResult> = { liveKind: kind };
   if (kind !== request.expectedKind) return failure(actId, "kind-mismatch", liveExtra);
+  if (!hasValidGate(request, kind)) return failure(actId, "gate-required", liveExtra);
 
   try {
     switch (action.op) {
@@ -204,10 +217,23 @@ async function executeResolved(
       }
       case "click": {
         if (raw.category !== "action") return failure(actId, "kind-mismatch", liveExtra);
-        if (kind !== "click-safe") return failure(actId, "gate-required", liveExtra);
         const clickable = element as Element & { click?: () => void };
         if (typeof clickable.click !== "function") return failure(actId, "exception", { ...liveExtra, detail: "not clickable" });
-        clickable.click();
+        if (kind === "click-safe") {
+          clickable.click();
+          return success(actId, liveExtra);
+        }
+
+        let cleanup: (() => void) | undefined;
+        if ((element.localName === "button" || element.localName === "input") && "form" in element) {
+          const submitter = element as HTMLButtonElement | HTMLInputElement;
+          if (submitter.form) cleanup = beginOneSubmitAllowance(submitter.form, submitter);
+        }
+        try {
+          clickable.click();
+        } finally {
+          cleanup?.();
+        }
         return success(actId, liveExtra);
       }
     }
