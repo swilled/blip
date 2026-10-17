@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="21" failures="20" errors="0" time="0.0256188">
+    <testsuite name="packages/dialogue/src/submit.test.ts" timestamp="2026-10-17T05:19:57.143Z" hostname="LAPTOP-OAMU4RG3" tests="21" failures="20" errors="0" skipped="0" time="0.0256188">
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; speaks the full read-back for read back" time="0.0090258">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     &quot;category&quot;: &quot;readback&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b1&quot;,
+-     &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
++     &quot;kind&quot;: &quot;parseIntent&quot;,
++     &quot;text&quot;: &quot;read back&quot;,
+    },
+  ]
+
+ ❯ src/submit.test.ts:45:28
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; speaks the full read-back for read it back" time="0.0011725">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     &quot;category&quot;: &quot;readback&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b1&quot;,
+-     &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
++     &quot;kind&quot;: &quot;parseIntent&quot;,
++     &quot;text&quot;: &quot;read it back&quot;,
+    },
+  ]
+
+ ❯ src/submit.test.ts:45:28
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; speaks the full read-back for read everything back" time="0.0008135">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     &quot;category&quot;: &quot;readback&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b1&quot;,
+-     &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
++     &quot;kind&quot;: &quot;parseIntent&quot;,
++     &quot;text&quot;: &quot;read everything back&quot;,
+    },
+  ]
+
+ ❯ src/submit.test.ts:45:28
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; answers when there is no page, gated action, or unambiguous primary action" time="0.0006845">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     &quot;category&quot;: &quot;error&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b1&quot;,
+-     &quot;text&quot;: &quot;I can&apos;t see a page yet.&quot;,
++     &quot;kind&quot;: &quot;parseIntent&quot;,
++     &quot;text&quot;: &quot;submit&quot;,
+    },
+  ]
+
+ ❯ src/submit.test.ts:58:70
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; explains required fields and never arms when submit is requested too early" time="0.0007326">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     &quot;category&quot;: &quot;error&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b1&quot;,
+-     &quot;text&quot;: &quot;I can&apos;t submit yet. probably Email, unlabeled field 3 and probably How did you hear about us are required and empty.&quot;,
++     &quot;kind&quot;: &quot;parseIntent&quot;,
++     &quot;text&quot;: &quot;submit the form&quot;,
+    },
+  ]
+
+ ❯ src/submit.test.ts:81:28
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; submit waits for the uninterrupted read-back before arming" time="0.0006772">
+            <failure message="expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]" type="AssertionError">
+AssertionError: expected [ { kind: &apos;parseIntent&apos;, …(1) } ] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]
+
+- Expected
++ Received
+
+  [
+    {
+-     &quot;category&quot;: &quot;readback&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b1&quot;,
+-     &quot;text&quot;: &quot;Reading back 6 fields. probably Your name, empty, optional. probably Email, fictional value. unlabeled field 3, fictional value. probably How did you hear about us, Friend. probably Satisfaction, empty, optional. probably Age, empty, optional. All required fields are filled.&quot;,
++     &quot;kind&quot;: &quot;parseIntent&quot;,
++     &quot;text&quot;: &quot;submit survey&quot;,
+    },
+  ]
+
+ ❯ src/submit.test.ts:91:29
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; does not arm from an earlier or unknown speak.done" time="0.0006895">
+            <failure message="expected undefined to be &apos;b2&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected undefined to be &apos;b2&apos; // Object.is equality
+
+- Expected:
+&quot;b2&quot;
+
++ Received:
+undefined
+
+ ❯ src/submit.test.ts:123:24
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; does not arm after an interrupted read-back" time="0.0005518">
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; abandons a read-back if the form digest changed before speech completed" time="0.0020955">
+            <failure message="expected [] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]" type="AssertionError">
+AssertionError: expected [] to deeply equal [ { kind: &apos;speak&apos;, …(4) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     &quot;category&quot;: &quot;error&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b2&quot;,
+-     &quot;text&quot;: &quot;The form changed, so I&apos;m not submitting. Say submit when you&apos;re ready.&quot;,
+-   },
+- ]
++ []
+
+ ❯ src/submit.test.ts:145:28
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; arms only the primary gated action when there are multiple gated actions" time="0.0006626">
+            <failure message="submit did not create a read-back speak" type="Error">
+Error: submit did not create a read-back speak
+ ❯ armEffect src/submit.test.ts:38:18
+ ❯ src/submit.test.ts:162:20
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; uses the only gated action when none is marked primary" time="0.0004493">
+            <failure message="submit did not create a read-back speak" type="Error">
+Error: submit did not create a read-back speak
+ ❯ armEffect src/submit.test.ts:38:18
+ ❯ src/submit.test.ts:180:20
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; accepts confirm.armed only after a read-back arm request" time="0.0022885">
+            <failure message="expected &apos;ready&apos; to be &apos;awaiting-confirm&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;ready&apos; to be &apos;awaiting-confirm&apos; // Object.is equality
+
+Expected: &quot;awaiting-confirm&quot;
+Received: &quot;ready&quot;
+
+ ❯ src/submit.test.ts:196:30
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; clears a confirm grant returned outside reading-back" time="0.0008844">
+            <failure message="expected { …(2) } to deeply equal { …(2) }" type="AssertionError">
+AssertionError: expected { …(2) } to deeply equal { …(2) }
+
+- Expected
++ Received
+
+@@ -1,13 +1,7 @@
+  {
+-   &quot;effects&quot;: [
+-     {
+-       &quot;grantId&quot;: &quot;g1&quot;,
+-       &quot;kind&quot;: &quot;clearConfirm&quot;,
+-       &quot;reason&quot;: &quot;cancelled&quot;,
+-     },
+-   ],
++   &quot;effects&quot;: [],
+    &quot;state&quot;: {
+      &quot;confirm&quot;: null,
+      &quot;currentFieldId&quot;: null,
+      &quot;lastDoneAt&quot;: null,
+      &quot;lastSpoken&quot;: null,
+
+ ❯ src/submit.test.ts:212:20
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; resets on confirm.refused and ignores a cleared event for another grant" time="0.0004821">
+            <failure message="expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality
+
+Expected: &quot;ready&quot;
+Received: &quot;awaiting-confirm&quot;
+
+ ❯ src/submit.test.ts:225:32
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (expired)" time="0.0004192">
+            <failure message="expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality
+
+Expected: &quot;ready&quot;
+Received: &quot;awaiting-confirm&quot;
+
+ ❯ src/submit.test.ts:248:31
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (page-changed)" time="0.0004571">
+            <failure message="expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality
+
+Expected: &quot;ready&quot;
+Received: &quot;awaiting-confirm&quot;
+
+ ❯ src/submit.test.ts:248:31
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (value-changed)" time="0.0003364">
+            <failure message="expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality
+
+Expected: &quot;ready&quot;
+Received: &quot;awaiting-confirm&quot;
+
+ ❯ src/submit.test.ts:248:31
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (executed)" time="0.0003432">
+            <failure message="expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality
+
+Expected: &quot;ready&quot;
+Received: &quot;awaiting-confirm&quot;
+
+ ❯ src/submit.test.ts:248:31
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; handles a matching cleared grant (cancelled)" time="0.0003088">
+            <failure message="expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;awaiting-confirm&apos; to be &apos;ready&apos; // Object.is equality
+
+Expected: &quot;ready&quot;
+Received: &quot;awaiting-confirm&quot;
+
+ ❯ src/submit.test.ts:248:31
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; clears an awaiting grant if the live form digest changes" time="0.0007044">
+            <failure message="expected [] to deeply equal [ Array(2) ]" type="AssertionError">
+AssertionError: expected [] to deeply equal [ Array(2) ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     &quot;grantId&quot;: &quot;g1&quot;,
+-     &quot;kind&quot;: &quot;clearConfirm&quot;,
+-     &quot;reason&quot;: &quot;value-changed&quot;,
+-   },
+-   {
+-     &quot;category&quot;: &quot;error&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b1&quot;,
+-     &quot;text&quot;: &quot;The form changed, so I&apos;m not submitting. Say submit when you&apos;re ready.&quot;,
+-   },
+- ]
++ []
+
+ ❯ src/submit.test.ts:270:28
+            </failure>
+        </testcase>
+        <testcase classname="packages/dialogue/src/submit.test.ts" name="submit and read-back flow &gt; resolves gated outcomes fail-closed" time="0.0004618">
+            <failure message="expected [] to deeply equal [ { kind: &apos;speak&apos;, …(4) }, …(1) ]" type="AssertionError">
+AssertionError: expected [] to deeply equal [ { kind: &apos;speak&apos;, …(4) }, …(1) ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     &quot;category&quot;: &quot;error&quot;,
+-     &quot;interruptible&quot;: true,
+-     &quot;kind&quot;: &quot;speak&quot;,
+-     &quot;speakId&quot;: &quot;b1&quot;,
+-     &quot;text&quot;: &quot;Blocked. The safety gate is not connected, so nothing was submitted.&quot;,
+-   },
+-   {
+-     &quot;kind&quot;: &quot;earcon&quot;,
+-     &quot;name&quot;: &quot;error&quot;,
+-   },
+- ]
++ []
+
+ ❯ src/submit.test.ts:280:34
+            </failure>
+        </testcase>
+    </testsuite>
+</testsuites>
