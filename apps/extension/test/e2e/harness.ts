@@ -5,7 +5,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { buildExtension } from "../../build.js";
 import { resolveBrowser } from "../../../../scripts/browser.js";
-import { buildFrame, EXTENSION_ID, extensionOrigin, parseFrame, type ActRequest, type FormModel, type Message, type Snapshot as SnapshotData, type StatePayload } from "@blip/protocol";
+import { buildFrame, EXTENSION_ID, extensionOrigin, newId, parseFrame, type ActRequest, type FormModel, type Message, type Snapshot as SnapshotData, type StatePayload } from "@blip/protocol";
 import { WebSocket as VoiceWebSocket } from "ws";
 import type { RunningServer } from "../../../server/src/server.js";
 import { startTestPages, type TestPageReport, type TestPagesServer } from "../../../../tools/test-pages/serve.js";
@@ -45,6 +45,7 @@ function observeModel(model: FormModel | null): ModelObservation | null {
 async function connectVoiceStateStream(
   running: RunningServer,
   onState: (payload: StatePayload) => void,
+  onFrame: (message: Message) => void,
 ): Promise<VoiceWebSocket> {
   const voice = new VoiceWebSocket(running.url, { origin: `http://127.0.0.1:${running.port}` });
   const hello = buildFrame("hello", { role: "voice", clientVersion: "test", protocolVersion: 1 });
@@ -54,6 +55,7 @@ async function connectVoiceStateStream(
     voice.on("message", (data) => {
       const parsed = parseFrame(Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer));
       if (!parsed.ok) return;
+      onFrame(parsed.message);
       if (parsed.message.type === "welcome" && parsed.message.replyTo === hello.id) {
         clearTimeout(timeout);
         resolve(voice);
@@ -75,6 +77,11 @@ async function stopOwnedBrowser(child: ChildProcess): Promise<void> {
 
 export interface BrowserFixtureSession {
   pages: TestPagesServer;
+  voiceClient: VoiceClient;
+  actResults(): ActResultObservation[];
+  serverLogs(): string[];
+  lastSpoken(): string | null;
+  sessionField(label: string): SessionFieldObservation | null;
   stateEvents(): StateObservation[];
   model(): ModelObservation | null;
   pageChangedCount(): number;
@@ -85,6 +92,41 @@ export interface BrowserFixtureSession {
   reports(pagePath: string): Promise<TestPageReport[]>;
   evaluateInPage(expression: string): Promise<unknown>;
   close(): Promise<void>;
+}
+
+export type VoiceClient = {
+  /** Send one real voice-role utterance and collect inbound frames through its idle state push. */
+  sendUtterance(text: string, timeoutMs?: number): Promise<Message[]>;
+  /** All inbound frames seen on the voice-role socket, including state, speak and error frames. */
+  frames(): Message[];
+};
+
+type VoiceClientRig = { socket: VoiceWebSocket; frames: Message[] };
+type ActResultObservation = Extract<Message, { type: "act.result" }>['payload'];
+type SessionFieldObservation = { label: string; sensitive: string; value: string | null; hasValue: boolean };
+
+/** A voice-role client with the same speak completion behavior as the REPL and voice UI. */
+export function voiceClient(rig: VoiceClientRig): VoiceClient {
+  return {
+    frames: () => rig.frames.slice(),
+    async sendUtterance(text, timeoutMs = 20_000) {
+      const start = rig.frames.length;
+      const utteranceId = newId();
+      rig.socket.send(JSON.stringify(buildFrame("utterance", { utteranceId, text, source: "typed" })));
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const received = rig.frames.slice(start);
+        const transcriptIndex = received.findIndex((message) =>
+          message.type === "transcript" && message.payload.utteranceId === utteranceId,
+        );
+        if (transcriptIndex >= 0 && received.slice(transcriptIndex + 1).some((message) =>
+          message.type === "state" && message.payload.busy === false,
+        )) return received;
+        await delay(10);
+      }
+      throw new Error("timed out waiting for the voice turn to return to idle");
+    },
+  };
 }
 
 type DebuggerTarget = { type: string; url: string; webSocketDebuggerUrl: string };
@@ -155,8 +197,12 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
   const browser = resolveBrowser();
   const profileDir = path.join(profileRoot, `act-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const stateEvents: StateObservation[] = [];
+  const voiceFrames: Message[] = [];
+  const actResultRecords: ActResultObservation[] = [];
+  const serverLogLines: string[] = [];
   let pageChangedCount = 0;
   const previousLogSink = setLogSink((line) => {
+    serverLogLines.push(line);
     try {
       const entry = JSON.parse(line) as { msg?: unknown; type?: unknown };
       if (entry.msg === "frame in" && entry.type === "page.changed") pageChangedCount += 1;
@@ -194,7 +240,19 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
     await mkdir(profileDir, { recursive: true });
     voice = await connectVoiceStateStream(running, (payload) => {
       stateEvents.push({ receivedAt: Date.now(), payload, model: observeModel(running.session.model) });
+    }, (message) => {
+      voiceFrames.push(message);
+      if (message.type === "speak" && voice?.readyState === VoiceWebSocket.OPEN) {
+        voice.send(JSON.stringify(buildFrame("speak.done", { speakId: message.payload.speakId, interrupted: false })));
+      }
     });
+    const originalRequest = running.hub.request.bind(running.hub) as (...args: any[]) => Promise<Message>;
+    (running.hub as unknown as { request: (...args: any[]) => Promise<Message> }).request = async (...args: any[]) => {
+      const result = await originalRequest(...args);
+      if (args[1] === "act.request" && result.type === "act.result") actResultRecords.push(result.payload);
+      return result;
+    };
+    const client = voiceClient({ socket: voice, frames: voiceFrames });
     await buildExtension({ socketUrl: running.url });
     const normalizedPath = pagePath.startsWith("/") ? pagePath : `/${pagePath}`;
     const fixtureUrl = `${pages.origins.primary}${normalizedPath}`;
@@ -223,6 +281,19 @@ export async function openFixturePage(pagePath: string): Promise<BrowserFixtureS
 
     return {
       pages,
+      voiceClient: client,
+      actResults: () => actResultRecords.map((result) => ({ ...result })),
+      serverLogs: () => serverLogLines.slice(),
+      lastSpoken: () => running.session.lastSpoken,
+      sessionField(label) {
+        const field = running.session.model?.fields.find((candidate) => candidate.label === label);
+        return field === undefined ? null : {
+          label: field.label,
+          sensitive: field.sensitive,
+          value: field.value,
+          hasValue: field.hasValue,
+        };
+      },
       stateEvents: () => stateEvents.slice(),
       model: () => observeModel(running.session.model),
       pageChangedCount: () => pageChangedCount,
