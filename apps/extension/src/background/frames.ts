@@ -88,7 +88,8 @@ function responseSnapshot(value: unknown): ContentSnapshot | undefined {
     typeof candidate.title !== "string" || typeof candidate.url !== "string" || typeof candidate.origin !== "string" ||
     !Array.isArray(candidate.headings) || !Array.isArray(candidate.alerts) || !Array.isArray(candidate.elements) ||
     typeof candidate.truncated !== "boolean" || typeof candidate.structuralHash !== "string" ||
-    typeof candidate.capturedAt !== "number"
+    typeof candidate.capturedAt !== "number" ||
+    (candidate.untrustedInstructionDetected !== undefined && typeof candidate.untrustedInstructionDetected !== "boolean")
   ) return undefined;
   return candidate as ContentSnapshot;
 }
@@ -171,9 +172,11 @@ export function mergeFrameSnapshots(options: MergeFrameSnapshotsOptions): Snapsh
   const headings: Array<{ level: number; text: string }> = [];
   const alerts: string[] = [];
   let aFrameWasTruncated = false;
+  let untrustedInstructionDetected = false;
   for (const frame of frames) {
     if (frame.snapshot) {
       aFrameWasTruncated ||= frame.snapshot.truncated;
+      untrustedInstructionDetected ||= frame.snapshot.untrustedInstructionDetected === true;
       for (const element of frame.snapshot.elements) {
         allElements.push({
           ...sanitizeElement(element),
@@ -203,6 +206,7 @@ export function mergeFrameSnapshots(options: MergeFrameSnapshotsOptions): Snapsh
     capturedAt: options.capturedAt,
   };
   if (top.snapshot.stepHint !== undefined) snapshotWithoutVersion.stepHint = top.snapshot.stepHint;
+  if (untrustedInstructionDetected) snapshotWithoutVersion.untrustedInstructionDetected = true;
 
   const signature = changeSignature(snapshotWithoutVersion);
   const version = (options.versions ?? snapshotVersions).next(options.tabId, signature);

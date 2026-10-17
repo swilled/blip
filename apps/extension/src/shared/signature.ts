@@ -16,7 +16,7 @@ type ChangeElement = Pick<
   | "errorText"
   | "options"
 >;
-type SnapshotChangeData = Pick<Snapshot, "elements" | "headings" | "alerts">;
+type SnapshotChangeData = Pick<Snapshot, "elements" | "headings" | "alerts" | "untrustedInstructionDetected">;
 
 /** Contract structural hash: identity and accessible label metadata only, never field values. */
 export function computeStructuralHash(elements: readonly StructuralElement[]): string {
@@ -47,5 +47,5 @@ export function changeSignature(snapshot: SnapshotChangeData): string {
     element.options?.map((option) => [option.value, option.label]) ?? null,
   ]);
   const headings = snapshot.headings.map((heading) => [heading.level, heading.text]);
-  return hashString(JSON.stringify([fields, headings, snapshot.alerts]));
+  return hashString(JSON.stringify([fields, headings, snapshot.alerts, snapshot.untrustedInstructionDetected === true]));
 }
