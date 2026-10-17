@@ -112,7 +112,7 @@ Plans:
 **Goal**: Nothing irreversible can happen on a page except through the single Executor, after a full read-back and the exact spoken phrase from the user's voice channel, and afterwards the user hears what the page actually said.
 **Mode:** mvp
 **Depends on**: Phase 2
-**Requirements**: GATE-01, GATE-02, GATE-03, GATE-04, GATE-05, RES-01, RES-02
+**Requirements**: GATE-01, GATE-02, GATE-03, GATE-04, GATE-05, GATE-08, RES-01, RES-02
 **Target window**: h8-h12
 **Shared milestones**: I2 (~h12)
 **Success Criteria** (what must be TRUE):
