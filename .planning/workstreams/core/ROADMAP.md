@@ -86,7 +86,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Review exact dependency pins before installation
-- [ ] 02-02-PLAN.md — Register approved workspaces and extension TypeScript/test configuration
+- [x] 02-02-PLAN.md — Register approved workspaces and extension TypeScript/test configuration
 - [ ] 02-03-PLAN.md — Build the MV3 identity and prove the production-Origin browser connection
 - [ ] 02-04-PLAN.md — Implement socket reconnect state and service-worker keepalive
 - [ ] 02-05-PLAN.md — Add idempotent reinjection and typed early replies
