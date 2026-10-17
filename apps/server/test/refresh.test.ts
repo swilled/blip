@@ -56,6 +56,38 @@ function deferredHub() {
 }
 
 describe("background page refresh", () => {
+  it("returns the exact snapshot only after the session accepts it", async () => {
+    const session = new Session("fake");
+    session.extensionConnected = true;
+    const accepted = snapshot("booking", 1, 1, 10);
+    const hub = {
+      request: vi.fn(async () => ({ payload: { ok: true, snapshot: accepted } })),
+      pushState: vi.fn(),
+    } as unknown as Hub;
+    const refresher = createRefresher({ hub, session, timeoutMs: 500 });
+
+    const result = await refresher.request("post-act");
+
+    expect(result).toEqual({ ok: true, applied: true, snapshot: accepted });
+    if (result.ok) expect(result.snapshot).toBe(accepted);
+  });
+
+  it("does not return the snapshot when the session rejects it as stale", async () => {
+    const session = new Session("fake");
+    session.extensionConnected = true;
+    session.applySnapshot(snapshot("booking", 1, 5, 500));
+    const hub = {
+      request: vi.fn(async () => ({ payload: { ok: true, snapshot: snapshot("broken", 1, 4, 900) } })),
+      pushState: vi.fn(),
+    } as unknown as Hub;
+    const refresher = createRefresher({ hub, session, timeoutMs: 500 });
+
+    const result = await refresher.request("post-act");
+
+    expect(result).toEqual({ ok: false, kind: "stale-snapshot" });
+    expect("snapshot" in result).toBe(false);
+  });
+
   it("refreshes after page.changed and pushes state without an utterance", async () => {
     const server = await startServer({ port: 0, dev: true, snapshotTimeoutMs: 500 });
     const extension = startFakeExtension({ url: server.url });
