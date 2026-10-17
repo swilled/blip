@@ -47,7 +47,7 @@ Includes the server-to-extension requests, listed next to the replies they expec
 | type | from | to | payload | notes |
 |---|---|---|---|---|
 | `snapshot.request` | server | extension | `{ tabId?: int, reason: page-load, user, post-act or refresh }` | the extension replies `snapshot.result` (timeout 8 s) |
-| `snapshot.result` | extension | server | `{ ok: true, snapshot }` or `{ ok: false, error: { code, message } }` | `ok`-discriminated union, so a failed capture is a typed reply and not a timeout |
+| `snapshot.result` | extension | server | `{ ok: true, snapshot }` or `{ ok: false, error: { code, message } }` | `ok`-discriminated union; `Snapshot.untrustedInstructionDetected?` is an optional warning-only boolean |
 | `act.request` | server | extension | `ActRequest` (see below) | the extension replies `act.result` (timeout 5 s) |
 | `act.result` | extension | server | `ActResult` (see below) | carries `observedValue` for verify-after-write |
 | `page.changed` | extension | server | `{ tabId: int, url, reason: navigation, mutation or tab-activated, structuralHash? }` | debounced 500 ms; the server decides whether to re-snapshot |
@@ -72,7 +72,7 @@ Includes the server-to-voice pushes.
 | `earcon` | server | voice | `{ name: listening, thinking, done, blocked or error }` | non-verbal latency cue |
 | `confirm.armed` | server | voice | `{ grantId, phrase, kind: ActionKind, actionLabel, expiresAt: number }` | informational only; the UI displays "Say: submit form" |
 | `confirm.cleared` | server | voice | `{ grantId, reason: executed, cancelled, expired, page-changed or value-changed }` | |
-| `state` | server | voice | `{ dialogue: DialogueStateName, page: object or null, focusFieldId?, busy, extensionConnected, brain }` | pushed on every change; `page` is `{ url, title, step?, fieldCount: int, requiredEmpty: int }` |
+| `state` | server | voice | `{ dialogue: DialogueStateName, page: object or null, focusFieldId?, busy, extensionConnected, brain }` | pushed on every change; `page` is `{ url, title, step?, fieldCount: int, requiredEmpty: int, untrustedInstructionDetected?: boolean }` |
 | `transcript` | server | voice | `{ utteranceId, heardAs, routedTo: grammar or model }` | debug and demo panel |
 
 ## ActOp, ActRequest and ActResult
@@ -162,6 +162,7 @@ The wire field `error.code` is an open string so a code added later never breaks
 - **Radio group.** One element, not one per option: `id` is the group id, `inputType` is `radio`, `options[].selected` marks the choice, and `value` is the selected option value or null.
 - **Checkbox.** Uses `checked`, with `value` null. **Select** uses `options` with `selected`, and `value` is the selected option value.
 - **Sensitive values.** When `sensitive` is not `none`, `value` is always null, in `Snapshot`, `FormModel`, and every frame. This is enforced by the schemas.
+- **GATE-07 warning signal.** `Snapshot.untrustedInstructionDetected?` and `StatePayload.page.untrustedInstructionDetected?` are optional booleans; older peers may omit them. The local detector sends no matched page prose, URL/query data, form value, or detector detail. The signal is warning-only and never changes an action kind, grant, confirmation, or permission.
 - **Caps.** At most 250 elements per snapshot, 40 headings, 20 alerts. The roughly 8k-token cap is applied at the model-prompt boundary in Phase 4, not on the wire.
 - **Label provenance (D-05).** `RawElement.labelCandidates[].source` is deterministic extension evidence (`aria`, `label`, `nearby-text`, `placeholder`, `inferred`) and excludes `model`. Resolved `Field.labelSource` may additionally be `model` only after server code applies a validated repair. Baseline ranking accepts raw sources only; the protocol lock stores both lists independently.
 - **FormModel conventions** the baseline builder follows:
