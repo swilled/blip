@@ -257,7 +257,7 @@ Plans:
 - [x] 08-04-PLAN.md — Compose and revise drafts with observed field read-back
 - [x] 08-05-PLAN.md — Gate sending on exact phrase and draft-bound grant
 - [x] 08-06-PLAN.md — Integrate and verify the synthetic end-to-end workflow
-- [ ] 08-07-PLAN.md — Connect Phase 8 task routing and guarded send through the demo dialogue runner
+- [x] 08-07-PLAN.md — Connect Phase 8 task routing and guarded send through the demo dialogue runner
 
 ---
 *Roadmap created: 2026-10-16*
