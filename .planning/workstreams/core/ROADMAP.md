@@ -3,11 +3,11 @@
 **Workstream:** `core` (Person A, Pranav)
 **Owns:** `@blip/protocol`, server hub, Chrome MV3 extension, Executor + policy gate (`packages/policy`), AGY subscription brain (intent-as-data), result reading
 **Scope:** the 26 core v1 requirements (PROT, PAGE, ACT, GATE, BRAIN, RES). Voice-track requirements (VOX, DLG, VIS, DEMO) are planned in `.planning/workstreams/voice/` and appear here only as dependencies.
-**Granularity:** coarse (5 phases) | **Project mode:** mvp (vertical slices; the build is demoable at the end of every phase)
+**Granularity:** coarse (5 v1 phases plus follow-on phases) | **Project mode:** mvp (vertical slices; the build is demoable at the end of every phase)
 
 ## Overview
 
-Core builds Blip's trust machinery from the contract outward. Phase 1 freezes the shared `@blip/protocol` package and stands up a loopback-only server with a fake extension, a fake brain and a typed REPL, so neither developer waits on a model subscription. Phase 2 swaps the fake extension for a real one that reads a live form and fills it the way a person would, reporting only what the DOM actually holds. Phase 3 adds the policy gate and the single Executor (nothing irreversible happens without a read-back and the exact spoken phrase) and reads the result page back, which lands I2 with no model in the loop. Phase 4 adds a locked-down, tool-less subscription brain for free-form intents and background label repair; the current implementation is AGY via the Antigravity CLI using Gemini 3.8 Flash. Phase 5 hardens Blip against a seeded prompt-injection page and validates the demo against a self-hosted synthetic survey, adds one-command startup, and ends at the `demo-safe` feature freeze. The owner confirmed this hackathon has no public-form URL; Core's local survey is the Phase 5 acceptance target, while voice-owned DEMO-03 remains deferred. Gate before brain: everything through Phase 3 demos without AGY.
+Core builds Blip's trust machinery from the contract outward. Phase 1 freezes the shared `@blip/protocol` package and stands up a loopback-only server with a fake extension, a fake brain and a typed REPL, so neither developer waits on a model subscription. Phase 2 swaps the fake extension for a real one that reads a live form and fills it the way a person would, reporting only what the DOM actually holds. Phase 3 adds the policy gate and the single Executor (nothing irreversible happens without a read-back and the exact spoken phrase) and reads the result page back, which lands I2 with no model in the loop. Phase 4 adds a locked-down, tool-less subscription brain for free-form intents and background label repair; the current implementation is AGY via the Antigravity CLI using Gemini 3.8 Flash. Phase 5 hardens Blip against a seeded prompt-injection page and validates the demo against a self-hosted synthetic survey, adds one-command startup, and ends at the `demo-safe` feature freeze. The owner confirmed this hackathon has no public-form URL; Core's local survey is the Phase 5 acceptance target, while voice-owned DEMO-03 remains deferred. Follow-on phases start after v1 technical acceptance and leave the existing v1 release gates intact. Phase 6 defines the contract and policy proposal for user-directed browser control. Gate before brain: everything through Phase 3 demos without AGY.
 
 ## Phases
 
@@ -22,6 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2) (completed 2026-10-17)
 - [x] **Phase 4: AGY Subscription Brain and Label Repair** - Current runtime uses the locked-down Antigravity CLI with Gemini 3.8 Flash; provider checks and live synthetic startup/roundtrip passed (2026-10-17)
 - [ ] **Phase 5: Hostile Pages, Local Synthetic Web and Freeze** - AGY hostile, full I3, and launcher-cache acceptance pass; written M0 sign-off, teammate review, and mainline release gates remain
+- [ ] **Phase 6: Browser Control Contract and Policy Proposal** - Define an additive, teammate-reviewable contract for user-directed browser control; implementation follows only after written voice-owner review
 
 ## Shared Milestones
 
@@ -198,7 +199,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase 5 technical acceptance; outstanding v1 release gates remain independent and unchanged.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -207,8 +208,19 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. AGY Subscription Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
+| 6. Browser Control Contract and Policy Proposal | 0/0 | Discuss complete; planning next | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
+
+### Phase 6: Browser control contract and policy proposal
+
+**Goal:** Define a teammate-reviewable, additive protocol and policy proposal for user-directed page reading, navigation, links, search, tabs, scrolling, and summaries. Preserve the existing form flow, privacy rules, and confirmation gates. This phase does not implement browser-control features. No contract change may merge before the voice owner approves it in writing.
+**Requirements**: Proposal only; no v1 requirement IDs change in this phase. AGENT-01 remains deferred for a separate later phase.
+**Depends on:** Phase 5 technical acceptance (passed); written v1 release gates remain independent.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 6 to break down)
 
 ---
 *Roadmap created: 2026-10-16*
