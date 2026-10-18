@@ -16,7 +16,7 @@
 - [x] **VOX-04**: Blip speaks replies with its own voice, plays earcons (listening / thinking / blocked), and says "one moment" when a reply takes over ~1.5 s
 - [ ] **VOX-05** (PARTIAL: interrupt by holding push-to-talk or typed "stop" works; voice barge-in is built but forced off until core merges GATE-08, because Spike F showed Blip hears itself): The user can interrupt Blip by speaking (barge-in). The confirm phrase is never accepted while Blip is speaking or within 1 s after it stops, so Blip's own speech can't confirm a submit. Echo handling is settled by a Phase 1 spike.
 - [x] **VOX-06**: User can say "stop" to cut off speech immediately
-- [ ] **VOX-07**: User can say "faster" / "slower" to change Blip's speech rate
+- [x] **VOX-07**: User can say "faster" / "slower" to change Blip's speech rate
 - [ ] **VOX-08**: In screen-reader mode, Blip's replies are spoken through NVDA (controller client DLL) instead of Blip's own voice, without double speech
 
 ### Dialogue & Commands
@@ -90,7 +90,7 @@
 | VOX-04 | voice | Phase 1 | Pending |
 | VOX-05 | voice | Phase 1 | Pending |
 | VOX-06 | voice | Phase 1 | Pending |
-| VOX-07 | voice | Phase 4 | Pending |
+| VOX-07 | voice | Phase 4 | Complete |
 | VOX-08 | voice | Phase 4 | Pending |
 | DLG-01 | voice | Phase 1 | Pending |
 | DLG-02 | voice | Phase 2 | Complete |

@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 4
 current_phase_name: NVDA Mode and Demo-Safe
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-10-18T03:05:33.172Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-10-18T03:16:28.711Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 4 execution started
-state_head: 156cebd228c81889713175a32f1768fff48ec454
+state_head: 50290738b2ee47311e1d40adbf2a484f6f2ac023
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 25
-  completed_plans: 23
+  completed_plans: 24
 milestone_name: milestone
 ---
 
@@ -30,7 +30,7 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 ## Current Position
 
 Phase: 4 (NVDA Mode and Demo-Safe) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-10-17 — Phase 4 execution started
 
@@ -76,6 +76,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P02 | 10min | 3 tasks | 11 files |
 | Phase 03 P03 | 24min | 3 tasks | 22 files |
 | Phase 04 P01 | 3min | 2 tasks | 12 files |
+| Phase 04 P02 | 10min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,8 @@ Recent decisions affecting the voice track:
 - [Phase 03]: Profile values stay in deterministic local fill logic; parseIntent receives only value-free form metadata.
 - [Phase 03]: Profile matching uses explicit autocomplete field tokens and skips uncertain or sensitive fields.
 - [Phase 03]: Batch undo restores only fields still equal to page-observed writes and consumes its one-level record.
+- [Phase 04]: Keep agent-voice rate in memory for the current window session and apply it when each browser utterance starts.
+- [Phase 04]: Intercept exact voice rate commands before barge-in cancellation so rate changes leave active speech running.
 
 ### Pending Todos
 
@@ -121,6 +124,6 @@ Recent decisions affecting the voice track:
 
 ## Session Continuity
 
-Last session: 2026-10-18T03:05:32.349Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-10-18T03:16:27.848Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
