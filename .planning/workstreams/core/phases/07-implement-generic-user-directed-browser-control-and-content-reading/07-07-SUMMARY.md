@@ -58,8 +58,10 @@ completed: 2026-10-18
 - Root and extension typechecks passed.
 - Extension and test-page builds passed.
 - `git diff --check` passed.
+- Dedicated Edge E2E verified a selected same-origin link reaches its local fixture destination without a confirmation prompt or page click handler.
+- The full Edge E2E suite passed 15 files with 2 skipped; one React-fill run hit a Windows temporary-profile cleanup lock and passed when rerun alone.
 
-No public site, personal account, or live provider was used. The real-browser synthetic-fixture exercise remains outstanding.
+No public site, personal account, or live provider was used. The selected-link path and broader synthetic browser flows were exercised in isolated Edge profiles.
 
 ## Remaining Integration Gate
 

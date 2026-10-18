@@ -60,6 +60,8 @@ gaps: []
 | `npm run ext:build` | Passed |
 | `npm run pages:build` | Passed |
 | `git diff --check` | Passed |
+| Dedicated Edge E2E: selected same-origin link | Passed. The extension opened the fixture destination with no confirmation prompt; a page click handler that prevents navigation did not run. |
+| Full Edge E2E suite | 15 files passed, 2 skipped. One React-fill test hit Windows `EBUSY` while removing its temporary profile; the test passed when rerun alone. |
 
 The new coverage verifies direct same-origin selection by voice and typing, spoken confirmation for cross-origin/action-like links, refusal of direct-mode escalation, and unchanged form action classification. Tests use local synthetic pages and fake browser APIs. No public site, personal account, or live provider was used.
 
@@ -67,7 +69,7 @@ The new coverage verifies direct same-origin selection by voice and typing, spok
 
 Before merge or push, the voice owner must review the exact shared diff for `BrowserLinkRecord.navigationSafety`, `BrowserOperation.authorizationMode`, and the same-origin safe-GET policy. The user reported teammate agreement with the product choice; written review of this exact diff is still the documented merge gate.
 
-A real-browser exercise of the local synthetic fixture is also still recommended to check browser permissions, speech timing, accessibility announcements, and page-change behavior. The automated test environment does not verify those browser-runtime details.
+The selected-link path was also exercised in Edge 155 with an isolated profile and a local synthetic fixture. The broader browser suite passed its test bodies; one run encountered a Windows temporary-profile cleanup lock that cleared on an isolated rerun. These checks do not substitute for review of the exact shared diff.
 
 ## Conclusion
 
