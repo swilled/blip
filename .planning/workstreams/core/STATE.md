@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-10-18T07:10:47.727Z"
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-10-18T07:16:52.657Z"
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 90
-  completed_plans: 70
+  completed_plans: 71
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 8 (Multi-step web reading and drafting) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 
 ## Performance Metrics
 
@@ -91,6 +91,7 @@ Plan: 2 of 6
 | Phase 07 P05 | 9 min | 1 tasks | 9 files |
 | Phase 07 P07-06 | 14m | 2 tasks | 3 files |
 | Phase 08 P08-01 | 6 min | 3 tasks | 10 files |
+| Phase 08 P08-02 | 6 min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -164,6 +165,8 @@ Recent decisions affecting current work:
 - [Phase 08-01]: Keep the item list optional so legacy browser captures remain valid.
 - [Phase 08-01]: Treat missing, malformed, or inconsistent visible time evidence as unknown recency.
 - [Phase 08-01]: Keep the protocol delta local and pending written voice-owner review before merge or push.
+- [Phase 08]: Keep read-item on the existing browser-content message channel and top-frame handler, carrying the exact capture identity and item ID.
+- [Phase 08]: Accept a successful result only when the current session tab, captured item, request and operation IDs, page identity, frame, text, and date all match.
 
 ### Pending Todos
 
@@ -196,6 +199,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T07:10:47.723Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-10-18T07:16:52.651Z
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
