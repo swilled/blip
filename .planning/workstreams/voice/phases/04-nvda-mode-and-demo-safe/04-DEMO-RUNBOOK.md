@@ -63,7 +63,7 @@ Start each run from a fresh response page or a cleared form. For each beat, wait
 
 | Check | Required evidence | Status / result |
 | --- | --- | --- |
-| Automated local preparation | `npm.cmd test -- dev/mock-server/src/run-real.test.ts dev/mock-server/src/demo-runbook.test.ts`; `npm.cmd run typecheck` | PASS — final combined run: 2 files, 7 tests; root typecheck passed |
+| Automated local preparation | Focused voice/runbook tests, full regression suite, and typecheck | PASS — focused 5 files / 26 tests; full suite 120 files / 1,257 tests passed (16 files / 28 skipped); root typecheck passed after review fixes |
 | Demo startup | `npm.cmd run demo`, machine, date, ready outcome | PENDING — not run for this preparation |
 | Live form target and reset | Confirm the URL above and fresh-page/clear behavior | PENDING — no Phase 4 page visit |
 | Negative validation attempt | Missing required field, each observed field-labeled error, remaining missing fields, and no success claim | PENDING |
@@ -90,3 +90,7 @@ The prepared start path is `npm.cmd run demo`; the local synthetic reset path is
 | --- | --- |
 | `npm.cmd test -- dev/mock-server/src/run-real.test.ts dev/mock-server/src/demo-runbook.test.ts` | PASS — 2 files, 7 tests |
 | `npm.cmd run typecheck` | PASS — root TypeScript check |
+
+## Post-review remediation record
+
+Code review findings CR-01 and CR-02 and warnings WR-01 and WR-02 were fixed in commit `d65653e`. Screen-reader mode now mutes the global status live region and prevents local rate acknowledgements from using browser TTS; the voice UI has narrow/short viewport fallbacks; offline form controls meet the 48 px target. The focused 5-file test run (26 tests), root typecheck, and full suite (120 files / 1,257 passed; 16 files / 28 skipped) passed. These checks do not replace the pending live/device rehearsals above.
