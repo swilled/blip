@@ -38,11 +38,13 @@ describe("held recording with external recognition", () => {
     stt.cancel(); stt.press(); await tick(); resolve("submit survey"); await tick();
     expect(options.onFinal).not.toHaveBeenCalled(); expect(stt.isActive()).toBe(true); stt.cancel();
   });
-  it("times out a held capture without sending a prefix", async () => {
+  it("keeps a held capture active beyond ten seconds and ends only on release", async () => {
     vi.useFakeTimers(); const { stt, options } = setup(); stt.press(); await tick();
-    vi.advanceTimersByTime(10000); stt.release(); await tick();
+    vi.advanceTimersByTime(60_000);
+    expect(stt.isActive()).toBe(true); expect(options.onError).not.toHaveBeenCalled();
     expect(options.onFinal).not.toHaveBeenCalled(); expect(options.transcribe).not.toHaveBeenCalled();
-    expect(options.onError).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining("10-second") }));
+    stt.release(); await tick();
+    expect(options.onFinal).toHaveBeenCalledWith({ text: "read the form", alternatives: [] });
   });
   it.each(["", "x".repeat(501)])("rejects empty and oversized transcription without dispatch", async text => {
     const { stt, options } = setup(); options.transcribe.mockResolvedValue(text);
@@ -54,17 +56,18 @@ describe("held recording with external recognition", () => {
     stt.press(); await tick(); expect(options.onError).toHaveBeenCalledWith(expect.objectContaining({ kind: "not-allowed" }));
     stt.press(); await tick(); stt.release(); await tick(); expect(options.onFinal).toHaveBeenCalledTimes(1);
   });
-  it("encodes mono PCM and resamples complete 48 kHz input", () => {
+  it("encodes audio longer than ten seconds and resamples complete 48 kHz input", () => {
     const bytes = encodeWav([new Float32Array(48000).fill(0.5)], 48000);
     expect(bytes.length).toBe(32044); const view = new DataView(bytes.buffer as ArrayBuffer);
     expect(view.getUint32(24, true)).toBe(16000); expect(view.getInt16(44, true)).toBe(16384);
-    expect(() => encodeWav([new Float32Array(160001)], 16000)).toThrow("audio-too-long");
+    const longer = encodeWav([new Float32Array(12 * 16000).fill(0.1)], 16000);
+    expect(longer.length).toBe(44 + 12 * 16000 * 2);
   });
   it("reports actual captured duration and levels separately from transcription", async () => {
     const t = setup(), onCapture = vi.fn();
     const stt = createRecordedStt({ ...t.options, onCapture });
     stt.press(); await tick(); stt.release(); await tick();
-    expect(onCapture).toHaveBeenCalledWith({ durationSeconds: 1, rms: expect.closeTo(0.1), peak: expect.closeTo(0.1) });
+    expect(onCapture).toHaveBeenCalledWith({ durationSeconds: 1, rms: expect.closeTo(0.1), peak: expect.closeTo(0.1), sampleRate: 16000, inputSettings: undefined });
   });
   it("uses the same-origin token and WAV endpoint without Chrome SpeechRecognition", async () => {
     const request = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ ready: true, token: "test-token" }) })

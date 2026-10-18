@@ -36,7 +36,7 @@ function relevant(keycode: number): boolean {
 }
 
 export function startPttHook(
-  onHold: (state: "start" | "end", reason?: "expired" | "reset") => void,
+  onHold: (state: "start" | "end", reason?: "reset") => void,
   deps: PttHookDeps = {},
 ): void {
   if (running) stopPttHook();

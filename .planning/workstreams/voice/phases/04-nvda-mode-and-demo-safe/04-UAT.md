@@ -6,16 +6,16 @@ source:
   - 04-02-SUMMARY.md
   - 04-03-SUMMARY.md
 started: 2026-10-18T03:42:15Z
-updated: 2026-10-18T07:02:40Z
+updated: 2026-10-18T07:13:46Z
 ---
 
 ## Current Test
 
-number: 2
-name: NVDA completion/cancellation or D-16 fallback
+number: 3
+name: Live Microsoft Form validation and three consecutive runs
 expected: |
-  On the demo workstation, verify one matching speakId completion/cancellation per NVDA item without overlapping Blip speech. If the safe completion signal cannot be established, record team acceptance of the documented D-16 fallback: agent voice for the main demo and NVDA only for the opening hook. The fallback does not establish VOX-08 NVDA support.
-awaiting: user/device result
+  On the live form, leave one required field empty and confirm Blip reports page-observed validation without claiming success. Then complete three fresh runs with fictional values, readback, and the distinct phrase. Report observed confirmation text only; do not infer submission from the phrase acknowledgement.
+awaiting: user-led live form result
 
 ## Tests
 
@@ -25,7 +25,7 @@ result: PASS by user report, 2026-10-18. The user said microphone input and spee
 
 ### 2. NVDA completion/cancellation or D-16 fallback
 expected: On the demo workstation, verify one matching speakId completion/cancellation per NVDA item without overlapping Blip speech. If that cannot be established safely, record team acceptance of the runbook's D-16 fallback: agent voice for the main demo and NVDA only for the opening hook. This does not establish VOX-08 NVDA support.
-result: PENDING.
+result: D-16 FALLBACK ACCEPTED under the user's standing direction to choose the recommended path: use Blip agent voice for the main demo and NVDA only for the opening hook. This records the demo fallback decision; it does not prove NVDA completion/cancellation or complete VOX-08.
 
 ### 3. Live Microsoft Form validation and three consecutive runs
 expected: Follow `04-DEMO-RUNBOOK.md` using fictional values only. Observe a missing-required-field validation without a success claim, then complete three fresh/reset runs with the distinct spoken phrase. Blip must report only page-observed results; any failure or interruption resets the consecutive count.
@@ -42,9 +42,9 @@ result: PENDING.
 ## Summary
 
 total: 5
-passed: 1
+passed: 2
 issues: 0
-pending: 4
+pending: 3
 skipped: 0
 blocked: 0
 
@@ -54,6 +54,7 @@ blocked: 0
 - The Microsoft Forms required-field repair was tested on the restarted updated demo build. The five expected required labels matched and optional questions were excluded. The public form was not submitted.
 - The earlier Phase 2 local exact-phrase test remains separate evidence: the user reported that negative phrases stayed blocked and exact `submit survey` submitted once. It is not evidence for a live Microsoft Forms submission.
 - The current extension fix only adds bounded question-level required-marker extraction. It does not change the submit gate.
+- D-16 is the selected demo path because the current adapter deliberately fails closed without a safe NVDA completion signal. Use Blip agent voice for the main demo and reserve NVDA for an opening hook; do not claim VOX-08 works.
 
 ## Gaps
 

@@ -5,7 +5,7 @@ current_phase: 4
 current_phase_name: NVDA Mode and Demo-Safe
 status: verifying
 stopped_at: Plan 04-08 repair evidence recorded; original Phase 4 human acceptance remains open
-last_updated: "2026-10-18T07:05:03Z"
+last_updated: "2026-10-18T07:13:46Z"
 last_activity: 2026-10-18
 last_activity_desc: Microsoft Forms required-field repair verified on the updated build; Phase 4 regression suite passed
 state_head: 9b323c6b56063dbc074fa00cf199e1cec85d5516
@@ -31,7 +31,7 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 
 Phase: 4 (NVDA Mode and Demo-Safe) — EXECUTING
 Plan: 04-08 repair regression and Microsoft required-field check recorded; remaining Phase 4 acceptance is human-led
-Status: Phase 4 remains human_needed for NVDA, live submission rehearsal, fallback/video, and freeze evidence
+Status: Phase 4 remains human_needed for live submission rehearsal, fallback/video, and freeze evidence; D-16 demo fallback selected, VOX-08 remains human-needed
 Last activity: 2026-10-18 — Root suite 1,316 passed / 28 skipped; typecheck and voice/extension builds passed; user confirmed five Microsoft required fields
 
 Progress: [█████░░░░░] 50%
@@ -126,7 +126,7 @@ Recent decisions affecting the voice track:
 
 ## Session Continuity
 
-Last session: 2026-10-18T07:05:03Z
+Last session: 2026-10-18T07:13:46Z
 Stopped at: 04-08 repair evidence recorded; Phase 4 milestone acceptance remains open
 Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-UAT.md
 
@@ -169,4 +169,4 @@ Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-UA
 - Microsoft Forms exposes required status through a question-level `requiredStar` note. `requiredStateOf` now reads that marker only within the matching `questionItem`; a regression test confirms an adjacent optional question remains optional.
 - Extension tests, extension typecheck/build, root typecheck, voice build, and the full root suite passed. Full suite: 127 files passed, 16 skipped; 1,316 tests passed, 28 skipped.
 - On the restarted updated build `67114f9-dirty-2026-10-18T07:00:58.786Z`, the user confirmed the five expected required fields—Employment type, Department, Leave type, Leave date, Return date—and that optional questions were excluded. No public-form submission was attempted.
-- The user reports microphone input and faster/slower operation work. Detailed per-route counts and rate timings were not retained. Phase 4 remains open for NVDA/D-16, live validation and three submissions, fallback/hotspot/recorder rehearsal, video, and freeze review; no `demo-safe` tag is authorized yet.
+- The user reports microphone input and faster/slower operation work. Detailed per-route counts and rate timings were not retained. D-16 is selected for the demo: agent voice for the main demo, NVDA only for the opening hook; VOX-08 remains human-needed. Phase 4 remains open for live validation and three submissions, fallback/hotspot/recorder rehearsal, video, and freeze review; no `demo-safe` tag is authorized yet.

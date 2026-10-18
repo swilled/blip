@@ -2,7 +2,7 @@ import { Intent, type FormModel, type Intent as IntentData, type Snapshot } from
 import { classifySensitiveShape } from "@blip/policy/sensitive-shapes";
 import { matchGrammar } from "../grammar";
 import { matchFieldPhrase } from "../phrases";
-import { decideUtteranceForBrain, type BrainInputDecision } from "./privacy";
+import { containsSensitiveUtterance, decideUtteranceForBrain, type BrainInputDecision } from "./privacy";
 import {
   projectPageForPrompt,
   serializeProjectionForPrompt,
@@ -11,6 +11,8 @@ import { InvalidAgyOutputError } from "./provider";
 
 export type IntentRouteProvider = {
   parseIntent(prompt: string, signal?: AbortSignal): Promise<IntentData>;
+  /** Local general-purpose providers may answer ordinary questions as well as classify page intents. */
+  allowGeneralKnowledge?: boolean;
 };
 
 export type IntentRoutePage = {
@@ -141,10 +143,13 @@ function validateIntentForPage(intent: IntentData, model: FormModel): void {
   }
 }
 
-function promptFor(utterance: string, page: IntentRoutePage): string {
+function promptFor(utterance: string, page: IntentRoutePage, allowGeneralKnowledge: boolean): string {
   const projection = projectPageForPrompt(page.snapshot, page.model);
   return [
-    "Interpret the user's request using only the current page context below.",
+    allowGeneralKnowledge
+      ? "Interpret the user's request. Answer general informational questions from your trained knowledge; for questions about this page, use only the current page context below."
+      : "Interpret the user's request using only the current page context below.",
+    ...(allowGeneralKnowledge ? ["Speak naturally in one to three short sentences. If live or personal information is missing, say so plainly. A page request is grounded only in the context below."] : []),
     "Return exactly one compact JSON object matching the existing Intent schema, with no markdown fences, preface, prose, comments, or extra keys. If the request is unclear, return a schema-valid clarify Intent with a short question.",
     "Allowed Intent types and required keys: describe, read_form, whats_required, what_went_wrong, read_back, fill_profile, undo, stop, and unknown require only type; go_to_field and spell require fieldId; set_fields requires fills with exactly one item containing fieldId and value; request_action and click_safe require actionId; answer requires text; clarify requires question.",
     "Use only current field and action ids from the page context.",
@@ -154,6 +159,24 @@ function promptFor(utterance: string, page: IntentRoutePage): string {
   ].join("\n");
 }
 
+function promptWithoutPage(utterance: string): string {
+  return [
+    "Answer the user's general informational question from your trained knowledge, or ask one short clarifying question.",
+    "There is no connected current browser page. If the user asks about a page, form, current field, or browser action, say that you cannot inspect or change it until a page is connected; do not guess page details.",
+    "Speak naturally, plainly, and concisely. Be honest when unsure or when live information is needed.",
+    "Only answer, clarify, or unknown are permitted. Never claim to have taken an action.",
+    `User request as JSON string: ${JSON.stringify(utterance)}`,
+  ].join("\n");
+}
+
+function validateIntentWithoutPage(intent: IntentData): void {
+  if (intent.type !== "answer" && intent.type !== "clarify" && intent.type !== "unknown") {
+    invalid("only conversational answers are allowed without a current page");
+  }
+  if (intent.type === "answer" && sensitiveOrPasswordText(intent.text)) invalid("the answer contained sensitive-shaped text");
+  if (intent.type === "clarify" && sensitiveOrPasswordText(intent.question)) invalid("the clarification contained sensitive-shaped text");
+}
+
 /**
  * Grammar and field phrases are deliberately kept local. This final server boundary repeats the
  * check so a future caller cannot accidentally send one to Agy; only privacy-approved free text
@@ -161,19 +184,47 @@ function promptFor(utterance: string, page: IntentRoutePage): string {
  */
 export async function routeIntent(
   utterance: string,
-  page: IntentRoutePage,
+  page: IntentRoutePage | null,
   provider: IntentRouteProvider,
   signal?: AbortSignal,
 ): Promise<IntentRouteResult> {
   if (matchGrammar(utterance) !== null) return { kind: "local", route: "grammar" };
   if (matchFieldPhrase(utterance) !== null) return { kind: "local", route: "field-phrase" };
+  if (page === null) {
+    if (containsSensitiveUtterance(utterance)) {
+      return { kind: "handoff", handoff: { kind: "clarify", spokenText: "Please restate that without a password or account number." } };
+    }
+    if (!provider.allowGeneralKnowledge) return { kind: "local", route: "grammar" };
+    const prompt = promptWithoutPage(utterance);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let intent: IntentData;
+      try {
+        intent = parseStrictIntent(await provider.parseIntent(
+          attempt === 0 ? prompt : `${prompt}\nRetry: return only an answer, clarify, or unknown Intent JSON object.`,
+          signal,
+        ));
+      } catch (error) {
+        if (error instanceof InvalidIntentResultError || error instanceof InvalidAgyOutputError || error instanceof SyntaxError) {
+          if (attempt === 0) continue;
+        }
+        throw error;
+      }
+      try {
+        validateIntentWithoutPage(intent);
+        return { kind: "intent", intent };
+      } catch (error) {
+        if (!(error instanceof InvalidIntentResultError) || attempt > 0) throw error;
+      }
+    }
+    return invalid("the response remained invalid after one retry");
+  }
   if (!page.isCurrent()) throw new StaleIntentPageError();
 
   const privacy = decideUtteranceForBrain(utterance, page.model);
   if (privacy.kind === "withhold-and-handoff") return { kind: "handoff", handoff: privacy.handoff };
   if (privacy.kind !== "safe") return { kind: "local", route: "field-phrase" };
 
-  const prompt = promptFor(privacy.providerText, page);
+  const prompt = promptFor(privacy.providerText, page, provider.allowGeneralKnowledge === true);
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let intent: IntentData;
     try {
@@ -182,7 +233,7 @@ export async function routeIntent(
         signal,
       ));
     } catch (error) {
-      if (error instanceof InvalidIntentResultError || error instanceof InvalidAgyOutputError) {
+      if (error instanceof InvalidIntentResultError || error instanceof InvalidAgyOutputError || error instanceof SyntaxError) {
         if (attempt === 0) continue;
       }
       throw error;

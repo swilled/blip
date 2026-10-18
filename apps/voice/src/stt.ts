@@ -7,7 +7,6 @@ export const MSG_MIC_MISSING = "No microphone could be opened. Check your record
 export const MSG_STT_NETWORK = "The speech recognition service is unavailable. Check the internet connection, then try again or type.";
 export const MSG_CLICK_WINDOW = "Click this window once, then hold the keys again.";
 export const MSG_STT_UNAVAILABLE = "Speech recognition isn't available in this browser. Type your command instead.";
-export const MSG_CAPTURE_LIMIT = "The 10-second hold limit was reached. Nothing was sent. Try a shorter command.";
 export type CaptureStage = "starting" | "listening" | "recovering" | "finalizing" | "idle";
 export interface SttAlternative { transcript: string; confidence: number }
 export interface SttResult { isFinal: boolean; length: number; [index: number]: SttAlternative }
@@ -153,7 +152,6 @@ export function createStt(opts: SttOptions): Stt {
       const c: Capture = { generation: ++generation, held: true, rec: null, settled: false, chunks: [], current: [], pendingInterim: false, retries: 0, startedAt: now(), timers: new Set() };
       owner = c;
       opts.onStage?.("starting");
-      timer(c, () => settle(c, { kind: "other", message: MSG_CAPTURE_LIMIT }), 10000);
       begin(c);
     },
     release() {

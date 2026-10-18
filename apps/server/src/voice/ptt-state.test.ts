@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPttState } from "./ptt-state.js";
 
 const RCTRL = 3613;
@@ -7,27 +7,23 @@ const LCTRL = 29;
 
 function setup() {
   const events: string[] = [];
-  let pending: (() => void) | null = null;
   const ptt = createPttState({
     onChange: (s) => events.push(s),
-    setTimer: (fn) => {
-      pending = fn;
-      return 1;
-    },
-    clearTimer: () => {
-      pending = null;
-    },
   });
-  return { ptt, events, fire: () => pending?.(), hasTimer: () => pending !== null };
+  return { ptt, events };
 }
 
+afterEach(() => vi.useRealTimers());
+
 describe("ptt-state", () => {
-  it("identifies expiry separately from an intentional release", () => {
-    const seen: unknown[] = [];
-    let expire = () => {};
-    const ptt = createPttState({ onChange: (...args) => seen.push(args), setTimer: fn => { expire = fn; return 1; }, clearTimer() {} });
-    ptt.handle("down", RCTRL); ptt.handle("down", SPACE); expire();
-    expect(seen).toEqual([["start"], ["end", "expired"]]);
+  it("stays active beyond ten seconds and ends only after both keys are released", () => {
+    vi.useFakeTimers();
+    const { ptt, events } = setup();
+    ptt.handle("down", RCTRL); ptt.handle("down", SPACE);
+    vi.advanceTimersByTime(60_000);
+    expect(events).toEqual(["start"]);
+    ptt.handle("up", SPACE); expect(events).toEqual(["start"]);
+    ptt.handle("up", RCTRL); expect(events).toEqual(["start", "end"]);
   });
   it("stays active until both Right Ctrl and Space are released", () => {
     const { ptt, events } = setup();
@@ -88,35 +84,4 @@ describe("ptt-state", () => {
     expect(events).toEqual(["start"]);
   });
 
-  it("watchdog forces one end; normal end cancels it", () => {
-    const a = setup();
-    a.ptt.handle("down", RCTRL);
-    a.ptt.handle("down", SPACE);
-    expect(a.hasTimer()).toBe(true);
-    a.fire();
-    expect(a.events).toEqual(["start", "end"]);
-    const b = setup();
-    b.ptt.handle("down", RCTRL);
-    b.ptt.handle("down", SPACE);
-    b.ptt.handle("up", SPACE);
-    expect(b.hasTimer()).toBe(true);
-    b.ptt.handle("up", RCTRL);
-    expect(b.hasTimer()).toBe(false);
-    expect(b.events).toEqual(["start", "end"]);
-  });
-
-  it("after a forced end, no new start until both keys released and pressed again", () => {
-    const { ptt, events, fire } = setup();
-    ptt.handle("down", RCTRL);
-    ptt.handle("down", SPACE);
-    fire();
-    ptt.handle("down", SPACE);
-    ptt.handle("down", RCTRL);
-    expect(events).toEqual(["start", "end"]);
-    ptt.handle("up", SPACE);
-    ptt.handle("up", RCTRL);
-    ptt.handle("down", RCTRL);
-    ptt.handle("down", SPACE);
-    expect(events).toEqual(["start", "end", "start"]);
-  });
 });

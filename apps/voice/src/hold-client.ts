@@ -30,7 +30,7 @@ export function parseHold(data: unknown): "start" | "end" | null {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
   const keys = Object.keys(v);
   if (!keys.includes("hold") || keys.some(k => k !== "hold" && k !== "reason")) return null;
-  if ("reason" in v && (v as { reason: unknown }).reason !== "expired" && (v as { reason: unknown }).reason !== "reset") return null;
+  if ("reason" in v && (v as { reason: unknown }).reason !== "reset") return null;
   const h = (v as { hold: unknown }).hold;
   return h === "start" || h === "end" ? h : null;
 }
@@ -49,7 +49,7 @@ export function createHoldClient(deps: HoldClientDeps): { close(): void } {
       if (h) {
         holding = h === "start";
         const reason = JSON.parse(ev.data as string).reason;
-        deps.onHold(h, reason === "expired" ? "The 10-second hold limit was reached. Nothing was sent." : reason === "reset" ? "The shortcut was stopped. Nothing was sent." : undefined);
+        deps.onHold(h, reason === "reset" ? "The shortcut was stopped. Nothing was sent." : undefined);
       }
     };
     s.onerror = () => {};

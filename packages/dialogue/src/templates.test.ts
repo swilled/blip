@@ -5,6 +5,7 @@ import fixtureJson from "../../../fixtures/forms/survey-form.model.json" with { 
 type BatchResult = { text: string; nextIndex: number | null; lastFieldId: string | null; optionsFieldId: string | null };
 type TemplatesApi = {
   readBatchText?: (form: FormModel, startIndex: number, count: number) => BatchResult;
+  currentValueText?: (field: Field) => string | null;
   echoText?: (field: Field, observedDisplay: string | null, replaced: boolean) => string;
   readBackText?: (form: FormModel) => string;
   requiredEmptyText?: (form: FormModel) => string;
@@ -60,10 +61,28 @@ describe("spoken form templates", () => {
 
   it("numbers page options and closes the final batch with its field count", () => {
     const batch = readBatchText(fixture, 3, 3);
-    expect(batch.text).toBe("Field 4: probably How did you hear about us, required. Options: one, Friend. Two, Web search. Three, Other. Field 5: probably Satisfaction, optional. Options: one, Low. Two, Medium. Three, High. Field 6: probably Age, optional. That is all 6 fields.");
+    expect(batch.text).toBe("Field 4: probably How did you hear about us, required. Options: one, Friend. Two, Web search. Three, Other. Field 5: probably Satisfaction, optional. Options: one, Low. Two, Medium. Three, High. Currently not selected. Field 6: probably Age, optional. That is all 6 fields.");
     expect(batch.nextIndex).toBeNull();
     expect(batch.lastFieldId).toBe("e6");
     expect(batch.optionsFieldId).toBe("e4");
+  });
+
+  it("reads current text and selected option values from the accepted form model", () => {
+    const filled = withFields(fixture.fields.map((field) => {
+      if (field.id === "e1") return { ...field, value: "Rowan Example", hasValue: true };
+      if (field.id === "e4") return { ...field, value: "friend", hasValue: true };
+      return field;
+    }));
+
+    expect(readBatchText(filled, 0, 3).text).toContain("Field 1: probably Your name, optional. Currently Rowan Example.");
+    expect(readBatchText(filled, 3, 3).text).toContain("Options: one, Friend. Two, Web search. Three, Other. Currently Friend.");
+  });
+
+  it("reports explicit checkbox and radio state without exposing unsupported file names", () => {
+    expect(loaded?.currentValueText?.(makeField({ type: "checkbox", hasValue: true }))).toBe("checked");
+    expect(loaded?.currentValueText?.(makeField({ type: "checkbox", hasValue: false }))).toBe("not checked");
+    expect(loaded?.currentValueText?.(makeField({ type: "radio-group", hasValue: false }))).toBe("not selected");
+    expect(loaded?.currentValueText?.(makeField({ type: "file", hasValue: true, value: null }))).toBe("file selected, name hidden");
   });
 
   it("limits spoken option lists to eight and tells the user how to choose", () => {
@@ -132,6 +151,7 @@ describe("spoken form templates", () => {
     ] as unknown as Field[]);
     const outputs = [
       readBatchText(forged, 0, 3).text,
+      loaded?.currentValueText?.({ ...password, value: passwordMarker } as unknown as Field) ?? "",
       echoText({ ...password, value: passwordMarker } as unknown as Field, passwordMarker, false),
       readBackText(forged),
       requiredEmptyText(forged),
@@ -142,7 +162,7 @@ describe("spoken form templates", () => {
       expect(output).not.toContain(passwordMarker);
       expect(output).not.toContain(cardMarker);
     }
-    expect(outputs[2]).toContain("Password, entered, hidden.");
-    expect(outputs[2]).toContain("Card number, entered, hidden.");
+    expect(outputs[3]).toContain("Password, entered, hidden.");
+    expect(outputs[3]).toContain("Card number, entered, hidden.");
   });
 });

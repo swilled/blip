@@ -7,7 +7,7 @@ export const SIDECAR_PORT = 7778;
 export const SIDECAR_ALLOWED_ORIGIN = "http://127.0.0.1:7777";
 
 export interface PttSidecar {
-  broadcast(state: "start" | "end", reason?: "expired" | "reset"): void;
+  broadcast(state: "start" | "end", reason?: "reset"): void;
   /** Resolves to the bound port (useful when port 0 was requested). */
   listening: Promise<number>;
   close(): Promise<void>;

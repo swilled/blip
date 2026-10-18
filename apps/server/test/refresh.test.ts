@@ -111,6 +111,31 @@ describe("background page refresh", () => {
     }
   });
 
+  it("refreshes a same-structure value edit and speaks the value from the active form", async () => {
+    const server = await startServer({ port: 0, dev: true, snapshotTimeoutMs: 500, dialogueRunner: true });
+    const extension = startFakeExtension({ url: server.url, fixture: "broken" });
+    const voice = await bindClient(server.port, "voice", { origin: undefined });
+    const marker = "Rowan Example live value";
+    try {
+      await extension.connected;
+      extension.setFixture("broken");
+      await vi.waitFor(() => expect(server.session.model?.title).toBe("Customer survey"));
+
+      const version = server.session.model!.snapshotVersion;
+      extension.setValue("e1", marker);
+      await vi.waitFor(() => expect(server.session.model?.fields.find((field) => field.id === "e1")?.value).toBe(marker));
+      expect(server.session.model?.snapshotVersion).toBe(version);
+      expect(JSON.stringify(extension.sent().filter((message) => message.type === "page.changed"))).not.toContain(marker);
+
+      const frames = await utterance(voice, "read the form");
+      expect(frames.filter((frame) => frame.type === "speak").map((frame) => frame.payload.text).join(" ")).toContain(marker);
+    } finally {
+      voice.ws.terminate();
+      extension.close();
+      await server.close();
+    }
+  });
+
   it("coalesces a burst into one trailing request using the latest reason", async () => {
     const session = new Session("fake");
     session.extensionConnected = true;

@@ -56,7 +56,6 @@ export const MSG_STOPPED = "Stopped.";
 export const MSG_UNKNOWN = "I didn't understand that.";
 export const MSG_BRAIN_FAILED = "Something went wrong on my side.";
 export const MSG_MODEL_FAILED = "I couldn't understand that";
-export const MSG_FILLER = "One moment.";
 const MSG_FIELD_PHRASE_TOO_LONG = "That value is too long to fill.";
 const MSG_NO_CURRENT_ERRORS = "There are no errors currently detected.";
 const INTENT_WATCHDOG_MS = 4_000;
@@ -862,7 +861,7 @@ function currentIntentPage(ctx: TurnContext, snapshot: Snapshot, model: NonNulla
   };
 }
 
-async function runAgyIntent(ctx: TurnContext, text: string, snapshot: Snapshot, model: NonNullable<Session["model"]>): Promise<void> {
+async function runAgyIntent(ctx: TurnContext, text: string, page: { snapshot: Snapshot; model: NonNullable<Session["model"]> } | null): Promise<void> {
   const provider = ctx.agyProvider;
   if (provider === undefined) {
     speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
@@ -888,7 +887,12 @@ async function runAgyIntent(ctx: TurnContext, text: string, snapshot: Snapshot, 
       rejectTimeout(new Error("Agy intent watchdog expired."));
     }, INTENT_WATCHDOG_MS);
 
-    const routed = routeIntent(text, currentIntentPage(ctx, snapshot, model), provider, controller.signal);
+    const routed = routeIntent(
+      text,
+      page === null ? null : currentIntentPage(ctx, page.snapshot, page.model),
+      provider,
+      controller.signal,
+    );
     const result = await Promise.race([routed, timeout]);
     settled = true;
     if (result.kind === "intent") await runIntent(ctx, result.intent);
@@ -1010,7 +1014,6 @@ export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
     }
 
     hub.send("voice", "earcon", { name: "thinking" });
-    speak(hub, session, MSG_FILLER, "filler");
     let modelIntent: Intent | null = null;
     try {
       modelIntent = await ctx.brain.parseIntent(safePhraseForBrain(fieldPhrase));
@@ -1031,11 +1034,18 @@ export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
   if (await handleBrowserUtterance(ctx)) return;
 
   hub.send("voice", "earcon", { name: "thinking" });
-  speak(hub, session, MSG_FILLER, "filler");
   if (ctx.agyProvider !== undefined) {
+    if (!session.extensionConnected) {
+      await runAgyIntent(ctx, text, null);
+      return;
+    }
     const captured = await captureIntentPage(ctx);
-    if (!captured.ok) return speak(hub, session, captured.reply, "error");
-    await runAgyIntent(ctx, text, captured.snapshot, captured.model);
+    if (!captured.ok) {
+      if (captured.reply === MSG_NO_EXTENSION) await runAgyIntent(ctx, text, null);
+      else speak(hub, session, captured.reply, "error");
+      return;
+    }
+    await runAgyIntent(ctx, text, captured);
     return;
   }
 

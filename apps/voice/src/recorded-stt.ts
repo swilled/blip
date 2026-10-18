@@ -1,4 +1,4 @@
-import { MAX_TEXT_CHARS, MSG_CAPTURE_LIMIT, MSG_DIDNT_CATCH, MSG_MIC, MSG_MIC_MISSING, type Stt, type SttError, type SttOptions } from "./stt";
+import { MAX_TEXT_CHARS, MSG_DIDNT_CATCH, MSG_MIC, MSG_MIC_MISSING, type Stt, type SttError, type SttOptions } from "./stt";
 import { audioLevel, type MicrophoneInputSettings } from "./microphone";
 
 export interface PcmRecording { stop(): Promise<Float32Array[]>; cancel(): void; sampleRate: number; inputSettings?: MicrophoneInputSettings }
@@ -22,12 +22,12 @@ export function summarizePcm(chunks: Float32Array[], sampleRate: number, inputSe
 
 export function encodeWav(chunks: Float32Array[], inputRate: number): Uint8Array {
   const count = chunks.reduce((n, c) => n + c.length, 0);
-  if (!Number.isFinite(inputRate) || inputRate < 16000 || count / inputRate > 10.05) throw new Error("audio-too-long");
+  if (!Number.isFinite(inputRate) || inputRate < 16000 || count > Math.floor((0xffff_ffff - 44) / 2)) throw new Error("audio-too-long");
   const pcm = new Float32Array(count); let offset = 0;
   for (const chunk of chunks) { pcm.set(chunk, offset); offset += chunk.length; }
   const samples = Math.floor(count * 16000 / inputRate);
   if (samples < 3200) throw new Error("too-short");
-  if (samples > 160000) throw new Error("audio-too-long");
+  if (samples > Math.floor((0xffff_ffff - 44) / 2)) throw new Error("audio-too-long");
   const bytes = new Uint8Array(44 + samples * 2), view = new DataView(bytes.buffer);
   const text = (at: number, value: string) => { for (let n = 0; n < value.length; n++) bytes[at + n] = value.charCodeAt(n); };
   text(0, "RIFF"); view.setUint32(4, bytes.length - 8, true); text(8, "WAVEfmt ");
@@ -45,11 +45,11 @@ export function encodeWav(chunks: Float32Array[], inputRate: number): Uint8Array
 }
 
 export function createRecordedStt(options: RecordedSttOptions): Stt {
-  type Capture = { abort: AbortController; recording?: PcmRecording; released: boolean; timer: ReturnType<typeof setTimeout> };
+  type Capture = { abort: AbortController; recording?: PcmRecording; released: boolean };
   let active: Capture | null = null;
   function settle(capture: Capture, error?: SttError, text?: string) {
     if (active !== capture) return;
-    active = null; clearTimeout(capture.timer); capture.abort.abort(); capture.recording?.cancel();
+    active = null; capture.abort.abort(); capture.recording?.cancel();
     options.onStage?.("idle");
     if (error) options.onError(error);
     else if (text !== undefined) options.onFinal({ text, alternatives: [] }); // Whisper CLI supplies no calibrated confidence; never invent one.
@@ -71,7 +71,7 @@ export function createRecordedStt(options: RecordedSttOptions): Stt {
       const code = error instanceof Error ? error.message : "";
       settle(capture, { kind: "other", message: code === "too-short" ? MSG_DIDNT_CATCH
         : code === "recognizer-unavailable" ? "Local speech recognition is not ready. Restart Blip after installing its local recognizer."
-        : code === "audio-too-long" ? MSG_CAPTURE_LIMIT
+        : code === "audio-too-long" ? "That recording is too large for the WAV format. Nothing was sent. Try a shorter command."
         : code === "capture-cancelled" ? "The page or connection changed during recognition. Nothing was sent. Start a fresh hold."
         : code === "recognizer-busy" ? "The previous recording is still being processed. Wait, then try again."
         : "Local speech recognition could not finish. Nothing was sent. Release the keys and try again." });
@@ -80,7 +80,7 @@ export function createRecordedStt(options: RecordedSttOptions): Stt {
   return {
     press() {
       if (active) return;
-      const capture: Capture = { abort: new AbortController(), released: false, timer: setTimeout(() => settle(capture, { kind: "other", message: MSG_CAPTURE_LIMIT }), 10000) };
+      const capture: Capture = { abort: new AbortController(), released: false };
       active = capture; options.onStage?.("starting");
       void options.open(capture.abort.signal).then(recording => {
         if (active !== capture) { recording.cancel(); return; }
@@ -90,14 +90,14 @@ export function createRecordedStt(options: RecordedSttOptions): Stt {
         settle(capture, { kind: name === "NotAllowedError" ? "not-allowed" : "audio-capture", message: name === "NotAllowedError" ? MSG_MIC : MSG_MIC_MISSING });
       });
     },
-    release() { const capture = active; if (!capture || capture.released) return; capture.released = true; clearTimeout(capture.timer); void release(capture); },
+    release() { const capture = active; if (!capture || capture.released) return; capture.released = true; void release(capture); },
     cancel(reason) { if (active) settle(active, reason ? { kind: "other", message: reason } : undefined); },
     isActive: () => active !== null,
   };
 }
 
 /** Raw microphone capture only: no SpeechRecognition, silence endpointing or cloud service. */
-export async function openPcmMicrophone(signal: AbortSignal, options: { constraints?: MediaStreamConstraints; onLevel?: (level: ReturnType<typeof audioLevel>) => void } = {}): Promise<PcmRecording> {
+export async function openPcmMicrophone(signal: AbortSignal, options: { constraints?: MediaStreamConstraints; onLevel?: (level: ReturnType<typeof audioLevel>) => void; onSamples?: (samples: Float32Array, sampleRate: number) => void } = {}): Promise<PcmRecording> {
   const stream = await navigator.mediaDevices.getUserMedia(options.constraints ?? { audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
   const track = stream.getAudioTracks()[0];
   const selectedSettings = track?.getSettings();
@@ -113,7 +113,7 @@ export async function openPcmMicrophone(signal: AbortSignal, options: { constrai
   catch (error) { for (const track of stream.getTracks()) track.stop(); throw error; }
   const chunks: Float32Array[] = [];
   let source: MediaStreamAudioSourceNode | undefined, worklet: AudioWorkletNode | undefined;
-  let closed = false, stopping = false, samples = 0;
+  let closed = false, stopping = false;
   let levelAt = -Infinity, meterSamples = 0, meterEnergy = 0, meterPeak = 0, meterClipped = 0;
   let ready!: () => void, flush!: () => void;
   const started = new Promise<void>(resolve => { ready = resolve; });
@@ -158,9 +158,8 @@ export async function openPcmMicrophone(signal: AbortSignal, options: { constrai
         options.onLevel?.({ rms: Math.sqrt(meterEnergy / Math.max(1, meterSamples)), peak: meterPeak, clipped: meterClipped });
         meterSamples = 0; meterEnergy = 0; meterPeak = 0; meterClipped = 0;
       }
-      samples += data.length;
-      if (samples <= context.sampleRate * 10) chunks.push(data);
-      else { cleanup(); flush(); }
+      chunks.push(data);
+      options.onSamples?.(data, context.sampleRate);
       ready();
     };
     const mute = context.createGain(); mute.gain.value = 0;
@@ -178,7 +177,7 @@ export async function openPcmMicrophone(signal: AbortSignal, options: { constrai
         let deadline: ReturnType<typeof setTimeout>;
         try { await Promise.race([flushed, new Promise<never>((_, reject) => { deadline = setTimeout(() => reject(new Error("recording-flush-timeout")), 1000); })]); }
         finally { clearTimeout(deadline!); cleanup(); }
-        if (signal.aborted || samples > context.sampleRate * 10) throw new Error("recording-cancelled");
+        if (signal.aborted) throw new Error("recording-cancelled");
         return chunks;
       },
       cancel: cleanup,
@@ -192,7 +191,8 @@ export function createLocalTranscriber(request: typeof fetch = fetch) {
     const status = await request("/_blip/stt", { signal, cache: "no-store" });
     const config = await status.json() as { ready?: boolean; token?: string };
     if (!status.ok || !config.ready || !config.token) throw new Error("recognizer-unavailable");
-    const deadline = AbortSignal.timeout(25000);
+    const audioSeconds = Math.max(0, (wav.byteLength - 44) / 32000);
+    const deadline = AbortSignal.timeout(Math.ceil(25_000 + audioSeconds * 3_000));
     const response = await request("/_blip/stt", { method: "POST", headers: { "Content-Type": "audio/wav", "X-Blip-Stt": config.token }, body: new Blob([wav as Uint8Array<ArrayBuffer>], { type: "audio/wav" }), signal: AbortSignal.any([signal, deadline]) });
     if (!response.ok) {
       let code: unknown;

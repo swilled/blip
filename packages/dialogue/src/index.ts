@@ -1,5 +1,6 @@
 export { reduce } from "./reduce";
 export { SPEECH_RATES, isSpeechRate } from "./speech-rate";
+export { fieldValueRequest, requiresFreshFormSnapshot } from "./live-read";
 export { confirmWindowOpen, phraseMatches } from "./confirm";
 export { formDigest, requiredEmpty } from "./fields";
 export { classifyUtterancePrivacy } from "./sensitive";

@@ -21,7 +21,8 @@ export function createTranscriptionHttp(transcribe: TranscribeAudio | undefined,
     const controller = new AbortController();
     const closed = () => controller.abort();
     res.once("close", closed);
-    const deadline = setTimeout(() => { closed(); if (!req.complete) req.destroy(); }, 25000);
+    // Bound a stalled upload, then allow local inference time to scale with audio length.
+    let deadline = setTimeout(() => { closed(); if (!req.complete) req.destroy(); }, 30_000);
     try {
       const chunks: Buffer[] = []; let size = 0;
       for await (const chunk of req) {
@@ -33,6 +34,9 @@ export function createTranscriptionHttp(transcribe: TranscribeAudio | undefined,
       let audible: boolean;
       try { audible = validateWav(wav); } catch { reply(400, { code: "invalid-audio" }); return; }
       if (!audible) { reply(200, { text: "", engine }); return; }
+      clearTimeout(deadline);
+      const audioSeconds = Math.max(0, (wav.length - 44) / 32000);
+      deadline = setTimeout(() => closed(), Math.ceil(25_000 + audioSeconds * 3_000));
       const text = await transcribe(wav, controller.signal);
       if (controller.signal.aborted || !session.voiceConnected || epoch !== session.voiceEpoch || capture !== session.voiceCapture) { reply(409, { code: "capture-cancelled" }); return; }
       reply(200, { text, engine });

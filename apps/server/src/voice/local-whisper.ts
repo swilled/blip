@@ -4,9 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type TranscribeAudio = ((wav: Buffer, signal: AbortSignal) => Promise<string>) & { engine?: string };
-export const MAX_WAV_BYTES = 44 + 16000 * 2 * 10;
+// RIFF/WAV stores chunk sizes as unsigned 32-bit values. This is a format bound,
+// not a push-to-talk duration limit; capture ends when the user releases the keys.
+export const MAX_WAV_BYTES = 0xffff_ffff;
 
-/** Accept exactly our bounded 16 kHz mono PCM format. Reject silence before model decoding. */
+/** Accept exactly our 16 kHz mono PCM format. Reject silence before model decoding. */
 export function validateWav(wav: Buffer): boolean {
   if (wav.length < 44 + 6400 || wav.length > MAX_WAV_BYTES || (wav.length - 44) % 2) throw new Error("invalid-audio");
   if (wav.toString("ascii", 0, 4) !== "RIFF" || wav.toString("ascii", 8, 16) !== "WAVEfmt "
@@ -52,7 +54,8 @@ export async function discoverLocalWhisper(options: { model?: "base.en" | "small
       }
     };
     const abort = () => finish(new Error("cancelled"));
-    const deadline = setTimeout(() => finish(new Error("recognition-timeout")), 20000);
+    const audioSeconds = Math.max(0, (wav.length - 44) / 32000);
+    const deadline = setTimeout(() => finish(new Error("recognition-timeout")), Math.ceil(25_000 + audioSeconds * 3_000));
     signal.addEventListener("abort", abort, { once: true });
     child.on("error", () => finish(new Error("recognizer-unavailable")));
     child.stdin.on("error", () => finish(new Error("recognizer-input-failed")));

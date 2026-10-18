@@ -11,6 +11,7 @@ export interface StructuralChange {
 export interface StructuralObserverOptions {
   frameId?: number;
   throttleMs?: number;
+  valueDebounceMs?: number;
   timeBudgetMs?: number;
   now?: () => number;
 }
@@ -27,6 +28,7 @@ const STRUCTURAL_ATTRIBUTES = new Set([
   "autocomplete", "checked", "class", "disabled", "for", "hidden", "href", "id", "max", "min", "multiple",
   "name", "placeholder", "readonly", "required", "role", "selected", "step", "style", "title", "type", "value",
 ]);
+const VALUE_ROLES = new Set(["textbox", "searchbox", "combobox", "listbox", "checkbox", "radio", "radiogroup", "switch", "spinbutton", "slider", "option"]);
 
 function shadowRootOf(element: Element): ShadowRoot | null {
   if (element.shadowRoot) return element.shadowRoot;
@@ -63,7 +65,30 @@ function relevantMutation(record: MutationRecord): boolean {
   return record.type === "childList" || record.type === "characterData";
 }
 
-/** Observe useful DOM shape changes, excluding values and private extension UI state. */
+function isAriaRadioStateMutation(record: MutationRecord): boolean {
+  if (record.type !== "attributes" || record.attributeName?.toLowerCase() !== "aria-checked") return false;
+  const target = record.target as Element;
+  return target.getAttribute("role")?.trim().toLowerCase() === "radio" ||
+    target.closest('[role="radio"], [role="radiogroup"]') !== null;
+}
+
+function isFormValueEvent(event: Event): boolean {
+  const target = event.target as (EventTarget & { nodeType?: number; localName?: string; isContentEditable?: boolean; getAttribute?: (name: string) => string | null }) | null;
+  if (!target || target.nodeType !== 1) return false;
+  const element = target as Element;
+  if (isInsideOverlay(element)) return false;
+  if (["input", "select", "textarea"].includes(element.localName)) return true;
+  const editable = element.getAttribute("contenteditable")?.trim().toLowerCase();
+  if (target.isContentEditable || editable === "" || editable === "true" || editable === "plaintext-only") return true;
+  return VALUE_ROLES.has(element.getAttribute("role")?.trim().toLowerCase() ?? "");
+}
+
+function isFormResetEvent(event: Event): boolean {
+  const target = event.target as (EventTarget & { nodeType?: number; localName?: string }) | null;
+  return event.type === "reset" && target?.nodeType === 1 && target.localName === "form";
+}
+
+/** Observe DOM shape and control-state changes without putting field values in the notification. */
 export function observeStructuralChanges(
   document: Document,
   onChange: (change: StructuralChange) => void,
@@ -74,6 +99,7 @@ export function observeStructuralChanges(
   if (typeof MutationObserverClass !== "function") return () => undefined;
 
   const throttleMs = Math.max(0, options.throttleMs ?? 500);
+  const valueDebounceMs = Math.max(0, options.valueDebounceMs ?? 120);
   const frameId = options.frameId ?? 0;
   const timeBudgetMs = options.timeBudgetMs ?? 100;
   const now = options.now ?? (() => Date.now());
@@ -81,8 +107,37 @@ export function observeStructuralChanges(
   let previousSignature = changeSignature(captureFrameSnapshot({ document, frameId, timeBudgetMs }));
   let lastPassAt = now() - throttleMs;
   let pending = false;
+  let pendingRadioStateChange = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let valueTimer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
+  const observedValueRoots: Array<Document | ShadowRoot> = [];
+  const handledValueEvents = new WeakSet<Event>();
+
+  const signalValueChange = (event: Event): void => {
+    if (disposed || handledValueEvents.has(event) || (!isFormValueEvent(event) && !isFormResetEvent(event))) return;
+    handledValueEvents.add(event);
+    if (valueTimer !== undefined) globalThis.clearTimeout(valueTimer);
+    valueTimer = globalThis.setTimeout(() => {
+      valueTimer = undefined;
+      if (disposed) return;
+      try {
+        const snapshot = captureFrameSnapshot({ document, frameId, timeBudgetMs });
+        previousSignature = changeSignature(snapshot);
+        // The signal contains only structural hashes; the live field contents stay in the
+        // subsequent extension-only snapshot response and never enter the mutation message.
+        onChange({ structuralHash: snapshot.structuralHash, changeSignature: previousSignature });
+      } catch {
+        // A transient page read failure must not take down the content script.
+      }
+    }, valueDebounceMs);
+  };
+
+  const observeValueRoot = (root: Document | ShadowRoot): void => {
+    if (observedValueRoots.includes(root)) return;
+    observedValueRoots.push(root);
+    for (const type of ["input", "change", "reset"]) root.addEventListener(type, signalValueChange, true);
+  };
 
   const watchShadowRoots = (): void => {
     const elements = elementsInComposedDocument(document, { timeBudgetMs });
@@ -92,6 +147,7 @@ export function observeStructuralChanges(
       if (!root || observedRoots.has(root)) continue;
       observedRoots.add(root);
       observer.observe(root, config);
+      observeValueRoot(root);
     }
   };
 
@@ -103,7 +159,9 @@ export function observeStructuralChanges(
     try {
       const snapshot = captureFrameSnapshot({ document, frameId, timeBudgetMs });
       const signature = changeSignature(snapshot);
-      if (signature !== previousSignature) {
+      const radioStateChanged = pendingRadioStateChange;
+      pendingRadioStateChange = false;
+      if (signature !== previousSignature || radioStateChanged) {
         previousSignature = signature;
         onChange({ structuralHash: snapshot.structuralHash, changeSignature: signature });
       }
@@ -121,11 +179,13 @@ export function observeStructuralChanges(
   const observer = new MutationObserverClass((records) => {
     if (disposed || !records.some(relevantMutation)) return;
     watchShadowRoots();
+    if (records.some(isAriaRadioStateMutation)) pendingRadioStateChange = true;
     pending = true;
     schedulePass();
   });
   const config: MutationObserverInit = { attributes: true, childList: true, characterData: true, subtree: true };
   observer.observe(document, config);
+  observeValueRoot(document);
   watchShadowRoots();
 
   return () => {
@@ -133,7 +193,13 @@ export function observeStructuralChanges(
     disposed = true;
     pending = false;
     if (timer !== undefined) globalThis.clearTimeout(timer);
+    if (valueTimer !== undefined) globalThis.clearTimeout(valueTimer);
     timer = undefined;
+    valueTimer = undefined;
     observer.disconnect();
+    for (const root of observedValueRoots) {
+      for (const type of ["input", "change", "reset"]) root.removeEventListener(type, signalValueChange, true);
+    }
+    observedValueRoots.length = 0;
   };
 }

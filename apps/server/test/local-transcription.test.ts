@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { startServer } from "../src/server";
-import { validateWav } from "../src/voice/local-whisper";
+import { MAX_WAV_BYTES, validateWav } from "../src/voice/local-whisper";
 import { encodeWav } from "../../voice/src/recorded-stt";
 
 function wav(amplitude = 0.1) { return Buffer.from(encodeWav([new Float32Array(16000).fill(amplitude)], 16000)); }
-describe("bounded local transcription endpoint", () => {
-  it("validates canonical PCM, rejects invalid input and detects silence", () => {
+describe("local transcription endpoint", () => {
+  it("validates canonical PCM longer than ten seconds, rejects invalid input and detects silence", () => {
     expect(validateWav(wav())).toBe(true); expect(validateWav(wav(0))).toBe(false);
     for (const audio of [Buffer.alloc(10), Buffer.alloc(400000), Buffer.from("RIFF-not-a-wave")]) expect(() => validateWav(audio)).toThrow();
+    expect(validateWav(Buffer.from(encodeWav([new Float32Array(12 * 16000).fill(0.1)], 16000)))).toBe(true);
     const wrong = wav(); wrong.writeUInt32LE(48000, 24); expect(() => validateWav(wrong)).toThrow();
   });
   it("transcribes only same-origin, token-authorized bounded WAV and never executes an action", async () => {
@@ -21,12 +22,15 @@ describe("bounded local transcription endpoint", () => {
       expect((await post({ Origin: "https://hostile.example", "X-Blip-Stt": token, "Content-Type": "audio/wav" })).status).toBe(403);
       expect((await post({ Origin: origin, "X-Blip-Stt": "wrong", "Content-Type": "audio/wav" })).status).toBe(403);
       const headers = { Origin: origin, "X-Blip-Stt": token, "Content-Type": "audio/wav" };
-      expect((await post(headers, Buffer.alloc(400000))).status).toBe(413);
       expect((await post(headers, Buffer.alloc(100))).status).toBe(400);
       expect(await (await post(headers, wav(0))).json()).toMatchObject({ text: "" });
       expect(transcribe).not.toHaveBeenCalled();
       expect(await (await post(headers)).json()).toMatchObject({ text: "read the form", engine: "whisper.cpp small.en" });
       expect(transcribe).toHaveBeenCalledTimes(1); expect(server.session.pendingGatedAction).toBeNull();
+      const longer = Buffer.from(encodeWav([new Float32Array(12 * 16000).fill(0.1)], 16000));
+      expect(longer.length).toBeLessThan(MAX_WAV_BYTES);
+      expect(await (await post(headers, longer)).json()).toMatchObject({ text: "read the form" });
+      expect(transcribe).toHaveBeenCalledTimes(2);
     } finally { await server.close(); }
   });
   it("rejects old-connection results and serializes native inference", async () => {

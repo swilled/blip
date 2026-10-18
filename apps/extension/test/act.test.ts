@@ -129,6 +129,35 @@ describe("executeAct live safety checks", () => {
     expect(document.querySelector<HTMLInputElement>('input[name="room"][value="b"]')?.checked).toBe(true);
   });
 
+  it("selects a bubbled ARIA radio option and returns the page-observed choice", async () => {
+    document.body.innerHTML = `
+      <div data-automation-id="questionItem">
+        <span data-automation-id="questionTitle"><span id="employment-title">Employment type</span></span>
+        <div role="radiogroup" aria-labelledby="employment-title">
+          <div id="full-time" role="radio" aria-label="Full time" aria-checked="false">Full time</div>
+          <div id="part-time" role="radio" aria-label="Part time" aria-checked="false">Part time</div>
+        </div>
+      </div>
+    `;
+    const frame = capture();
+    const field = frame.elements[0]!;
+    document.querySelector("#part-time")!.addEventListener("click", () => {
+      document.querySelector("#full-time")!.setAttribute("aria-checked", "false");
+      document.querySelector("#part-time")!.setAttribute("aria-checked", "true");
+    });
+
+    await expect(executeAct(request(
+      field.id,
+      { op: "select", targetId: field.id, optionValue: "Part time" },
+      "select",
+    ))).resolves.toMatchObject({
+      ok: true,
+      observedValue: "Part time",
+      liveKind: "select",
+    });
+    expect(document.querySelector('[role="radio"][aria-checked="true"]')?.id).toBe("part-time");
+  });
+
   it("rejects a changed target fingerprint before acting", async () => {
     document.body.innerHTML = '<label for="name">Name</label><input id="name">';
     const frame = capture();

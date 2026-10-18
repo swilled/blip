@@ -27,6 +27,11 @@ interface RadioGroup extends FoundElement {
   groupRoot: Element;
 }
 
+interface AriaRadioGroup extends FoundElement {
+  ariaRadio: true;
+  members: Element[];
+}
+
 type ChromeWithClosedRoots = typeof globalThis & {
   chrome?: {
     dom?: {
@@ -161,6 +166,57 @@ function radioGroupKey(element: HTMLInputElement, order: number): { scope: Node;
   const scope = element.form ?? root;
   const name = element.name;
   return { scope, key: name ? `name:${name}` : `anonymous:${order}` };
+}
+
+export function ariaRadioOwner(element: Element, elements?: readonly Element[]): Element {
+  const ancestorGroup = element.closest('[role="radiogroup"]');
+  if (ancestorGroup) return ancestorGroup;
+
+  const id = element.getAttribute("id");
+  if (id && elements) {
+    const ownedGroup = elements.find((candidate) =>
+      explicitRole(candidate) === "radiogroup" &&
+      (candidate.getAttribute("aria-owns") ?? "").trim().split(/\s+/).includes(id),
+    );
+    if (ownedGroup) return ownedGroup;
+  }
+
+  return element.closest("fieldset") ??
+    element.closest('[data-automation-id="questionItem"]') ??
+    element.closest('[role="group"]') ??
+    element.parentElement ??
+    element;
+}
+
+export function ariaRadioSelected(element: Element): boolean {
+  if (element.getAttribute("aria-checked")?.trim().toLowerCase() === "true") return true;
+  return element.localName === "input" && (element as HTMLInputElement).checked;
+}
+
+export function ariaRadioOptionLabel(element: Element): string {
+  const accessible = labelCandidatesOf(element).find((candidate) => candidate.source === "aria")?.text;
+  if (accessible) return accessible;
+  return boundedText(element.textContent, 200, 200) ||
+    labelCandidatesOf(element).find((candidate) => candidate.source === "label")?.text ||
+    boundedText(element.getAttribute("value"), 200, 200);
+}
+
+export function ariaRadioOptionValue(element: Element): string {
+  return boundedText(element.getAttribute("value"), 200, 200) || ariaRadioOptionLabel(element);
+}
+
+export function ariaRadioGroupMembers(group: Element): Element[] {
+  const elements = elementsInComposedDocument(group.ownerDocument);
+  return elements.filter((element) => explicitRole(element) === "radio" && ariaRadioOwner(element, elements) === group);
+}
+
+function ariaRadioGroupLabels(element: Element): LabelCandidate[] {
+  const question = element.closest('[data-automation-id="questionItem"]');
+  const title = question?.querySelector('[data-automation-id="questionTitle"]');
+  const titleText = boundedText(title?.textContent, 200, 200);
+  const candidates = labelCandidatesOf(element);
+  if (!titleText || candidates.some((candidate) => candidate.text === titleText)) return candidates;
+  return [{ text: titleText, source: "aria" as const, confidence: 1 }, ...candidates].slice(0, 8);
 }
 
 function effectiveButtonType(element: Element): string | undefined {
@@ -346,6 +402,45 @@ function radioRaw(group: RadioGroup, frameId: number): RawElement {
   return assignId(group.element, value);
 }
 
+function ariaRadioRaw(group: AriaRadioGroup, frameId: number): RawElement {
+  const root = group.element;
+  const labels = ariaRadioGroupLabels(root);
+  const required = requiredStateOf(root, labels);
+  const error = errorStateOf(root);
+  const options = group.members.map((member) => {
+    const label = ariaRadioOptionLabel(member);
+    const value = ariaRadioOptionValue(member);
+    return { value, label: label || value, selected: ariaRadioSelected(member) };
+  });
+  const selected = options.find((option) => option.selected);
+  const sensitive = group.members.map((member) => safeValueOf(member).sensitive).find((value) => value !== "none") ?? "none";
+  const value: RawElement = {
+    id: "",
+    frameId,
+    category: "field",
+    tag: root.localName,
+    inputType: "radio",
+    role: "radiogroup",
+    labelCandidates: labels,
+    ...(root.getAttribute("name") ? { name: boundedText(root.getAttribute("name"), 200, 200) } : {}),
+    ...(error.describedBy ? { describedBy: error.describedBy } : {}),
+    required: required.required,
+    requiredSource: required.requiredSource,
+    invalid: error.invalid,
+    errorText: error.errorText,
+    value: sensitive === "none" ? selected?.value ?? null : null,
+    hasValue: selected !== undefined,
+    options,
+    sensitive,
+    disabled: group.members.every(isDisabled),
+    visible: group.members.some(isVisible),
+    ...(groupText(root) ? { group: groupText(root)! } : {}),
+    order: group.order,
+    kind: "select",
+  };
+  return assignId(root, value);
+}
+
 function pageUrlOf(document: Document): string {
   try {
     const url = new URL(document.location.href);
@@ -360,12 +455,26 @@ export function walkDocument(document: Document, options: WalkOptions = {}): Raw
   const frameId = options.frameId ?? 0;
   const pageUrl = pageUrlOf(document);
   const { elements } = composedElements(document, options);
-  const found: FoundElement[] = [];
+  const found: Array<FoundElement | RadioGroup | AriaRadioGroup> = [];
   const radioScopes = new Map<Node, Map<string, RadioGroup>>();
+  const ariaRadioGroups = new Map<Element, AriaRadioGroup>();
+  const elementOrder = new Map(elements.map((element, index) => [element, index]));
 
   elements.forEach((element, order) => {
     if (isHiddenInput(element)) return;
     const inputType = inputTypeOf(element);
+    const role = explicitRole(element);
+    if (role === "radio" && !(element.localName === "input" && inputType === "radio")) {
+      const owner = ariaRadioOwner(element, elements);
+      let group = ariaRadioGroups.get(owner);
+      if (!group) {
+        group = { element: owner, order: elementOrder.get(owner) ?? order, ariaRadio: true, members: [] };
+        ariaRadioGroups.set(owner, group);
+      }
+      group.members.push(element);
+      return;
+    }
+    if (role === "radiogroup") return;
     if (element.localName === "input" && inputType === "radio") {
       const radio = element as HTMLInputElement;
       const key = radioGroupKey(radio, order);
@@ -392,9 +501,11 @@ export function walkDocument(document: Document, options: WalkOptions = {}): Raw
   });
 
   for (const byName of radioScopes.values()) found.push(...byName.values());
+  found.push(...ariaRadioGroups.values());
 
   const raw = found.map((entry) => {
-    if ("members" in entry) return radioRaw(entry as RadioGroup, frameId);
+    if ("ariaRadio" in entry) return ariaRadioRaw(entry, frameId);
+    if ("members" in entry) return radioRaw(entry, frameId);
     if (isActionElement(entry.element)) return actionRaw(entry.element, entry.order, frameId, pageUrl);
     return valueRaw(entry.element, entry.order, frameId);
   });

@@ -27,7 +27,7 @@ describe("Phase 4 demo runbook", () => {
     expect(runbook).toContain("Local submit observed. No data was sent.");
     expect(runbook).toContain("not Phase 4 DEMO-03 evidence");
     expect(runbook.toLowerCase()).toContain("no phase 4 live-form rehearsal has been performed or claimed");
-    expect(runbook).toContain("no Phase 4 page visit");
+    expect(runbook).toContain("No demo window was launched, reset script invoked, live form visited or submitted");
     expect(runbook).toContain("Three consecutive live runs");
     expect(runbook).toContain("PENDING — no device result inferred");
     expect(runbook).toContain("PENDING — no tag created");

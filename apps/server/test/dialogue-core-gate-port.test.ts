@@ -57,7 +57,7 @@ function makeRig() {
     schedule: () => undefined,
   };
   const gate = createCoreDialogueGatePort(gatedContext);
-  const handlers = createDialogueHandlers({ gate, now: () => clock });
+  const handlers = createDialogueHandlers({ gate, now: () => clock, refresher });
 
   function message<T extends MessageType>(type: T, payload: PayloadOf<T>): Message {
     const result = parseFrame(JSON.stringify(buildFrame(type, payload)));

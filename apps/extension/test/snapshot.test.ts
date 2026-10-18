@@ -66,6 +66,16 @@ describe("captureFrameSnapshot", () => {
     expect(cardLikeField).toMatchObject({ sensitive: "card-number", value: null, hasValue: true });
   });
 
+  it("reads current live control properties on each snapshot, not their initial HTML attributes", () => {
+    document.body.innerHTML = '<label for="name">Name</label><input id="name" value="Initial">';
+    const field = () => captureFrameSnapshot({ document, topOrigin: "https://forms.example", timeBudgetMs: 1000 })
+      .elements.find((element) => element.category === "field");
+
+    expect(field()?.value).toBe("Initial");
+    document.querySelector<HTMLInputElement>("#name")!.value = "Rowan Example";
+    expect(field()).toMatchObject({ value: "Rowan Example", hasValue: true });
+  });
+
   it("sets truncated only when the 250-element wire list is cut, keeping fields before actions", () => {
     document.body.innerHTML = `<button type="button">Close</button>${Array.from({ length: 249 }, (_, index) => `<input name="field${index}">`).join("")}<button type="button">Dismiss</button>`;
 

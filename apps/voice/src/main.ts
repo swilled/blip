@@ -13,11 +13,13 @@ import { createSocket, type VoiceSocket } from "./socket";
 import { createSpeakBridge } from "./speak-bridge";
 import { createSpeechRate, createRateCommandController, parseSpeechRateCommand } from "./speech-rate";
 import { createVoiceState } from "./state";
-import { createRecordedStt, createLocalTranscriber, encodeWav, openPcmMicrophone, summarizePcm } from "./recorded-stt";
+import { openPcmMicrophone, summarizePcm } from "./recorded-stt";
+import { createMoonshineStt, loadMoonshineTranscriber } from "./moonshine-stt";
 import { createTalkController } from "./talk-controller";
 import { checkMicrophone, createSpeechDiagnostics } from "./speech-diagnostics";
 import { createTts } from "./tts";
 import { createNativeSynth } from "./native-synth";
+import { createKokoroSynth } from "./kokoro-synth";
 import { microphoneConstraints, microphoneLevelHint } from "./microphone";
 import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log";
 
@@ -51,6 +53,7 @@ document.getElementById("check-microphone")!.addEventListener("click", async () 
 });
 const recognitionTestButton = el<HTMLButtonElement>("test-recognition");
 const recognitionTestStatus = el("recognition-test-status");
+let voiceStt: ReturnType<typeof createMoonshineStt> | null = null;
 let recognitionTest: AbortController | null = null;
 window.addEventListener("pagehide", () => recognitionTest?.abort());
 recognitionTestButton.addEventListener("click", async () => {
@@ -84,10 +87,10 @@ recognitionTestButton.addEventListener("click", async () => {
       echoCancellation: summary.inputSettings?.echoCancellation, noiseSuppression: summary.inputSettings?.noiseSuppression, autoGainControl: summary.inputSettings?.autoGainControl });
     recording = undefined;
     recognitionTestStatus.textContent = "Transcribing locally… no command will be sent.";
-    const text = await createLocalTranscriber()(encodeWav(chunks, summary.sampleRate), controller.signal);
+    const text = await voiceStt?.transcribeRecorded(chunks, summary.sampleRate);
     if (!controller.signal.aborted) recognitionTestStatus.textContent = text
       ? `Local test heard: “${text}”. No command was sent.`
-      : "The microphone recorded, but Whisper heard no words. No command was sent.";
+      : "The microphone recorded, but Moonshine heard no words. No command was sent.";
   } catch (error) {
     if (controller.signal.aborted) recognitionTestStatus.textContent = "Speech test cancelled. No command was sent.";
     else {
@@ -112,15 +115,23 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 const nativeSynth = createNativeSynth({ synthesis: window.speechSynthesis, makeUtterance: text => new SpeechSynthesisUtterance(text), record: recordSpeechEvent, warn: message => { el("output-mode-status").textContent = message; } });
+const speechSynth = createKokoroSynth({
+  native: nativeSynth,
+  onStatus: message => { el("output-mode-status").textContent = message; },
+});
 function renderVoices(): void {
   const select = el<HTMLSelectElement>("speech-voice");
-  const selected = select.value;
-  select.replaceChildren(new Option("Automatic local English voice", ""), ...nativeSynth.getVoices().map(voice => new Option(`${voice.name}${voice.localService ? " (local)" : ""}`, voice.voiceURI)));
-  if ([...select.options].some(option => option.value === selected)) select.value = selected;
+  const selected = select.value || "kokoro:af_heart";
+  select.replaceChildren(
+    new Option("Female — Kokoro Heart (American)", "kokoro:af_heart"),
+    new Option("Male — Kokoro Michael (American)", "kokoro:am_michael"),
+  );
+  select.value = [...select.options].some(option => option.value === selected) ? selected : "kokoro:af_heart";
+  speechSynth.setVoice(select.value);
 }
 renderVoices();
 window.speechSynthesis.addEventListener("voiceschanged", renderVoices);
-el<HTMLSelectElement>("speech-voice").addEventListener("change", event => { nativeSynth.setVoice((event.target as HTMLSelectElement).value || null); el("output-mode-status").textContent = "The selected voice will read the next reply."; });
+el<HTMLSelectElement>("speech-voice").addEventListener("change", event => { speechSynth.setVoice((event.target as HTMLSelectElement).value); el("output-mode-status").textContent = "The selected voice will read the next reply."; });
 function selectedMicrophoneConstraints(): MediaStreamConstraints {
   return microphoneConstraints(el<HTMLSelectElement>("microphone-device").value, el<HTMLInputElement>("microphone-echo-cancel").checked, el<HTMLInputElement>("microphone-auto-gain").checked, el<HTMLInputElement>("microphone-noise-suppress").checked);
 }
@@ -206,7 +217,7 @@ function commitExchange(): void {
 
 const tts = createTts({
   localFiller: false,
-  synth: nativeSynth,
+  synth: speechSynth,
   onFailure: message => { el("output-mode-status").textContent = message; },
   getRate: () => speechRate,
   now: () => Date.now(),
@@ -355,19 +366,26 @@ talk = createTalkController({
     sendUtterance: (u) => socket?.sendUtterance(u) ?? null,
   },
   handleLocalUtterance: handleLocalRateUtterance,
-  makeStt: (h) =>
-    createRecordedStt({
-      open: async signal => {
+  makeStt: (h) => {
+    const stt = createMoonshineStt({
+      loadTranscriber: onProgress => loadMoonshineTranscriber(onProgress),
+      open: async (signal, onSamples) => {
         ++nativeRecognitionId;
         recordSpeechEvent({ event: "capture-request", generation: nativeRecognitionId, focused: document.hasFocus(), visible: document.visibilityState === "visible" });
-        const recording = await openPcmMicrophone(signal, { constraints: selectedMicrophoneConstraints(), onLevel: level => {
+        const recording = await openPcmMicrophone(signal, { constraints: selectedMicrophoneConstraints(), onSamples, onLevel: level => {
           el<HTMLMeterElement>("microphone-level").value = Math.min(1, level.rms * 5);
           el("microphone-level-hint").textContent = microphoneLevelHint(level.rms, level.peak);
         } });
         recordSpeechEvent({ event: "audiostart", generation: nativeRecognitionId });
         return recording;
       },
-      transcribe: createLocalTranscriber(),
+      summarize: summarizePcm,
+      onProgress: (fraction, file) => {
+        const percent = fraction === undefined ? "" : ` ${Math.round(fraction * 100)}%`;
+        el("speech-recognition-status").textContent = `Preparing the on-device speech model${percent} (${file}).`;
+      },
+      onReady: () => { el("speech-recognition-status").textContent = "On-device Moonshine English recognition is ready. Speech stays on this device."; },
+      onLoadError: error => { el("speech-recognition-status").textContent = `The speech model could not load: ${error.message.slice(0, 180)}. Check the connection once, then reload Blip; audio is never uploaded.`; },
       onCapture: summary => {
         recordSpeechEvent({ event: "capture-summary", generation: nativeRecognitionId, durationSeconds: summary.durationSeconds, rms: summary.rms, peak: summary.peak,
           inputChannels: summary.inputSettings?.channels, inputSampleRate: summary.inputSettings?.sampleRate, captureSampleRate: summary.sampleRate,
@@ -377,7 +395,12 @@ talk = createTalkController({
       onFinal: final => { recordSpeechEvent({ event: "result", generation: nativeRecognitionId, results: 1 }); h.onFinal(final); },
       onError: error => { recordSpeechEvent({ event: "error", generation: nativeRecognitionId, code: error.kind }); h.onError(error); },
       onStage: h.onStage,
-    }),
+      onInterim: h.onInterim,
+    });
+    voiceStt = stt;
+    void stt.warmup().catch(() => {});
+    return stt;
+  },
   tts,
   state,
   earcons,
@@ -465,7 +488,7 @@ holdButton.addEventListener("keyup", (ev) => {
   }
 });
 window.addEventListener("blur", () => setManualHold(false, "The Blip window lost focus. Nothing was sent."));
-window.addEventListener("pagehide", () => { rateCommands.cancel(); holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); tts.cancel(); nativeSynth.dispose(); window.speechSynthesis.removeEventListener("voiceschanged", renderVoices); navigator.mediaDevices.removeEventListener("devicechange", refreshMicrophones); });
+window.addEventListener("pagehide", () => { rateCommands.cancel(); holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); voiceStt?.close(); tts.cancel(); speechSynth.dispose(); window.speechSynthesis.removeEventListener("voiceschanged", renderVoices); navigator.mediaDevices.removeEventListener("devicechange", refreshMicrophones); });
 
 // Typed input.
 const input = el<HTMLInputElement>("typed-input");
@@ -507,6 +530,7 @@ function activate(): void {
   if (activated) return;
   activated = true;
   talk.activate();
+  speechSynth.activate();
   document.getElementById("start-gate")?.remove();
   el("app").removeAttribute("inert");
   earcons.init();

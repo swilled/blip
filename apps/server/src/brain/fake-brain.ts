@@ -1,5 +1,5 @@
 // The offline stand-in for the model (D-23). Deterministic: the same text always gives the same
-// Intent, after a fixed delay that exercises the filler/earcon path. It cannot request an action
+// Intent, after a fixed delay that exercises the thinking-earcon path. It cannot request an action
 // unless a test sets `requestActionId`, and even then the server never turns that into an act.request.
 import type { Intent } from "@blip/protocol";
 

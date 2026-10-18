@@ -22,7 +22,7 @@ export const Intent = z.discriminatedUnion("type", [
   z.object({ type: z.literal("stop") }),
   z.object({ type: z.literal("request_action"), actionId: z.string() }), // REQUEST only; never executes a gated kind
   z.object({ type: z.literal("click_safe"), actionId: z.string() }), // executor re-checks kind
-  z.object({ type: z.literal("answer"), text: z.string().max(300) }), // free-form question answered from the model
+  z.object({ type: z.literal("answer"), text: z.string().max(1200) }), // concise conversational answer, spoken by Blip
   z.object({ type: z.literal("clarify"), question: z.string().max(200) }),
   z.object({ type: z.literal("unknown") }),
 ]);

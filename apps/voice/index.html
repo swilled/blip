@@ -58,8 +58,9 @@
       <meter id="microphone-level" min="0" max="1" value="0" aria-label="Microphone sound level"></meter>
       <p id="microphone-level-hint" aria-live="off">Hold to talk to check the sound level.</p>
       <p id="microphone-capture-summary" class="label muted"></p>
+      <p id="speech-recognition-status" role="status" aria-live="polite">Preparing on-device Moonshine English recognition. The first load downloads the free model; audio stays in this browser.</p>
       <p id="recognition-test-status" role="status" aria-live="polite">The speech test transcribes locally and never sends a command.</p>
-      <p>Speech recognition: local Whisper. Hold to record; release to transcribe.</p>
+      <p>Speech recognition: Moonshine streaming locally. Hold to talk; release to send the final transcript.</p>
       <p id="microphone-check-status" role="status"></p>
       </fieldset>
       <details id="speech-diagnostics">
@@ -71,7 +72,7 @@
       <fieldset id="output-mode" aria-describedby="output-mode-help">
         <legend>Speech output</legend>
         <label for="speech-voice">Blip voice</label>
-        <select id="speech-voice"><option value="">Automatic local English voice</option></select>
+        <select id="speech-voice"><option value="kokoro:af_heart">Female — Kokoro Heart (American)</option><option value="kokoro:am_michael">Male — Kokoro Michael (American)</option></select>
         <label><input type="radio" name="output-mode" value="agent-voice" checked /> Blip voice</label>
         <label><input type="radio" name="output-mode" value="screen-reader" /> Screen reader (NVDA)</label>
         <p id="output-mode-help" class="label muted">Only one speech output is used. This choice lasts for this window session.</p>

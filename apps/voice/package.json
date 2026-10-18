@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@blip/dialogue": "*",
     "@blip/protocol": "*",
-    "@blip/dialogue": "*"
+    "@moonshine-ai/moonshine-wasm": "^0.1.5",
+    "kokoro-js": "^1.2.1"
   },
   "scripts": {
     "dev": "vite build --watch",

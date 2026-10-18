@@ -120,6 +120,68 @@ describe("walkDocument", () => {
     expect(elements.find((element) => element.text === "Close and confirm")).toMatchObject({ category: "action", kind: "submit" });
   });
 
+  it("recognizes bubbled single-choice questions built from ARIA radio options", () => {
+    document.body.innerHTML = `
+      <div data-automation-id="questionItem">
+        <span data-automation-id="questionTitle">
+          <span id="QuestionId_employment" role="heading" aria-level="2">
+            <span data-automation-id="questionOrdinal">2.</span>
+            <span>Employment type</span>
+            <span data-automation-id="requiredStar" role="note" aria-label="Required to answer"></span>
+          </span>
+        </span>
+        <div role="radiogroup" aria-labelledby="QuestionId_employment">
+          <div role="radio" aria-label="Full time" aria-checked="false">Full time</div>
+          <div role="radio" aria-label="Part time" aria-checked="true">Part time</div>
+        </div>
+      </div>
+    `;
+
+    const elements = walkDocument(document);
+
+    expect(elements).toHaveLength(1);
+    expect(elements[0]).toMatchObject({
+      category: "field",
+      inputType: "radio",
+      role: "radiogroup",
+      kind: "select",
+      value: "Part time",
+      hasValue: true,
+      required: true,
+      requiredSource: "aria",
+      options: [
+        { value: "Full time", label: "Full time", selected: false },
+        { value: "Part time", label: "Part time", selected: true },
+      ],
+    });
+    expect(elements[0]?.labelCandidates[0]?.text).toContain("Employment type");
+
+    document.querySelector('[role="radio"][aria-checked="true"]')!.setAttribute("aria-checked", "false");
+    document.querySelector('[role="radio"][aria-label="Full time"]')!.setAttribute("aria-checked", "true");
+    expect(walkDocument(document)[0]).toMatchObject({ value: "Full time", hasValue: true });
+  });
+
+  it("follows aria-owns when radio options are not DOM children of their group", () => {
+    document.body.innerHTML = `
+      <h2 id="availability-title">Availability</h2>
+      <div id="availability" role="radiogroup" aria-labelledby="availability-title" aria-owns="weekday weekend"></div>
+      <div id="weekday" role="radio" aria-checked="false">Weekdays</div>
+      <div id="weekend" role="radio" aria-checked="true">Weekends</div>
+    `;
+
+    const elements = walkDocument(document);
+
+    expect(elements).toHaveLength(1);
+    expect(elements[0]).toMatchObject({
+      labelCandidates: [expect.objectContaining({ text: "Availability" })],
+      value: "Weekends",
+      options: [
+        { value: "Weekdays", label: "Weekdays", selected: false },
+        { value: "Weekends", label: "Weekends", selected: true },
+      ],
+    });
+  });
+
   it("discovers controls in open and Chrome-exposed closed shadow roots", () => {
     document.body.innerHTML = `<x-open></x-open><x-closed></x-closed>`;
     const openHost = document.querySelector("x-open")!;

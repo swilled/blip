@@ -54,6 +54,7 @@ export class InvalidAgyOutputError extends Error {
  * this API accepts no CLI/process handle and returns only existing protocol Intent data or a descriptive patch.
  */
 export type AgyProvider = IntentBrain & {
+  allowGeneralKnowledge: true;
   parseIntent(prompt: string, signal?: AbortSignal): Promise<z.infer<typeof Intent>>;
   repairFormModel(prompt: string, signal?: AbortSignal): Promise<RepairPatch>;
   /** Returns bounded prose only; page content cannot become a browser command or authorization. */
@@ -125,6 +126,7 @@ export async function createAgyProvider(options: AgyProviderOptions = {}): Promi
   await sessions.start();
 
   return {
+    allowGeneralKnowledge: true,
     async parseIntent(prompt, signal?: AbortSignal) {
       return parseIntentStrict(await sessions.call("intent", prompt, signal));
     },

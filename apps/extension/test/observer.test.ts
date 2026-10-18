@@ -36,7 +36,7 @@ function startObserver(onChange: (change: StructuralChange) => void): () => void
 }
 
 describe("structural page mutation observer", () => {
-  it("keeps value-only input and checked changes silent", async () => {
+  it("signals live value changes without including values in the page-change message", async () => {
     document.body.innerHTML = '<label for="name">Name</label><input id="name"><label><input id="check" type="checkbox">Agree</label>';
     const changes: StructuralChange[] = [];
     const stop = startObserver((change) => changes.push(change));
@@ -45,9 +45,74 @@ describe("structural page mutation observer", () => {
     document.querySelector<HTMLInputElement>("#check")!.checked = true;
     document.querySelector<HTMLInputElement>("#name")!.dispatchEvent(new Event("input", { bubbles: true }));
     document.querySelector<HTMLInputElement>("#check")!.dispatchEvent(new Event("change", { bubbles: true }));
-    await flushMutationTurn(1000);
+    await flushMutationTurn(120);
 
-    expect(changes).toEqual([]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ structuralHash: expect.any(String), changeSignature: expect.any(String) });
+    expect(Object.keys(changes[0]!)).toEqual(["structuralHash", "changeSignature"]);
+    expect(JSON.stringify(changes)).not.toContain("private value");
+
+    // A second edit still sends a refresh signal even though value-free structure is unchanged.
+    document.querySelector<HTMLInputElement>("#name")!.value = "another private value";
+    document.querySelector<HTMLInputElement>("#name")!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushMutationTurn(120);
+    expect(changes).toHaveLength(2);
+    expect(changes[1]!.changeSignature).toBe(changes[0]!.changeSignature);
+    expect(JSON.stringify(changes)).not.toContain("another private value");
+    stop();
+  });
+
+  it("refresh-signals form reset and contenteditable changes", async () => {
+    document.body.innerHTML = '<form><input id="name" value="before"><button type="reset">Reset</button></form><div id="editor" contenteditable="true"></div>';
+    const changes: StructuralChange[] = [];
+    const stop = startObserver((change) => changes.push(change));
+
+    document.querySelector("form")!.dispatchEvent(new Event("reset", { bubbles: true }));
+    document.querySelector("#editor")!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushMutationTurn(120);
+
+    expect(changes).toHaveLength(1);
+    expect(JSON.stringify(changes)).not.toContain("before");
+    stop();
+  });
+
+  it("signals a selected bubble when an ARIA radio changes state without input/change events", async () => {
+    document.body.innerHTML = '<div role="radiogroup"><div id="option" role="radio" aria-checked="false">Full time</div></div>';
+    const changes: StructuralChange[] = [];
+    const stop = startObserver((change) => changes.push(change));
+
+    document.querySelector("#option")!.setAttribute("aria-checked", "true");
+    await flushMutationTurn(500);
+
+    expect(changes).toHaveLength(1);
+    expect(Object.keys(changes[0]!)).toEqual(["structuralHash", "changeSignature"]);
+    expect(JSON.stringify(changes)).not.toContain("Full time");
+    stop();
+  });
+
+  it("watches editable controls inside open and Chrome-exposed closed shadow roots", async () => {
+    const openHost = document.createElement("x-open-form");
+    const openRoot = openHost.attachShadow({ mode: "open" });
+    openRoot.innerHTML = '<input aria-label="Open value">';
+    const closedHost = document.createElement("x-closed-form");
+    const closedRoot = closedHost.attachShadow({ mode: "closed" });
+    closedRoot.innerHTML = '<input aria-label="Closed value">';
+    document.body.append(openHost, closedHost);
+    vi.stubGlobal("chrome", { dom: { openOrClosedShadowRoot: (host: Element) => host === closedHost ? closedRoot : null } });
+
+    const changes: StructuralChange[] = [];
+    const stop = startObserver((change) => changes.push(change));
+    const openInput = openRoot.querySelector("input")!;
+    const closedInput = closedRoot.querySelector("input")!;
+    openInput.value = "open private value";
+    closedInput.value = "closed private value";
+    openInput.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    closedInput.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+    await flushMutationTurn(120);
+
+    expect(changes).toHaveLength(1);
+    expect(JSON.stringify(changes)).not.toContain("open private value");
+    expect(JSON.stringify(changes)).not.toContain("closed private value");
     stop();
   });
 

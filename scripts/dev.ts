@@ -15,7 +15,7 @@ import { startFakeExtension } from "../tools/fake-extension/src/fake-extension";
 import { startRepl } from "../tools/repl/src/repl";
 
 const USAGE = `usage: npm run dev -- [options]
-  --brain=fake|agy        default fake
+  --brain=fake|agy         default fake; agy uses the signed-in headless Antigravity CLI
   --port <n>                 default ${DEFAULT_PORT}; 0 picks a free port
   --fake-delay <ms>          how long a model-routed turn waits, default 1500
   --fixture=booking|broken   page the fake extension serves, default booking

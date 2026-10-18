@@ -1,4 +1,4 @@
-import { classifyUtterancePrivacy, dialogueStateName, initialState, reduce, speakEffect, isSpeechRate, confirmWindowOpen, phraseMatches } from "@blip/dialogue";
+import { classifyUtterancePrivacy, dialogueStateName, initialState, reduce, speakEffect, isSpeechRate, confirmWindowOpen, phraseMatches, requiresFreshFormSnapshot } from "@blip/dialogue";
 import {
   newId,
   type ActRequest,
@@ -384,7 +384,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         context.session.voiceCapture = null;
         context.session.busy = true;
         context.hub.pushState();
-        if (context.session.model === null || context.session.stale) {
+        if (context.session.model === null || context.session.stale || requiresFreshFormSnapshot(utterance.text)) {
           await refreshSnapshot(context.session, "user");
         }
         if (utterance.source === "voice" && state.confirm && phraseMatches(utterance.text, state.confirm.phrase)) {

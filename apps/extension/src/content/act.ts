@@ -1,9 +1,16 @@
 import type { ActRequest, ActResult, RawElement, ActionKind } from "@blip/protocol";
 import { classifyAction, classifyField } from "@blip/policy/classify";
-import { fillSelect, fillText, selectRadio, setChecked } from "./fill.js";
+import { fillSelect, fillText, selectRadio, setChecked, settle } from "./fill.js";
 import { focusWithEvents } from "./focus.js";
 import { fingerprintOf } from "./fingerprint.js";
-import { actionFactsOf, resolveElementId, walkDocument } from "./walk.js";
+import {
+  actionFactsOf,
+  ariaRadioGroupMembers,
+  ariaRadioOptionValue,
+  ariaRadioSelected,
+  resolveElementId,
+  walkDocument,
+} from "./walk.js";
 import { isSsn, luhnValid, safeValueOf, type SafeValue, type Sensitivity } from "./sensitive.js";
 import { isDisabled } from "./visibility.js";
 import { beginOneSubmitAllowance, withSubmitEventsBlocked } from "./submit-guard.js";
@@ -88,6 +95,7 @@ function hasValidGate(request: ActRequest, liveKind: ActionKind): boolean {
 function fieldSensitivity(element: Element, raw: RawElement): Sensitivity {
   if (raw.inputType === "radio") {
     const members = radioMembers(element, raw);
+    if (members.length === 0) return raw.sensitive;
     for (const member of members) {
       const sensitivity = safeValueForAct(member).sensitive;
       if (sensitivity !== "none") return sensitivity;
@@ -181,8 +189,26 @@ async function executeResolved(
           valueElement = element;
         } else if (raw.inputType === "radio") {
           const members = radioMembers(element, raw);
-          outcome = await selectRadio(members, action.optionValue);
-          valueElement = members.find((member) => member.checked) ?? members[0] ?? element;
+          if (members.length > 0) {
+            outcome = await selectRadio(members, action.optionValue);
+            valueElement = members.find((member) => member.checked) ?? members[0] ?? element;
+          } else {
+            const ariaMembers = ariaRadioGroupMembers(element);
+            const selected = ariaMembers.find((member) => ariaRadioOptionValue(member) === action.optionValue);
+            if (!selected) return failure(actId, "exception", { ...liveExtra, detail: unsupportedDetail() });
+            if (isDisabled(selected)) return failure(actId, "disabled", liveExtra);
+            const clickable = selected as Element & { click?: () => void };
+            if (typeof clickable.click !== "function") return failure(actId, "exception", { ...liveExtra, detail: unsupportedDetail() });
+            clickable.click();
+            await settle(document.defaultView);
+            const updated = walkDocument(document, { frameId }).find((candidate) => candidate.id === targetId);
+            const observed = updated?.options?.find((option) => option.value === action.optionValue);
+            if (!observed?.selected) {
+              return failure(actId, "exception", { ...liveExtra, detail: "choice did not become selected" });
+            }
+            getHighlightOverlay(document).highlight(element);
+            return success(actId, { ...liveExtra, observedValue: updated?.value ?? null });
+          }
         } else {
           return failure(actId, "exception", { ...liveExtra, detail: unsupportedDetail() });
         }

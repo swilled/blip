@@ -4,7 +4,8 @@ import type { DialogueState, UndoEntry } from "./state";
 import { cancelEffect, discloseFieldLabel, speakEffect } from "./state";
 import { fillableFields, matchOption, optionLabelFor, optionList, profileFieldMatches, requiredEmpty, resolveField, spokenLabel } from "./fields";
 import { cleanValue, normalizeCommand, normalizeEmail, normalizeNumberish } from "./normalize";
-import { changeText, echoText, profileBatchText, readBatchText, requiredEmptyText, requiredFieldsBatchText, spellValueText, undoSummaryText } from "./templates";
+import { changeText, currentValueText, echoText, profileBatchText, readBatchText, requiredEmptyText, requiredFieldsBatchText, spellValueText, undoSummaryText } from "./templates";
+import { fieldValueRequest } from "./live-read";
 import type { DialogueEvent } from "./events";
 
 type DialogueResult = { state: DialogueState; effects: Effect[] };
@@ -104,6 +105,20 @@ function sayOr(labels: string[]): string {
 
 function speakableLabels(labels: string[]): string[] {
   return labels.map((label) => label.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/\s+/g, " ").trim().slice(0, 80));
+}
+
+/** Answer a named field-value question from the latest accepted page snapshot. */
+function handleFieldValueUtterance(state: DialogueState, norm: string, ctx: DialogueContext): DialogueResult | null {
+  const requested = fieldValueRequest(norm);
+  if (requested === undefined) return null;
+  if (ctx.form === null) return answer(state, "I can't read the page yet. Please reconnect and try again.");
+  if (!requested) return answer(state, "Which field should I read?");
+  const match = resolveField(ctx.form, requested);
+  if (match.kind === "ambiguous") return answer(state, `Which field? ${sayOr(speakableLabels(match.labels))}?`);
+  if (match.kind === "none") return answer(state, "I couldn't find that field. Say its full label.");
+  const value = currentValueText(match.field) ?? "empty";
+  const number = fieldNumber(ctx.form, match.field);
+  return withFieldDisclosure(state, ctx.form, match.field, `${spokenLabel(match.field, number)} is ${value}.`);
 }
 
 /** Handle the exact local spell grammar using only the current form snapshot. */
@@ -566,6 +581,9 @@ export function handleReadUtterance(
   _raw: string,
   ctx: DialogueContext,
 ): DialogueResult | null {
+  const fieldValueResult = handleFieldValueUtterance(state, norm, ctx);
+  if (fieldValueResult !== null) return fieldValueResult;
+
   if (READ.has(norm)) {
     if (ctx.form === null) return answer(state, "I can't see a page yet.");
     return read(state, ctx.form, 0);

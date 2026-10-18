@@ -19,6 +19,6 @@ Validation passed:
 - `npm.cmd run build --workspace @blip/voice` and `npm.cmd run build --workspace @blip/extension` — passed.
 - `npm.cmd test -- dev/mock-server/src/demo-runbook.test.ts` — 2 tests passed.
 
-The plan's evidence update records VOX-01, VOX-02, and VOX-07 as user-confirmed working and identifies the Microsoft required-field subcheck as passed. The full Phase 4 goal remains open: NVDA exact completion or D-16 disposition, live negative validation and three consecutive submissions, fallback/hotspot/recorder rehearsal, three-minute video, and freeze review are not established. No `demo-safe` tag was created.
+The plan's evidence update records VOX-01, VOX-02, and VOX-07 as user-confirmed working and identifies the Microsoft required-field subcheck as passed. The D-16 demo fallback was selected under the user's standing direction to choose the recommended path: agent voice for the main demo, NVDA only for the opening hook. VOX-08 remains human-needed. The full Phase 4 goal remains open: live negative validation and three consecutive submissions, fallback/hotspot/recorder rehearsal, three-minute video, and freeze review are not established. No `demo-safe` tag was created.
 
 The hold-to-talk documentation now reflects the user's no-fixed-time-limit requirement: capture ends on button release or release of both Right Ctrl and Space. Device loss, cancellation, replacement, and capture/flush failure still discard incomplete audio.

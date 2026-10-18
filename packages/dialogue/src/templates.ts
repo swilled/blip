@@ -66,7 +66,22 @@ function readOptions(field: Field): string {
   return ` Options: ${spoken.join(" ")}${more}`;
 }
 
-/** Speak one page-ordered batch without exposing any field values. */
+/** Describe the value most recently observed in the live page without exposing sensitive data. */
+export function currentValueText(field: Field): string | null {
+  if (field.sensitive !== "none") return field.hasValue ? "filled, hidden" : null;
+  if (field.type === "checkbox") return field.hasValue ? "checked" : "not checked";
+  if (field.type === "file") return field.hasValue ? "file selected, name hidden" : "no file selected";
+  if (field.type === "radio-group" && !field.hasValue) return "not selected";
+  if (!field.hasValue || field.value === null || field.value === "") return null;
+
+  const rawValue = cleanSpoken(field.value, 200);
+  const optionValue = field.type === "select" || field.type === "radio-group"
+    ? optionLabelFor(field, rawValue) ?? rawValue
+    : rawValue;
+  return spokenValue(optionValue, field) || null;
+}
+
+/** Speak one page-ordered batch with each current, non-sensitive value observed from the page. */
 export function readBatchText(form: FormModel, startIndex: number, count: number): {
   text: string;
   nextIndex: number | null;
@@ -81,7 +96,8 @@ export function readBatchText(form: FormModel, startIndex: number, count: number
   const lines = batch.map((field, offset) => {
     const number = start + offset + 1;
     const requirement = field.required ? "required" : "optional";
-    return `Field ${number}: ${spokenLabel(field, number)}, ${requirement}.${readOptions(field)}`;
+    const currentValue = currentValueText(field);
+    return `Field ${number}: ${spokenLabel(field, number)}, ${requirement}.${readOptions(field)}${currentValue === null ? "" : ` Currently ${currentValue}.`}`;
   });
   if (fields.length === 0) lines.push("There are no fields.");
   else if (end < fields.length) lines.push("Say continue for more.");

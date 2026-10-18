@@ -1,7 +1,7 @@
 ---
 phase: 04-nvda-mode-and-demo-safe
-verified: 2026-10-18T07:05:03Z
-status: human_needed
+verified: 2026-10-18T07:55:43Z
+status: gaps_found
 score: 1/5 must-haves verified
 covered_files:
   - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-01-PLAN.md
@@ -10,62 +10,124 @@ covered_files:
   - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-02-SUMMARY.md
   - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-03-PLAN.md
   - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-03-SUMMARY.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-04-PLAN.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-04-SUMMARY.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-05-PLAN.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-05-SUMMARY.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-06-PLAN.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-06-SUMMARY.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-07-PLAN.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-07-SUMMARY.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-08-PLAN.md
+  - .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-08-SUMMARY.md
+  - apps/server/src/main.ts
+  - apps/server/src/server.ts
+  - apps/server/src/session/refresh.ts
+  - apps/server/src/session/session.ts
+  - apps/server/src/voice/dialogue-runner.ts
+  - apps/server/src/voice/nvda.test.ts
+  - apps/server/src/voice/nvda.ts
+  - apps/server/src/voice/ptt-hook.test.ts
+  - apps/server/src/voice/ptt-state.test.ts
+  - apps/server/src/voice/ptt-state.ts
+  - apps/server/src/voice/speech-routing.ts
+  - apps/server/test/dialogue-core-gate-port.test.ts
+  - apps/server/test/dialogue-runner-server.test.ts
+  - apps/server/test/refresh.test.ts
+  - apps/server/test/static.test.ts
+  - apps/voice/index.html
+  - apps/voice/src/hold-client.test.ts
+  - apps/voice/src/hold-client.ts
   - apps/voice/src/main.ts
+  - apps/voice/src/native-synth.test.ts
+  - apps/voice/src/native-synth.ts
   - apps/voice/src/output-mode.test.ts
   - apps/voice/src/output-mode.ts
+  - apps/voice/src/socket.test.ts
+  - apps/voice/src/socket.ts
+  - apps/voice/src/speak-bridge.ts
+  - apps/voice/src/speech-diagnostics.test.ts
+  - apps/voice/src/speech-diagnostics.ts
+  - apps/voice/src/speech-rate-command.test.ts
+  - apps/voice/src/speech-rate.test.ts
+  - apps/voice/src/speech-rate.ts
+  - apps/voice/src/state.test.ts
+  - apps/voice/src/state.ts
+  - apps/voice/src/stt.test.ts
+  - apps/voice/src/stt.ts
   - apps/voice/src/styles.css
+  - apps/voice/src/talk-controller.test.ts
+  - apps/voice/src/talk-controller.ts
+  - apps/voice/src/tts.test.ts
+  - apps/voice/src/tts.ts
+  - apps/voice/src/ui-log.ts
+  - apps/voice/vite.config.ts
+  - dev/mock-server/src/demo-runbook.test.ts
+  - dev/mock-server/src/run-real.test.ts
+  - fixtures/forms/offline/manifest.json
   - fixtures/forms/offline/public-form.html
-covered_digest: "v3:sha256:8de891eb6ee72b44ae68a6b9b4bcfb7ed4d0acee7135660a83d3c2379324b808"
+  - packages/dialogue/src/index.ts
+  - packages/dialogue/src/speech-rate.ts
+  - packages/dialogue/src/submit.test.ts
+  - scripts/demo.test.ts
+  - scripts/demo.ts
+covered_digest: "v3:sha256:6edb7ddf26ebfa72d2808e0203829061f5cc482b1ba1e494ce57d27173359a9f"
 behavior_unverified: 0
 overrides_applied: 0
-re_verification:
-  previous_status: human_needed
-  previous_score: 0/5
-  gaps_closed:
-    - "VOX-07 rate changes: user reports faster/slower speech works."
-    - "Microsoft Forms required-field identification: the five expected fields matched and optional questions were excluded."
-  gaps_remaining:
-    - "VOX-08 NVDA completion/cancellation or D-16 fallback disposition."
-    - "DEMO-03 live negative validation and three consecutive page-observed submissions."
-    - "DEMO-04 fallback, hotspot, recorder, video, and freeze review."
-  regressions: []
-decision_coverage:
-  honored: 16
-  total: 16
-  not_honored: []
+gaps:
+  - truth: "In screen-reader mode with NVDA running and the form tab focused, Blip replies are spoken exclusively through NVDA and the matching speech item completes safely."
+    status: failed
+    reason: "The shipped route always returns nvda-unavailable because the controller exposes no safe per-item completion signal. The documented D-16 demo fallback does not implement or satisfy VOX-08."
+    artifacts:
+      - path: "apps/server/src/voice/speech-routing.ts"
+        issue: "routeSpeech returns nvda-unavailable whenever completionSignal is unavailable; the production adapter declares that signal unavailable."
+      - path: "apps/server/src/voice/nvda.ts"
+        issue: "The adapter only exposes dispatch/cancel return codes and cannot complete an exact speakId from observed audible completion."
+    missing:
+      - "A safe NVDA completion/cancellation signal correlated to each speakId, with no double speech, or a phase contract change accepted by the developer."
+  - truth: "Commands requiring a fresh page snapshot cannot speak or act on stale form data when refresh fails (04-REVIEW CR-01)."
+    status: failed
+    reason: "CR-01 remains dispositioned open as critical. The utterance handler awaits refreshSnapshot but ignores its boolean result before reducing the utterance. The concrete createRefresher currently marks its session stale on failure, but this caller does not enforce or test that contract; the focused refresh test covers the helper, not the user-command path."
+    artifacts:
+      - path: "apps/server/src/voice/dialogue-runner.ts"
+        issue: "The fresh-read branch discards refreshSnapshot's result and continues into confirmation checks and reducer dispatch."
+      - path: ".planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-REVIEW-DISPOSITION.md"
+        issue: "CR-01 is still marked open."
+    missing:
+      - "Fail closed at the command handler when a required refresh returns false, and add an integration regression proving no stale answer or gated action is emitted."
 human_verification:
-  - test: "On the demo workstation with the form tab focused, verify NVDA output completion/cancellation against exactly one matching speakId, or make and record the D-16 agent-voice-main-demo/NVDA-opening-hook fallback decision."
-    expected: "Either actual NVDA speech is exclusive and completion/cancellation resolves its matching speakId exactly once, or the team records acceptance of the documented D-16 fallback while VOX-08 remains human-needed."
-    why_human: "The installed controller exposes no safe completion signal and code deliberately refuses NVDA dispatch; only workstation observation and a human fallback decision can close this acceptance item."
-  - test: "On the supplied live Microsoft Form, perform the missing-required-field validation attempt, then three consecutive reset-and-submit runs using fictional values and the distinct phrase."
-    expected: "Errors are tied to observed field labels with no success claim; each successful run speaks only page-observed confirmation data, and any interruption resets the consecutive-run count."
-    why_human: "No Phase 4 live validation or submissions were performed. The offline practice page and earlier synthetic result cannot prove the live form flow."
-  - test: "Rehearse the fallback sequence: one clear STT miss and typed retry, one hotspot attempt, explicit offline disclosure, and a recorder test that is reopened and reviewed."
-    expected: "Typed input uses the same command pipeline; hotspot outcome is recorded; offline use is disclosed and sends no live response; the sample recording reopens with understandable audio."
-    why_human: "STT, venue networking, actual fallback disclosure, and recorder operation depend on the demo workstation and venue. The runbook evidence fields remain pending."
-  - test: "Record and review an uninterrupted three-minute local demo video, then conduct the freeze review."
-    expected: "The recording uses fictional values, contains no personal information, is stored outside the repository, and the reviewer records acceptance before creating the demo-safe tag."
-    why_human: "The runbook records the video and freeze review as pending; neither has been observed."
+  - test: "On the demo workstation, exercise the screen-reader control with NVDA running and the form tab focused; verify exclusive audible output and matching completion/cancellation for each speakId."
+    expected: "Exactly one output route speaks each item; completion/cancellation settles the matching speakId once. If unavailable, retain the D-16 fallback and do not claim VOX-08."
+    why_human: "Audibility, focus announcements, and device-level NVDA behavior cannot be established by source inspection. The current software route fails closed before NVDA speech."
+  - test: "On the team-owned live form, perform the missing-required-field validation attempt and then three reset-and-submit runs with fictional data and the exact spoken phrase."
+    expected: "Errors and confirmation are reported only from the active page; no success is claimed after a phrase or click; all three page-observed results succeed consecutively."
+    why_human: "No live validation attempt or public-form submission is recorded; local fixtures do not prove the live service flow."
+  - test: "Rehearse one clear STT miss followed by typed input, one phone-hotspot attempt, and disclosed offline continuation; test the recorder and reopen/review its sample."
+    expected: "Typed input uses the same command path, hotspot outcome is recorded, offline use is disclosed before continuing, and reopened audio is understandable."
+    why_human: "Microphone recognition, venue networking, spoken disclosure, and recorder behavior depend on the actual demo workstation and venue."
+  - test: "Record and review an uninterrupted three-minute demo, then conduct the freeze review."
+    expected: "Video uses fictional values, contains no personal information, is stored outside the repository, and receives reviewer acceptance before any demo-safe tag is created."
+    why_human: "No video or freeze review evidence exists; these are physical and human acceptance steps."
 ---
 
 # Phase 4: NVDA Mode and Demo-Safe Verification Report
 
 **Phase Goal:** As a demo presenter, I want to complete the public-form demo with accessible speech and rehearsed fallbacks, so that the team can deliver a reliable demonstration.
-**Verified:** 2026-10-18T07:05:03Z
-**Status:** human_needed
-**Re-verification:** Yes — refreshed after code-review remediation commit `d65653e`.
+**Verified:** 2026-10-18T07:55:43Z
+**Status:** gaps_found
+**Re-verification:** No. The earlier report had no structured `gaps:` section, so this pass re-established the roadmap and plan must-haves. All eight plans and summaries were read.
 
 ## User Flow Coverage
 
-The phase is in MVP mode. Its user-story outcome is that the team can deliver a reliable public-form demonstration with accessible speech and rehearsed fallbacks. The implementation and automated checks cover preparation and local behavior. The user reports working microphone input and audible rate changes, and confirmed the Microsoft required-field list on the updated build; the remaining live/device acceptance steps below have not been performed.
+The phase is in MVP mode. Its story outcome is that the team can deliver a reliable public-form demonstration with accessible speech and rehearsed fallbacks. Local preparation and rate behavior are present, but the NVDA success criterion is not implemented and the live, venue, recording, and freeze steps remain unperformed.
 
-| Step | Expected | Evidence | Status |
+| Step | Expected | Evidence in codebase | Status |
 |---|---|---|---|
-| Start the demo and select speech mode | The voice window opens with labeled, keyboard-operable output and rate controls. | `apps/voice/index.html`, `apps/voice/src/main.ts`; user reports microphone input and faster/slower operation work. Detailed timing traces were not retained. | Partial: reported working; NVDA and quantitative rate checks remain open. |
-| Complete the real form | Describe, fill, read back, state the distinct phrase, and hear the live page's result. | User confirmed the updated build lists the five current required fields correctly; negative validation and three live runs remain pending in `04-DEMO-RUNBOOK.md`. | Partial: required-field identification passed; full real-form acceptance pending. |
-| Use speech and network fallbacks | Retry a clear STT miss through typed input; try hotspot once, then disclose local offline use if needed. | Typed input shares the command pipeline; `fixtures/forms/offline/manifest.json` maps local routes and the offline page is tested as local-only. | Human needed: STT, hotspot, and disclosure rehearsal pending. |
-| Capture and approve the demo | Record an uninterrupted three-minute walkthrough, review the evidence, then accept the freeze. | Runbook specifies local storage outside the repository and keeps the video and freeze/tag entries pending. | Human needed. |
-| Reach the outcome | The team can deliver a reliable demonstration with accessible speech and rehearsed fallbacks. | The offline fallback assets and runbook exist, but NVDA completion/cancellation, full live-form acceptance, venue/recorder rehearsal, and video evidence remain absent. | Human needed; outcome not yet demonstrated. |
+| Select accessible speech mode | Use one labeled output route for the session; NVDA speaks and settles its matching item safely. | The UI offers session-scoped modes. `speech-routing.ts` returns `nvda-unavailable` because `nvda.ts` has no safe completion signal. | FAILED — blocker; VOX-08 is not achieved. |
+| Adjust Blip's rate | Faster/slower changes the current session rate and later utterances use it. | Preset adjustments and utterance-start rate capture are wired; focused rate and TTS tests pass. The user also reports audible changes. | VERIFIED — user-reported audibility; no quantitative three-level timing trace. |
+| Complete the public form | Describe, fill, read back, speak the distinct phrase, and hear page-observed validation/result on three consecutive resets. | The runbook defines this flow and the local observed-result path exists. Live validation and all three live runs remain pending. | HUMAN NEEDED. |
+| Use the fallbacks | Retry a clear STT miss by typing; try hotspot; disclose and use local copy; verify recorder. | Offline copy and local route exist; runbook documents each step. Hotspot, typed retry, offline disclosure, and recorder checks remain pending. | HUMAN NEEDED. |
+| Record and accept the freeze | Review the full three-minute video and freeze evidence before creating a tag. | The runbook and evidence ledger leave video, review, freeze acceptance, and tag pending. | HUMAN NEEDED. |
 
 ## Goal Achievement
 
@@ -73,79 +135,60 @@ The phase is in MVP mode. Its user-story outcome is that the team can deliver a 
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | In screen-reader mode, NVDA speaks replies exclusively and switching back restores Blip voice. | HUMAN NEEDED | The controller has no safe completion signal; `speech-routing.ts` deliberately returns unavailable before dispatch. The UI returns to agent voice. Resolve the workstation acceptance by exact speakId observation or the documented D-16 fallback decision. |
-| 2 | Faster/slower audibly changes Blip's rate for the session. | USER-REPORTED PASS | The user reports speed changes work; earlier device feedback said the second slower confirmation was clearly slower. No three-level timing trace was retained, so the Plan 04-08 quantitative comparison remains unverified. |
-| 3 | The team-owned live form completes three consecutive user-led runs with only page-observed results spoken. | HUMAN NEEDED | The runbook has reset, negative-validation, and three-run steps, but all Phase 4 live evidence entries remain pending. |
-| 4 | At freeze, a tested fallback kit and rehearsed plan-B script are ready. | HUMAN NEEDED | Offline routes are implemented and tested; hotspot, actual fallback rehearsal, recorder, freeze acceptance, and tag remain pending. |
-| 5 | A backup video of the full three-minute demo is recorded. | HUMAN NEEDED | The runbook requires a local recording outside the repository; no recording path or review evidence is recorded. |
+| 1 | In screen-reader mode, NVDA speaks replies exclusively and the matching speech item completes safely; switching back restores agent voice. | FAILED | `routeSpeech` cannot dispatch NVDA speech without a completion signal; the production adapter reports that signal unavailable. D-16 is a disclosed fallback, not fulfillment of this truth. |
+| 2 | Faster/slower audibly changes agent-voice speech rate for the session. | VERIFIED | Preset and queue wiring inspected; named rate-adjustment and next-utterance tests pass. User reports audible rate changes. Quantitative timing remains unrecorded. |
+| 3 | The team-owned public form completes three consecutive user-led runs with only page-observed results spoken. | HUMAN NEEDED | The live-form ledger has no negative-validation attempt or completed run. Synthetic local responses do not count. |
+| 4 | The tested fallback kit and rehearsed plan-B script are ready at freeze. | HUMAN NEEDED | Offline page and route are present, but hotspot, rehearsal, recorder, and freeze evidence are pending. |
+| 5 | A backup video of the full three-minute demo is recorded. | HUMAN NEEDED | No recording path or review evidence is recorded. |
 
-**Score:** 1/5 roadmap truths verified. The rate-change truth is supported by the user's direct device report. The NVDA, three-run public form, fallback/freeze, and backup video truths remain open.
+**Score:** 1/5 roadmap truths verified. Two blocking gaps remain; the live and physical acceptance items are retained below as pending.
 
 ### Plan Must-Have Detail
 
-Plan-specific implementation checks were also traced so their passing code paths are not confused with completion of the broader roadmap outcomes.
-
-| Plan | Detail checked | Status | Evidence |
-|---|---|---|---|
-| 04-01 | Session-only agent-voice default and exclusive labeled mode control | VERIFIED (source/test) | `output-mode.ts`, `main.ts`, `index.html`; focused mode tests. |
-| 04-01 | Cancel old output before a mode change and keep only one route active | VERIFIED (source/test) | Output-mode controller ordering and regression tests; latest review remediation also guards local rate acknowledgements by selected mode. |
-| 04-01 | Complete NVDA speech/cancellation against matching speakId only on a safe signal | HUMAN NEEDED | Successful NVDA completion is not implemented because the available DLL has no safe signal. No false completion is emitted; decide exact device path or D-16 fallback. |
-| 04-01 | Unavailable NVDA announces once and returns to agent voice | VERIFIED (source/test) | Server routing emits unavailable; mode controller fallback is exercised by tests. |
-| 04-02 | Exact faster/slower commands adjust session rate by 0.1 within 0.8–1.5 | VERIFIED (source/test) | `speech-rate.ts` and focused rate/command tests. |
-| 04-02 | New utterances and acknowledgement use the new rate without restarting active speech | VERIFIED (source/test) | TTS captures rate at utterance start; focused queue/command tests; latest review fix makes acknowledgement mode-aware. |
-| 04-02 | Limit attempts remain bounded and acknowledge the limit | VERIFIED (source/test) | Pure rate helper tests cover both boundaries. |
-| 04-02 | Rate is session-local and does not change NVDA's rate | VERIFIED (source) | In-memory voice-window state and no NVDA rate-setting operation. |
-| 04-03 | Three live runs and truthful page-observed results | HUMAN NEEDED | No live run or validation evidence in the runbook ledger. |
-| 04-03 | Live validation errors and missing fields are reported truthfully | HUMAN NEEDED | The runbook specifies this sequence; no live form result was observed. |
-| 04-03 | Offline counterparts are local, disclosed, and cannot submit to the live form | VERIFIED (source/test) | Manifest and self-contained page; serving tests assert local route, no remote assets, and no live submission path. |
-| 04-03 | Fallback rehearsal covers typed input, hotspot, offline copy, recorder, and video | HUMAN NEEDED | Procedures are documented; physical/network/recording execution remains pending. |
-| 04-03 | NVDA either resolves exact speakIds or D-16 fallback is accepted and recorded | HUMAN NEEDED | The fallback is documented, but no workstation test or human acceptance decision has been recorded. |
+Plan-specific detail supplements the roadmap contract and does not reduce it. Plan 04-01 artifacts pass the CLI artifact check, but the NVDA speakId completion link is absent by design because safe completion is unavailable. Plan 04-02 artifacts and links pass; source uses later Windows presets from the repair plan rather than the original 0.8–1.5 numeric range. Plans 04-03 through 04-08 contain substantial local assets and repair code; their physical acceptance steps remain explicitly pending. Automated key-link queries report some source-to-test/document links as unresolved because the plan describes test coverage in prose rather than importing the test; those were checked against the production imports and named test files manually. The substantive unresolved safety connection is CR-01.
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `apps/server/src/voice/nvda.ts` | Native speech adapter that does not equate DLL dispatch return with completion | VERIFIED | Substantive fail-closed adapter; no safe callback exists in the current controller path. |
-| `apps/server/src/voice/speech-routing.ts` | Select screen-reader handling only when it can safely satisfy completion | VERIFIED | Returns `nvda-unavailable` when completion is unavailable; no fabricated `speak.done`. |
-| `apps/voice/src/socket.ts` | Existing protocol settings sender | VERIFIED | Existing `SettingsPayload` carries session mode. |
-| `apps/voice/index.html`, `apps/voice/src/main.ts`, `apps/voice/src/output-mode.ts` | Accessible session mode and rate controls wired to live UI behavior | VERIFIED | Native labeled controls; mode state rendered; output-mode and rate behavior tests included in focused run. |
-| `apps/voice/src/speech-rate.ts`, `apps/voice/src/tts.ts` | Bounded session rate applied to future browser utterances | VERIFIED | Rate captured at queue start; active item is retained. |
-| `apps/voice/src/styles.css` | Responsive compact layout and usable controls | VERIFIED (source) | Commit `d65653e` adds responsive compact/viewport behavior. Visual/zoom review remains human acceptance. |
-| `fixtures/forms/offline/manifest.json`, `fixtures/forms/offline/public-form.html` | Local offline counterpart and route inventory | VERIFIED | Self-contained, labeled offline form; tests check local serving and no live submission path. Offline use remains a disclosed fallback. |
-| `04-DEMO-RUNBOOK.md` | Live sequence, fallback steps, evidence ledger, and freeze instructions | VERIFIED as preparation | Required steps exist; live, venue, recorder, video, and freeze evidence is explicitly pending. |
+| `apps/server/src/voice/nvda.ts` | NVDA adapter that never equates dispatch return with audible completion | VERIFIED as fail-closed adapter | Substantive adapter; no safe completion/cancellation callback exists. Its intentional inability to route speech leaves VOX-08 failed. |
+| `apps/server/src/voice/speech-routing.ts` | Route selected output safely | VERIFIED as fail-closed routing | Explicitly returns `nvda-unavailable` when completion is unavailable. |
+| `apps/voice/src/output-mode.ts`, `apps/voice/index.html`, `apps/voice/src/main.ts` | Accessible session-only, exclusive output choice | VERIFIED in source/tests | Wired through settings; keyboard/assistive-technology device review remains human. |
+| `apps/voice/src/speech-rate.ts`, `apps/voice/src/tts.ts` | Session rate presets applied at utterance start | VERIFIED | Source and focused tests show rate capture for later queue items without restarting active speech. |
+| `apps/server/src/voice/dialogue-runner.ts` | Fresh current-page commands fail closed on refresh failure | FAILED / CR-01 open | Refresh result is ignored at the utterance handler; no caller-level regression proves stale output is blocked. |
+| `fixtures/forms/offline/public-form.html`, `fixtures/forms/offline/manifest.json` | Local disclosed fallback and route inventory | VERIFIED locally | Real local assets; runbook test passed. This is not DEMO-03 evidence. |
+| `04-DEMO-RUNBOOK.md`, `04-REPAIR-ACCEPTANCE.md` | Live sequence and acceptance ledger | VERIFIED as preparation | Steps exist and pending evidence is accurately recorded. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| `apps/voice/src/main.ts` | `apps/voice/src/socket.ts` | Mode selection sends existing `SettingsPayload` | WIRED | Plan query found `sendSettings`; mode controller is called from the UI. |
-| `apps/server/src/server.ts` | `apps/server/src/voice/speech-routing.ts` and `nvda.ts` | Session settings select speech handling | WIRED for safe fallback | Server stores the mode and consults routing; unsupported NVDA completion returns unavailable. |
-| `apps/server/src/voice/nvda.ts` | GATE-08 `speakId` completion | Audible completion/cancellation resolves matching id | HUMAN NEEDED / unavailable | Plan query finds no `speakId` in the adapter. The absent safe signal is the reason the route fails closed; exact workstation completion or D-16 fallback remains pending. |
-| `apps/voice/src/main.ts` | `apps/voice/src/speech-rate.ts` | Exact local commands and buttons update session rate | WIRED | Plan query found `adjustSpeechRate`; local typed and voice paths share the handler. |
-| `apps/voice/src/speech-rate.ts` | `apps/voice/src/tts.ts` | Future queued utterances capture updated rate | WIRED | Plan query found rate-provider wiring; queue tests verify capture without restart. |
-| `fixtures/forms/offline/manifest.json` | `dev/mock-server` static fixtures route | Offline route resolves locally | WIRED | Plan query found local fixture route; serving test checks manifest routes. |
-| Core observed result | Voice speech route | Server speech message carries page-observed response | WIRED locally; live path pending | The local server/client speech contract is present; no Phase 4 public-form result has been observed. The plan's conceptual `from` entry is not a relative file, so its automated link query is not authoritative. |
+| `apps/voice/src/main.ts` | `apps/voice/src/socket.ts` | Mode selection sends `SettingsPayload` | WIRED | CLI pattern check passed; source call is present. |
+| `apps/server/src/server.ts` | `apps/server/src/voice/speech-routing.ts` / `nvda.ts` | Session mode routes output | WIRED to fail-closed behavior | Server consults routing; screen-reader mode reports unavailable instead of falsely completing speech. |
+| `apps/server/src/voice/nvda.ts` | GATE-08 speak completion | Exact completion/cancellation settles matching `speakId` | NOT WIRED | No speakId completion handling exists in the adapter; CLI link check found no `speakId`. |
+| `apps/voice/src/main.ts` | `apps/voice/src/speech-rate.ts` | Exact local commands adjust rate | WIRED | CLI pattern check passed. |
+| `apps/voice/src/speech-rate.ts` | `apps/voice/src/tts.ts` | Later queued utterance captures rate | WIRED | CLI pattern check and named behavior test passed. |
+| Offline manifest | `dev/mock-server` static route | Local URL maps to local file | WIRED | CLI pattern check and runbook tests support local serving; no remote submission path is claimed. |
+| `apps/server/src/voice/dialogue-runner.ts` | `apps/server/src/session/refresh.ts` | Fresh-page command uses current snapshot | PARTIAL / CR-01 | Production refresher marks failure stale, but the utterance handler discards the result; caller-level fail-closed behavior is not tested. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data variable | Source | Produces real data | Status |
 |---|---|---|---|---|
-| Offline practice result | Required-field values and local result text | User-entered values in `public-form.html` and local required-field check | Yes, local practice only | FLOWING locally; tested serving and no live submission. |
-| Demo route inventory | Offline URLs and file paths | `manifest.json` consumed by local static fixture serving | Yes | FLOWING; route checks are part of `run-real.test.ts`. |
-| Speech rate | Current session rate | Exact voice/typed command or labeled button updates in-memory state; TTS reads it at utterance start | Yes | FLOWING in source/tests; audible effect pending. |
-| Live form result | Confirmation or field errors | Live Microsoft Forms page through core RES-01 observation | Not observed in this phase | HUMAN NEEDED; no live page result may be inferred from offline or synthetic data. |
+| Offline practice page | Entered values and local errors | User input and local required-field validation | Yes, local only | FLOWING locally; the page is disclosed practice and cannot prove the live service. |
+| Session rate | Current synthesis preset | Exact command/button updates session state; TTS reads at utterance start | Yes | FLOWING; named rate/queue tests passed and user reports audible change. |
+| Public-form result | Current errors or confirmation | Live page observation through extension/core RES path | Not observed in this phase | HUMAN NEEDED; no live result may be inferred from offline or synthetic data. |
+| NVDA speech | NVDA output for tracked `speakId` | Production screen-reader route | No | DISCONNECTED by explicit fail-closed route; this is the VOX-08 blocker. |
 
 ### Behavioral Spot-Checks
 
-| Behavior | Command/evidence | Result | Status |
+| Behavior | Command | Result | Status |
 |---|---|---|---|
-| Full workspace regression | `npm.cmd test` | 127 files passed, 16 skipped; 1,316 tests passed, 28 skipped | PASS |
-| TypeScript validation | `npm.cmd run typecheck` and `npm.cmd run typecheck --workspace @blip/extension` | Both passed | PASS |
-| Current voice and extension builds | `npm.cmd run build --workspace @blip/voice`; `npm.cmd run build --workspace @blip/extension` | Both passed | PASS |
-| Microsoft Forms required-field recognition | User recheck on build `67114f9-dirty-2026-10-18T07:00:58.786Z` | Exactly Employment type, Department, Leave type, Leave date, Return date; optional questions excluded | PASS (user report) |
-| Live NVDA, form validation/submissions, venue, recorder, and video outcomes | Runbook evidence ledger | Not run or not recorded; remain pending | HUMAN NEEDED |
-
-These automated commands were run during this execution. Device and live-service evidence is explicitly attributed to the user's report; no public-form submission is claimed.
+| Rate presets change by an audible step | `npm.cmd test -- --run apps/voice/src/speech-rate.test.ts -t "increases by two tenths for an audible change"` | 1 named test passed | PASS |
+| Next queued item captures changed rate without restart | `npm.cmd test -- --run apps/voice/src/tts.test.ts -t "captures rate when each utterance starts without restarting active speech"` | 1 named test passed | PASS |
+| Failed snapshot refresh marks session stale | `npm.cmd test -- --run apps/server/test/refresh.test.ts -t "maps disconnection and failed snapshots to safe stale results without speaking"` | 1 named helper test passed; it does not exercise the utterance caller's ignored boolean | PASS for helper only; CR-01 remains open |
+| Runbook preserves live/fallback acceptance steps | `npm.cmd test -- --run dev/mock-server/src/demo-runbook.test.ts` | 2 tests passed | PASS for documentation assertions only |
+| Public form, NVDA workstation, hotspot, recorder, video, and freeze | Runbook evidence ledger | All are pending or not performed | HUMAN NEEDED |
 
 ### Probe Execution
 
@@ -155,38 +198,36 @@ Not applicable. Phase 4 is not a migration/tooling phase and declares no probe s
 
 | Requirement | Source plan | Description | Status | Evidence |
 |---|---|---|---|---|
-| VOX-07 | 04-02 | Faster/slower changes Blip's rate | User-verified | User reports rate changes work; detailed three-level timing trace remains a Plan 04-08 evidence gap. |
-| VOX-08 | 04-01, 04-03 | NVDA output without double speech | Human needed | Safe route intentionally unavailable without completion signal; verify exact speakId or accept D-16 fallback. |
-| DEMO-03 | 04-03 | Complete a real public form end to end by voice | Human needed | Negative validation and three consecutive page-observed live runs remain pending. |
-| DEMO-04 | 04-03 | Offline copies, hotspot plan, backup video, rehearsed fallback | Partially prepared; human needed | Local pages and runbook exist; hotspot, rehearsal, recorder, video, and freeze evidence remain pending. |
-
-No later phase in the Voice roadmap explicitly owns these checks. No Phase 4 requirement is orphaned from the three plans.
+| VOX-07 | 04-02, 04-06, 04-07 | Faster/slower adjusts Blip's rate | SATISFIED at functional level | Source, named adjustment/queue tests, and user report support session rate behavior; measured three-level timing remains pending. |
+| VOX-08 | 04-01, 04-03, 04-06 | NVDA replies without double speech and with safe completion | BLOCKED | Controller completion is unavailable; server route declines NVDA speech. D-16 does not satisfy the requirement. |
+| DEMO-03 | 04-03 | Complete a real public form end to end by voice | NEEDS HUMAN | Negative validation plus three consecutive live runs are pending in the runbook. |
+| DEMO-04 | 04-03 | Offline copies, hotspot, backup video, and rehearsed fallback | NEEDS HUMAN | Offline assets are present; hotspot, recorder, video, and rehearsal have not been performed. |
 
 ### Decision Coverage
 
-All 16 trackable CONTEXT.md decisions are honored by shipped artifacts. This non-blocking result does not change the human-needed status.
+All trackable Phase 4 CONTEXT decisions are honored (16/16; non-blocking gate).
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
-|---|---|---|---|---|
-| `apps/server/src/voice/nvda.ts` | 26, 37 | `return null` on unavailable native adapter | Info | Intentional fail-closed availability path, not a stub; prevents treating a missing DLL/callback as successful speech. |
+|---|---:|---|---|---|
+| `apps/server/src/voice/dialogue-runner.ts` | 385 | Fresh-snapshot result ignored by caller | BLOCKER (CR-01) | Current-page commands do not enforce refresh success at the point of use. |
+| `apps/server/src/voice/nvda.ts` | 26, 37 | `return null` on native library load failure | INFO | Expected fail-closed error handling; callers report NVDA unavailable. |
 
-No unreferenced TBD/FIXME/XXX debt markers or placeholder implementations were found in the inspected implementation and requirement-linked tests. The relevant mode/rate/offline tests are active; tests exercise local state, routing, and fixture behavior, not real audio or live form outcomes.
+No unreferenced `TBD`, `FIXME`, or `XXX` debt markers were found in plan-listed implementation files. Empty handlers and `return null` matches are guarded validation/native-load branches or test doubles, not user-visible stubs.
 
-### Human Verification Required
+### Human Verification Required — Pending
 
-1. **NVDA or D-16:** On the workstation with the form tab focused, check exclusive NVDA output, completion/cancellation, and exactly one matching `speakId`; otherwise record human acceptance of agent voice for the main demo and NVDA for the opening hook, leaving VOX-08 human-needed.
-2. **Live Microsoft Form:** Perform one negative-validation attempt, then three consecutive reset runs with fictional values and the distinct phrase. Record only page-observed errors/confirmation; synthetic local results do not count. Required-field identification itself passed on the updated build; this does not replace validation or submissions.
-3. **Fallback rehearsal:** Cause one STT miss and type through the same pipeline; make exactly one hotspot attempt; disclose offline use; test and reopen the recorder sample. Record the outcomes.
-4. **Video and freeze:** Record/review the uninterrupted three-minute local video, store it outside the repository, then review all acceptance evidence before creating the `demo-safe` tag.
-5. **Repair measurement record:** If the detailed Plan 04-08 timing threshold is retained, capture one fixed phrase at slow/default/fast and record three native duration samples per level. Current user report confirms audible rate changes, but no quantitative trace was retained.
+1. **NVDA device behavior:** exercise the screen-reader control with NVDA and the form tab focused; observe exclusivity and exact completion/cancellation. The current implementation intentionally cannot route speech, so VOX-08 remains blocked even if D-16 is used for the presentation.
+2. **Live public form:** perform the negative validation attempt and three consecutive reset-and-submit runs with fictional data, reporting only page-observed results.
+3. **Fallback rehearsal:** test one STT miss and typed retry, one hotspot attempt, explicit offline disclosure, and a recorder sample that can be reopened and understood.
+4. **Video and freeze:** record and review the uninterrupted three-minute demo and conduct human freeze review. No `demo-safe` tag is authorized by this evidence.
 
 ### Gaps Summary
 
-No implementation blocker was found in the locally verifiable preparation. The rate controller and queue, mode-aware live region and acknowledgements, responsive layout, 48 px offline controls, local fallback routes, and runbook are present. Automated checks passed. The user reports working microphone input and audible rate changes; the updated Microsoft Form's five required labels were confirmed. The phase outcome remains open because NVDA disposition, live validation and three submissions, venue/fallback rehearsal, recorder, video, and freeze review remain pending. Quantitative rate timings were not captured. Do not claim VOX-08, DEMO-03, or DEMO-04 complete and do not create the `demo-safe` tag before evidence review.
+Phase 4 has not achieved its roadmap goal. The screen-reader success criterion is observably unmet because the NVDA path fails closed without a completion signal. The current review also has an open critical CR-01: fresh-page commands ignore refresh success at the reducer boundary. Rate adjustment and local preparation are supported, but live-form results, the complete fallback rehearsal, device checks, video review, and freeze acceptance remain pending. No phase-completion claim or demo-safe tag is supported.
 
 ---
 
-_Verified: 2026-10-18T03:40:26Z_  
+_Verified: 2026-10-18T07:55:43Z_
 _Verifier: the agent (gsd-verifier)_

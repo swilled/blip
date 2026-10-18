@@ -5,7 +5,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { startServer } from "../apps/server/src/server";
-import { discoverLocalWhisper } from "../apps/server/src/voice/local-whisper";
 import { encodeWav } from "../apps/voice/src/recorded-stt";
 import { syntheticSpeech } from "./check-local-stt";
 import { resolveBrowser } from "./browser";
@@ -17,10 +16,8 @@ const samples = new Float32Array(pcm.length / 2 + 16000);
 for (let n = 0; n < pcm.length / 2; n++) samples[n + 4000] = pcm.readInt16LE(n * 2) / 32768;
 const fixture = path.join(profile, "synthetic.wav");
 await writeFile(fixture, encodeWav([samples], 16000));
-const transcribeAudio = await discoverLocalWhisper();
-if (!transcribeAudio) throw new Error("Install local STT first.");
 const received: Array<{ source: string; text: string }> = [];
-const server = await startServer({ port: 0, transcribeAudio, dialogueRunner: true,
+const server = await startServer({ port: 0, dialogueRunner: true,
   staticRoots: [{ urlPrefix: "/voice", dir: path.join(root, "apps/voice/dist") }],
   handlersFactory: () => ({ utterance: ({ message }) => { if (message.type === "utterance") received.push(message.payload); } }),
 });
@@ -41,8 +38,13 @@ try {
   await new Promise<void>((resolve, reject) => { ws!.once("open", resolve); ws!.once("error", reject); });
   let next = 0;
   const waiting = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  const browserErrors: string[] = [];
   ws.on("message", data => {
-    const result = JSON.parse(String(data)), item = waiting.get(result.id);
+    const result = JSON.parse(String(data));
+    if (result.method === "Runtime.exceptionThrown") browserErrors.push(result.params.exceptionDetails.exception?.description ?? result.params.exceptionDetails.text);
+    if (result.method === "Log.entryAdded" && result.params.entry.level === "error") browserErrors.push(result.params.entry.text);
+    if (result.method === "Network.loadingFailed") browserErrors.push(`${result.params.errorText}: ${result.params.requestId}`);
+    const item = waiting.get(result.id);
     if (!item) return; clearTimeout(item.timer); waiting.delete(result.id);
     result.error ? item.reject(new Error(result.error.message)) : item.resolve(result.result);
   });
@@ -51,12 +53,15 @@ try {
     waiting.set(id, { resolve, reject, timer: setTimeout(() => { waiting.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 5000) });
     ws!.send(JSON.stringify({ id, method, params }));
   });
+  await send("Runtime.enable");
+  await send("Log.enable");
+  await send("Network.enable");
   const evaluate = async (expression: string) => {
     const result = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? "Browser evaluation failed.");
     return result.result?.value;
   };
-  for (let n = 0; n < 60; n++) {
+  for (let n = 0; n < 1800; n++) {
     if (server.session.voiceConnected && await evaluate("Boolean(document.getElementById('start-gate'))")) break;
     await sleep(100);
   }
@@ -64,6 +69,20 @@ try {
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32 });
   await send("Input.dispatchKeyEvent", { type: "keyUp", key: " ", code: "Space", windowsVirtualKeyCode: 32 });
   if (!await evaluate("!document.getElementById('start-gate')")) throw new Error("Start gate did not open.");
+  if (!await evaluate("crossOriginIsolated")) throw new Error("Voice page is not cross-origin isolated; threaded WebAssembly cannot safely start in Chrome.");
+  for (let n = 0; n < 1800; n++) {
+    const status = await evaluate("document.getElementById('speech-recognition-status').textContent");
+    if (String(status).includes("recognition is ready")) break;
+    if (String(status).includes("could not load")) {
+      const resources = await evaluate("performance.getEntriesByType('resource').filter(x => /moonshine|onnxruntime|model\\//.test(x.name)).map(x => x.name)");
+      throw new Error(`Moonshine model failed: ${status}; resources=${JSON.stringify(resources)}; browserErrors=${JSON.stringify(browserErrors)}`);
+    }
+    await sleep(100);
+    if (n === 1799) {
+      const resources = await evaluate("performance.getEntriesByType('resource').filter(x => /moonshine|onnxruntime|model\\//.test(x.name)).map(x => x.name)");
+      throw new Error(`Moonshine model did not finish loading: ${status}; resources=${JSON.stringify(resources)}; browserErrors=${JSON.stringify(browserErrors)}`);
+    }
+  }
   await evaluate("document.getElementById('hold-to-talk').focus()");
   await send("Input.dispatchKeyEvent", { type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32 });
   let listening = false;
@@ -81,8 +100,7 @@ try {
   }
   const captureSummary = await evaluate("document.getElementById('microphone-capture-summary').textContent");
   if (!/Recorded \d/.test(captureSummary)) throw new Error("Capture duration/level feedback is missing.");
-  const engine = (await (await fetch(`${origin}/_blip/stt`)).json() as { engine: string }).engine;
-  console.log(JSON.stringify({ syntheticMicrophone: true, realAudioWorklet: true, chromeSpeechDisabled: true, nativeWhisper: engine, captureSummary, microphoneOptions: await evaluate("document.getElementById('microphone-device').options.length"), voiceOptions: await evaluate("[...document.getElementById('speech-voice').options].map(option => option.text)"), finalizedAfterRelease: received[0], passed: true }));
+  console.log(JSON.stringify({ syntheticMicrophone: true, realAudioWorklet: true, chromeSpeechDisabled: true, engine: "Moonshine Voice WebAssembly medium streaming", captureSummary, microphoneOptions: await evaluate("document.getElementById('microphone-device').options.length"), voiceOptions: await evaluate("[...document.getElementById('speech-voice').options].map(option => option.text)"), finalizedAfterRelease: received[0], passed: true }));
   await send("Browser.close").catch(() => {});
 } finally {
   ws?.close(); browser.kill(); await server.close();

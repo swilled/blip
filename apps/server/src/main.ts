@@ -1,7 +1,7 @@
 // CLI entry (D-21). Flag parsing only; everything real lives in startServer().
 //   --port <n>            default 7777 (0 = ephemeral)
 //   --dev                 allow no-Origin clients and the dev voice origins
-//   --brain=fake|agy   default fake; agy uses the signed-in Antigravity CLI subscription
+//   --brain=fake|agy default fake; agy uses the signed-in headless Antigravity CLI
 //   --fake-delay <ms>     default 1500: how long a model-routed turn waits (the fake brain "thinking")
 //   --fake-request-action <actionId>
 //                         TEST ONLY: the fake brain answers model-routed turns with request_action for

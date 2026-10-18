@@ -37,7 +37,7 @@ Start each run from a fresh response page or a cleared form. For each beat, wait
 1. **Describe:** ask Blip to describe the form and required fields. Report the current page-observed labels and errors; use the Phase 3 field list only as historical context.
 2. **Negative validation check (once before the three runs):** leave one required field empty, fill the other required fields with the fictional values, then use the normal read-back and distinct spoken confirmation phrase. Only the user's explicit phrase can pass the submit gate. Record every validation error with its field label and remaining missing fields. Blip must not claim success. Reset from a fresh response page/cleared page afterward. Do not count this as one of the three live runs.
 3. **Fill:** for each live run, ask Blip to fill using the same fictional values; pause for the user to inspect and correct.
-4. **Read back:** ask Blip to read the page-observed values and correct any discrepancy before proceeding.
+4. **Read back:** ask Blip to `read the form` to hear current non-sensitive values and correct any discrepancy. For one field, ask `what's in [field]` or `what is written in [field]`; Blip must reread the active page and report only its current value. Sensitive values stay hidden.
 5. **Confirm:** Blip states the distinct phrase. Pause for the user to issue it; no other utterance or inferred intent authorizes submission.
 6. **Observe:** after the user confirms, report only the page-observed confirmation text and number. If no result is observed, say success cannot be verified. Never treat a click, request, mock response, or missing error as confirmation.
 7. Reset before the next run. Complete three successful runs consecutively with the identical fictional values; any failed or interrupted run resets the consecutive count to zero.
@@ -77,7 +77,7 @@ Repair regression (2026-10-18): root suite passed 127 files / 1,316 tests, with 
 | Live run 3 | Reset, same fictional values, user phrase, observed confirmation text/number or truthful unverifiable result | PENDING |
 | Three consecutive live runs | Human-reviewed count and outcome; synthetic local results do not count | PENDING |
 | NVDA speech exclusivity | Workstation, actual audible completion and cancellation, exactly one matching `speakId` per item, no overlapping Blip voice | PENDING — no device result inferred |
-| D-16 fallback decision | If NVDA gate unavailable/unsafe at freeze, record agent voice for main demo and NVDA opening hook only | PENDING |
+| D-16 fallback decision | Record agent voice for main demo and NVDA opening hook only | SELECTED under user's standing direction to choose the recommended path; this does not verify VOX-08 |
 | STT miss and typed fallback | One clear miss and same-pipeline typed outcome | PENDING |
 | Hotspot | Exactly one phone-hotspot attempt and observed result | PENDING |
 | Offline disclosure | Audible disclosure before using each local fallback route | PENDING |

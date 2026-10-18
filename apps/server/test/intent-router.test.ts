@@ -167,4 +167,45 @@ describe("privacy-gated intent routing", () => {
     expect(provider.parseIntent.mock.calls[0]![0]).toContain("answer requires text; clarify requires question");
     expect(provider.parseIntent.mock.calls[0]![0]).not.toContain("page-value-sentinel-275");
   });
+
+  it("answers general questions without a connected page using only conversational intents", async () => {
+    const provider = {
+      ...providerWith({ type: "answer", text: "Sunlight splits water molecules during photosynthesis." }),
+      allowGeneralKnowledge: true,
+    };
+    const result = await routeIntent("How does photosynthesis work?", null, provider);
+
+    expect(result).toEqual({ kind: "intent", intent: { type: "answer", text: "Sunlight splits water molecules during photosynthesis." } });
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("There is no connected current browser page");
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("Only answer, clarify, or unknown are permitted");
+  });
+
+  it("does not send secret-shaped utterances to a general provider without a page", async () => {
+    const provider = { ...providerWith({ type: "answer", text: "This must not be used." }), allowGeneralKnowledge: true };
+    const result = await routeIntent("my password is private-sentinel-748", null, provider);
+
+    expect(result).toMatchObject({ kind: "handoff", handoff: { kind: "clarify" } });
+    expect(provider.parseIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("private-sentinel-748");
+  });
+
+  it("rejects action intents when there is no current page", async () => {
+    const provider = {
+      ...providerWith({ type: "request_action", actionId: "submit" }, { type: "set_fields", fills: [] }),
+      allowGeneralKnowledge: true,
+    };
+    await expect(routeIntent("submit the page", null, provider)).rejects.toBeInstanceOf(InvalidIntentResultError);
+    expect(provider.parseIntent).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets the local general provider answer broad questions while page facts remain projected", async () => {
+    const accepted = page();
+    const provider = {
+      ...providerWith({ type: "answer", text: "A mortgage is a loan used to buy property." }),
+      allowGeneralKnowledge: true,
+    };
+    await routeIntent("What is a mortgage?", accepted, provider);
+    expect(provider.parseIntent.mock.calls[0]![0]).toContain("Answer general informational questions from your trained knowledge");
+    expect(provider.parseIntent.mock.calls[0]![0]).not.toContain("value-free");
+  });
 });

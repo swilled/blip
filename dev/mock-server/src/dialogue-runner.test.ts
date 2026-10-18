@@ -742,6 +742,20 @@ describe("real voice dialogue runner", () => {
     session.stale = false;
     const handlers = createDialogueHandlers({
       now: () => clock,
+      // This test isolates the gate failure path; return the accepted live snapshot
+      // expected by submit's freshness check without requiring a websocket extension.
+      refresher: {
+        async request() {
+          const liveSnapshot: Snapshot = {
+            ...loadSnapshot("broken"),
+            tabId: 1,
+            version: 1,
+            capturedAt: clock,
+            snapshotId: "gate-reject-live-snapshot",
+          };
+          return { ok: true, applied: true, snapshot: liveSnapshot };
+        },
+      },
       gate: {
         async arm() {
           return { ok: true, grantId: "grant-1", speakId: "speak-1", phrase: "submit survey", expiresAt: clock + 30_000 };

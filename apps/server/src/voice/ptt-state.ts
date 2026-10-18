@@ -5,10 +5,7 @@ export const RIGHT_CTRL = 3613;
 export const SPACE = 57;
 
 export interface PttStateOptions {
-  onChange: (state: "start" | "end", reason?: "expired" | "reset") => void;
-  watchdogMs?: number;
-  setTimer?: (fn: () => void, ms: number) => unknown;
-  clearTimer?: (handle: unknown) => void;
+  onChange: (state: "start" | "end", reason?: "reset") => void;
 }
 
 export interface PttState {
@@ -17,45 +14,22 @@ export interface PttState {
 }
 
 export function createPttState(opts: PttStateOptions): PttState {
-  const watchdogMs = opts.watchdogMs ?? 10000;
-  const setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
-  const clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
-
   let ctrlDown = false;
   let spaceDown = false;
   let active = false;
-  let latched = false;
-  let timer: unknown = null;
 
-  function cancelTimer(): void {
-    if (timer !== null) {
-      clearTimer(timer);
-      timer = null;
-    }
-  }
-
-  function end(reason?: "expired" | "reset"): void {
+  function end(reason?: "reset"): void {
     if (!active) return;
     active = false;
-    cancelTimer();
     opts.onChange("end", reason);
   }
 
   function evaluate(): void {
     const bothReleased = !ctrlDown && !spaceDown;
-    if (bothReleased) latched = false;
     const both = ctrlDown && spaceDown;
-    if (both && !active && !latched) {
+    if (both && !active) {
       active = true;
       opts.onChange("start");
-      cancelTimer();
-      timer = setTimer(() => {
-        timer = null;
-        if (active) {
-          latched = true;
-          end("expired");
-        }
-      }, watchdogMs);
     } else if (bothReleased && active) {
       end();
     }
@@ -70,10 +44,8 @@ export function createPttState(opts: PttStateOptions): PttState {
       evaluate();
     },
     reset() {
-      cancelTimer();
       ctrlDown = false;
       spaceDown = false;
-      latched = false;
       end("reset");
     },
   };

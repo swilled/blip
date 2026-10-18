@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createStt, MSG_CAPTURE_LIMIT, MSG_DIDNT_CATCH, MSG_MIC, MSG_MIC_MISSING, MSG_STT_NETWORK, MSG_STT_UNAVAILABLE, MSG_CLICK_WINDOW, type RecognitionLike, type SttFinal, type SttError, type SttResultEvent } from "./stt";
+import { createStt, MSG_DIDNT_CATCH, MSG_MIC, MSG_MIC_MISSING, MSG_STT_NETWORK, MSG_STT_UNAVAILABLE, MSG_CLICK_WINDOW, type RecognitionLike, type SttFinal, type SttError, type SttResultEvent } from "./stt";
 function result(text: string, final = true, confidence = 0.9): SttResultEvent {
   return { results: { length: 1, 0: { isFinal: final, length: 1, 0: { transcript: text, confidence } } } };
 }
@@ -108,12 +108,13 @@ describe("held speech capture", () => {
     expect(t.finals).toEqual([]); expect(t.errors[0]?.message).toContain("did not finish");
     expect(t.first().abort).toHaveBeenCalledOnce();
   });
-  it("bounds startup and the physical hold", () => {
+  it("bounds startup but keeps a physical hold active until release", () => {
     const a = setup(); a.stt.press(); vi.advanceTimersByTime(8000);
     expect(a.errors[0]?.message).toContain("did not start");
     const b = setup(); b.stt.press(); b.first().rec.onstart!();
-    vi.advanceTimersByTime(10000); expect(b.errors[0]?.message).toBe(MSG_CAPTURE_LIMIT);
-    expect(b.finals).toEqual([]);
+    vi.advanceTimersByTime(60_000); expect(b.errors).toEqual([]); expect(b.stt.isActive()).toBe(true);
+    b.complete("read the form");
+    expect(b.finals.map(final => final.text)).toEqual(["read the form"]);
   });
   it("rejects overlong final input without truncating it into a command", () => {
     const t = setup(); t.stt.press(); t.first().rec.onresult!(result("x".repeat(501)));

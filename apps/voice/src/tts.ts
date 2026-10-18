@@ -10,6 +10,8 @@ export interface SynthHandlers {
 }
 
 export interface Synth {
+  /** Maximum time allowed for first audio when the synthesizer has a lazy-loading model. */
+  startupTimeoutMs?: number;
   speak(text: string, handlers: SynthHandlers, rate: number): void;
   cancel(): void;
 }
@@ -142,7 +144,7 @@ export function createTts(deps: TtsDeps): Tts {
     gateTimer = setTimer(() => {
       gateTimer = null;
       sentenceEnded(gen, true);
-    }, 8000);
+    }, synth.startupTimeoutMs ?? 8000);
     let started = false;
     const handlers: SynthHandlers = {
       onstart: () => {

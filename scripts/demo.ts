@@ -49,13 +49,14 @@ export interface ReadinessWaitOptions {
 
 const USAGE = `usage: npm run demo -- [--brain=fake|agy] [--smoke]
   --reopen-voice        reopen Blip on the already-running current demo; leave the form unchanged
-  --brain=fake|agy  local brain; defaults to fake
+  --brain=fake|agy         local brain; defaults to fake
   --smoke              exit after extension and voice readiness and print a pass marker
   --help               show this help
 
 The launcher runs the Phase 3 dialogue reducer through core's grant-bound Executor.
 I2: npm run demo -- --brain=fake
 I3: npm run demo -- --brain=agy
+General voice/text questions: npm run demo -- --brain=agy (requires the signed-in Antigravity CLI)
 It uses .chrome-profile/demo for the extension and .chrome-profile/demo-voice for the voice
 window, never auto-loads the extension, and serves the synthetic survey on port ${DEMO_PAGES_PORT}.`;
 
@@ -212,8 +213,8 @@ async function buildExtensionForDemo(): Promise<void> {
 export async function buildVoiceClientForDemo(): Promise<void> {
   await buildVoiceClient({ configFile: path.join(voiceRoot, "vite.config.ts") });
   const index = await readFile(path.join(voiceDist, "index.html"), "utf8");
-  if (!index.includes("Blip voice speed") || !index.includes("Screen reader (NVDA)")) {
-    throw new Error("The Phase 4 voice client build is missing its output-mode or speech-rate controls");
+  if (!index.includes("Blip voice speed") || !index.includes("Screen reader (NVDA)") || !index.includes("Kokoro Heart") || !index.includes("Kokoro Michael")) {
+    throw new Error("The voice client build is missing its output-mode, natural Kokoro voice, or speech-rate controls");
   }
 }
 

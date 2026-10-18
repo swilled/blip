@@ -130,18 +130,17 @@ describe("turn frame order (D-23)", () => {
     }
   });
 
-  it("model route: transcript (model), earcon thinking, filler, delayed answer, state", async () => {
+  it("model route: transcript (model), earcon thinking, delayed answer, state without spoken filler", async () => {
     const r = await rig({ server: { fakeDelayMs: 100 } });
     try {
       const start = performance.now();
       const frames = await turn(r.voice, "please book a flight to mars");
       const elapsed = performance.now() - start;
       const m = meaningful(frames);
-      expect(m.map((f) => f.type)).toEqual(["transcript", "earcon", "speak", "speak", "state"]);
+      expect(m.map((f) => f.type)).toEqual(["transcript", "earcon", "speak", "state"]);
       expect(m[0]!.payload.routedTo).toBe("model");
       expect(m[1]!.payload.name).toBe("thinking");
-      expect(m[2]!.payload.category).toBe("filler");
-      expect(m[3]!.payload.category).toBe("answer");
+      expect(m[2]!.payload.category).toBe("answer");
       expect(elapsed).toBeGreaterThanOrEqual(95); // lower bound only
     } finally {
       await r.cleanup();
@@ -176,10 +175,10 @@ describe("determinism (D-23)", () => {
       }
     }
     expect(texts[0]).toEqual(texts[1]);
-    // describe x2 (1 speak each) + model x2 (filler + answer each)
-    expect(texts[0]!.length).toBe(6);
+    // describe x2 (1 speak each) + model x2 (1 answer each; no spoken filler)
+    expect(texts[0]!.length).toBe(4);
     expect(texts[0]![0]).toBe(texts[0]![1]);
-    expect(texts[0]![3]).toBe(texts[0]![5]);
+    expect(texts[0]![2]).toBe(texts[0]![3]);
   });
 });
 

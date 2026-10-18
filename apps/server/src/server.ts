@@ -21,6 +21,7 @@ import { createDialogueHandlers } from "./voice/dialogue-runner";
 import { createCoreDialogueGatePort } from "./voice/core-gate-port";
 import type { SpeechOutput } from "./voice/speech-routing";
 import { createTranscriptionHttp } from "./voice/transcription-http";
+import { serveMoonshineModelFile } from "./voice/moonshine-model";
 import type { TranscribeAudio } from "./voice/local-whisper";
 import { parsePageTaskCommand } from "./browser/tasks";
 import { matchGrammar } from "./brain/grammar";
@@ -39,6 +40,8 @@ export type StartServerOptions = {
   /** Immutable identity of the client this process was started with. */
   voiceBuildId?: string;
   transcribeAudio?: TranscribeAudio;
+  /** Test seam for the pinned, read-only Moonshine model proxy. */
+  moonshineModelFetch?: typeof fetch;
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
   port?: number;
   dev?: boolean;
@@ -138,6 +141,12 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     } catch {
       return json(res, 404, { ok: false });
     }
+    // Moonshine's threaded WebAssembly worker exchanges SharedArrayBuffer audio/model data.
+    // Chromium only exposes that safely when the voice document is cross-origin isolated.
+    if (pathname === "/voice" || pathname.startsWith("/voice/")) {
+      res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+      res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+    }
     // /healthz stays ahead of static roots so a static file can never shadow it.
     if (req.method === "GET" && pathname === "/healthz") return json(res, 200, { ok: true });
     if (pathname === "/_blip/stt" && req.method === "GET") {
@@ -146,6 +155,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     }
     if (pathname === "/_blip/stt" && req.method === "POST") {
       void transcriptionHttp(req, res);
+      return;
+    }
+    if (pathname.startsWith("/_blip/moonshine-model/")) {
+      void serveMoonshineModelFile(req, res, pathname, options.moonshineModelFetch);
       return;
     }
     if (req.method === "GET" && pathname === "/_blip/voice-runtime" && options.voiceBuildId) {

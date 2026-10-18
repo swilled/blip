@@ -41,6 +41,8 @@ export type FakeExtension = {
   fixtureName(): FixtureName;
   /** Swap the fixture: bumps the version, resets values and emits page.changed (navigation). */
   setFixture(name: FixtureName): void;
+  /** Change one live field value without changing the structural version, then notify the server. */
+  setValue(fieldId: string, value: string): void;
   emitPageChanged(reason: PageChangedPayload["reason"]): void;
   /** A copy of the in-memory elements. */
   elements(): RawElement[];
@@ -205,6 +207,14 @@ export function startFakeExtension(options: FakeExtensionOptions): FakeExtension
       fixture = name;
       snapshot = load(name, snapshot.version);
       emitPageChanged("navigation");
+    },
+    setValue(fieldId, value) {
+      const field = snapshot.elements.find((element) => element.id === fieldId && element.category === "field");
+      if (!field) throw new Error(`unknown field "${fieldId}"`);
+      field.value = field.sensitive === "none" ? value : null;
+      field.hasValue = value !== "";
+      snapshot = { ...snapshot, capturedAt: Date.now() };
+      emitPageChanged("mutation");
     },
     emitPageChanged,
     elements: () => structuredClone(snapshot.elements),

@@ -67,8 +67,8 @@ describe("repl output formats (D-25)", () => {
     t.input.write("tell me a joke\n");
     await t.waitFor((l) => l === 'transcript: "tell me a joke" via model');
     await t.waitFor((l) => l === "earcon: thinking");
-    await t.waitFor((l) => l === "speak[filler]: One moment.");
     await t.waitFor((l) => l.startsWith("speak[answer]: "));
+    expect(t.lines.some((l) => l === "speak[filler]: One moment.")).toBe(false);
     expect(t.lines.every((l) => !l.includes("\n"))).toBe(true);
   });
 

@@ -7,6 +7,7 @@ import { bindClient, type Frame } from "./helpers";
 function adapterWithInit(options: {
   toolsFor?: (config: AgyRoleConfig) => string[];
   agentFor?: (config: AgyRoleConfig) => string;
+  promptResponse?: (config: AgyRoleConfig, prompt: string) => string;
   events: string[];
 }) {
   const close = vi.fn();
@@ -32,7 +33,7 @@ function adapterWithInit(options: {
               : '{"fields":[{"id":"bootstrap-field","label":"Synthetic field","confidence":0.5}]}';
           }
           calls.push({ role: config.role, prompt });
-          return '{"type":"describe"}';
+          return options.promptResponse?.(config, prompt) ?? '{"type":"describe"}';
         },
         abort() {},
         async close() {
@@ -109,7 +110,38 @@ describe("server brain mode", () => {
     ]);
   });
 
-  it("does not send an utterance to Agy when no accepted page snapshot exists", async () => {
+  it("routes general questions through the headless AGY intent role without a browser page", async () => {
+    const events: string[] = [];
+    const f = adapterWithInit({
+      events,
+      promptResponse: (config) => config.role === "intent"
+        ? '{"type":"answer","text":"Plants use light to turn water and carbon dioxide into sugar."}'
+        : '{"fields":[]}',
+    });
+    const server = await startServer({ port: 0, dev: true, brain: "agy", agyAdapter: f.adapter });
+    const voice = await bindClient(server.port, "voice", { origin: undefined });
+    try {
+      expect(server.session.brain).toBe("agy");
+      voice.send("utterance", { utteranceId: newId(), text: "How does photosynthesis work?", source: "typed" });
+      const frames: Frame[] = [];
+      for (;;) {
+        const frame = await voice.nextMessage(3000);
+        frames.push(frame);
+        if (frame.type === "state" && frame.payload.busy === false) break;
+      }
+      const intentCall = f.calls.find((call) => call.role === "intent");
+      expect(intentCall).toBeDefined();
+      expect(intentCall!.prompt).toContain("There is no connected current browser page");
+      expect(intentCall!.prompt).toContain("Only answer, clarify, or unknown are permitted");
+      expect(frames.filter((frame) => frame.type === "speak").at(-1)?.payload.text)
+        .toBe("Plants use light to turn water and carbon dioxide into sugar.");
+    } finally {
+      voice.ws.terminate();
+      await server.close();
+    }
+  });
+
+  it("withholds a sensitive utterance before sending it to Agy when no page is connected", async () => {
     const events: string[] = [];
     const f = adapterWithInit({ events });
     const server = await startServer({ port: 0, dev: true, brain: "agy", agyAdapter: f.adapter });
@@ -128,7 +160,7 @@ describe("server brain mode", () => {
       }
       expect(f.calls).toEqual([]);
       expect(frames.filter((frame) => frame.type === "speak").at(-1)?.payload.text)
-        .toBe("I can't see the page because the browser extension is not connected.");
+        .toBe("Please restate that without a password or account number.");
     } finally {
       voice.ws.terminate();
       await server.close();

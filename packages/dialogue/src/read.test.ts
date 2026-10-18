@@ -315,10 +315,37 @@ describe("dialogue read and option picks", () => {
     expect(result.state.pendingOptions).toBeNull();
   });
 
+  it.each(["what's in Your name", "what is written in Your name", "read the value of Your name field"])(
+    "reads a named field's current observed value for %s",
+    (command) => {
+      const filled = FormModel.parse({
+        ...survey,
+        fields: survey.fields.map((field) => field.id === "e1"
+          ? { ...field, value: "Rowan Example", hasValue: true, confidence: 0.95 }
+          : field),
+      });
+      const text = (reduce(initialState(), say(command), ctx(filled)).effects[0] as { text: string }).text;
+      expect(text).toContain("Your name is Rowan Example.");
+    },
+  );
+
+  it("reads a current sensitive-field presence without speaking its contents", () => {
+    const marker = "private-password-marker";
+    const sensitive = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e1"
+        ? { ...field, label: "Password", type: "password" as const, sensitive: "password" as const, value: null, hasValue: true }
+        : field),
+    });
+    const text = (reduce(initialState(), say("what's in Password"), ctx(sensitive)).effects[0] as { text: string }).text;
+    expect(text).toContain("Password is filled, hidden.");
+    expect(text).not.toContain(marker);
+  });
+
   it("reads the final survey batch and offers non-placeholder options", () => {
     const result = readSecondSurveyBatch();
     expect(result.effects).toEqual([speak(
-      "I guessed probably How did you hear about us. The form model marks this label as low confidence. I guessed probably Satisfaction. The form model marks this label as low confidence. I guessed probably Age. The form model marks this label as low confidence. Field 4: probably How did you hear about us, required. Options: one, Friend. Two, Web search. Three, Other. Field 5: probably Satisfaction, optional. Options: one, Low. Two, Medium. Three, High. Field 6: probably Age, optional. That is all 6 fields.",
+      "I guessed probably How did you hear about us. The form model marks this label as low confidence. I guessed probably Satisfaction. The form model marks this label as low confidence. I guessed probably Age. The form model marks this label as low confidence. Field 4: probably How did you hear about us, required. Options: one, Friend. Two, Web search. Three, Other. Field 5: probably Satisfaction, optional. Options: one, Low. Two, Medium. Three, High. Currently not selected. Field 6: probably Age, optional. That is all 6 fields.",
       "b2",
     )]);
     expect(result.state.readCursor).toBeNull();

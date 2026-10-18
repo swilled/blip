@@ -9,6 +9,7 @@ export default defineConfig({
   root,
   base: "./",
   define: { __BLIP_BUILD_ID__: JSON.stringify(info.id) },
+  worker: { format: "es" },
   plugins: [{
     name: "blip-build-identity",
     transformIndexHtml: () => [{ tag: "meta", attrs: { name: "blip-build", content: info.id }, injectTo: "head" }],
