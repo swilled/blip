@@ -209,11 +209,6 @@ async function startConfiguredTaskDemo() {
     setNow(value: number) { now = value; },
     setSuccessfulPageResult(value: boolean) { successfulPageResult = value; },
     setRecipientValue(value: string) { recipientValue = value; },
-    setDraftValue(value: string) { draftValue = value; },
-    setCaptureIdentity(value: { captureId: string; captureRevision: number }) {
-      captureId = value.captureId;
-      captureRevision = value.captureRevision;
-    },
     setVoice(value: TestClient) { voice = value; },
     changePage() {
       snapshot = structuredClone(snapshot);
@@ -234,6 +229,9 @@ async function startConfiguredTaskDemo() {
   };
 }
 
+type DemoRig = Awaited<ReturnType<typeof startConfiguredTaskDemo>>;
+type PendingTaskGate = NonNullable<DemoRig["server"]["session"]["pendingGatedAction"]>;
+
 function sendVoiceUtterance(client: TestClient, text: string, source: "voice" | "typed" = "voice"): void {
   client.send("utterance", { utteranceId: newId(), text, source });
 }
@@ -242,7 +240,7 @@ async function speakText(client: TestClient, text: string, timeoutMs = 5_000): P
   return waitForFrame(client, (frame) => frame.type === "speak" && frame.payload.text === text, timeoutMs);
 }
 
-async function prepareCurrentPageTask(rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>): Promise<void> {
+async function prepareCurrentPageTask(rig: DemoRig): Promise<void> {
   if (rig.server.session.model === null) {
     sendVoiceUtterance(rig.voice, "what's here");
     await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.category === "answer");
@@ -254,7 +252,7 @@ async function prepareCurrentPageTask(rig: Awaited<ReturnType<typeof startConfig
   }
 }
 
-async function prepareObservedDraft(rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>): Promise<void> {
+async function prepareObservedDraft(rig: DemoRig): Promise<void> {
   sendVoiceUtterance(rig.voice, "draft a reply to latest for recipient Synthetic Contact in field Reply message");
   await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.text.startsWith("Current draft in Reply message:"));
   expect(rig.server.session.activePageTask?.lastObservedDraftValue).toBeTruthy();
@@ -263,12 +261,17 @@ async function prepareObservedDraft(rig: Awaited<ReturnType<typeof startConfigur
   expect(rig.server.session.activePageTask?.lastObservedDraftValue).toContain("updated time");
 }
 
-async function armObservedDraftSend(rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>): Promise<NonNullable<typeof rig.server.session.pendingGatedAction>> {
+async function beginObservedDraftSend(rig: DemoRig): Promise<PendingTaskGate> {
   sendVoiceUtterance(rig.voice, "send this email");
   const prompt = await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt");
   expect(prompt.payload.text).toContain("Can you say 'send this email'?");
   const pending = rig.server.session.pendingGatedAction;
   if (pending === null) throw new Error("Core task send did not create its read-back grant state.");
+  return pending;
+}
+
+async function armObservedDraftSend(rig: DemoRig): Promise<PendingTaskGate> {
+  const pending = await beginObservedDraftSend(rig);
   rig.voice.send("speak.done", { speakId: pending.speakId, interrupted: false });
   await sleep(20);
   const cooldown = rig.scheduled.find((entry) => entry.delayMs === 1_000);
@@ -283,7 +286,7 @@ async function armObservedDraftSend(rig: Awaited<ReturnType<typeof startConfigur
 
 function sendRedeem(
   client: TestClient,
-  pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>,
+  pending: PendingTaskGate,
   overrides: { source?: "voice" | "typed"; omitSource?: boolean; grantId?: string; speakId?: string; phrase?: string } = {},
 ): void {
   const payload = {
@@ -452,15 +455,22 @@ describe("core server dialogue runner option", () => {
       expect(rig.sendDispatches).toBe(1);
       expect(rig.server.session.pendingGatedAction).toBeNull();
       expect(rig.server.session.activePageTask).toBeNull();
+    } finally {
+      await rig.stop();
+    }
+  });
 
-      // A second, locally accepted click with no fresh page-owned result is reported as unverified.
+  it("configured runner reports unverified when the synthetic page returns no fresh confirmation", async () => {
+    const rig = await startConfiguredTaskDemo();
+    try {
+      await prepareCurrentPageTask(rig);
       await prepareObservedDraft(rig);
-      const unverified = await armObservedDraftSend(rig);
+      const pending = await armObservedDraftSend(rig);
       rig.setSuccessfulPageResult(false);
-      sendRedeem(rig.voice, unverified, { source: "voice" });
+      sendRedeem(rig.voice, pending, { source: "voice" });
       await speakText(rig.voice, "I couldn't verify the page outcome.");
-      expect(rig.sendDispatches).toBe(2);
-      expect(rig.voice.frames.some((frame) => frame.type === "speak" && frame.payload.text === "The page confirms the action.")).toBe(true);
+      expect(rig.sendDispatches).toBe(1);
+      expect(rig.voice.frames.some((frame) => frame.type === "speak" && frame.payload.text === "The page confirms the action.")).toBe(false);
     } finally {
       await rig.stop();
     }
@@ -492,19 +502,36 @@ describe("core server dialogue runner option", () => {
   });
 
   it.each([
-    ["task identity", (pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>) => {
+    ["typed exact phrase", "send this email", "typed" as const],
+    ["bare voice affirmation", "yes", "voice" as const],
+  ] as const)("ordinary utterance route cannot redeem a task grant with %s", async (_name, text, source) => {
+    const rig = await startConfiguredTaskDemo();
+    try {
+      await prepareCurrentPageTask(rig);
+      await prepareObservedDraft(rig);
+      await armObservedDraftSend(rig);
+      sendVoiceUtterance(rig.voice, text, source);
+      await sleep(80);
+      expect(rig.sendDispatches).toBe(0);
+    } finally {
+      await rig.stop();
+    }
+  });
+
+  it.each([
+    ["task identity", (pending: PendingTaskGate) => {
       pending.binding.pageTask!.taskId = "mutated-task-id";
     }],
-    ["page identity", (pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>) => {
+    ["page identity", (pending: PendingTaskGate) => {
       pending.binding.pageTask!.sourceIdentity.pageUrl = "http://127.0.0.1:8787/other.html";
     }],
-    ["draft binding", (_pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>, rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>) => {
+    ["draft binding", (_pending: PendingTaskGate, rig: DemoRig) => {
       rig.server.session.activePageTask!.lastObservedDraftValue = "mutated outside the task";
     }],
-    ["recipient binding", (_pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>, rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>) => {
+    ["recipient binding", (_pending: PendingTaskGate, rig: DemoRig) => {
       rig.setRecipientValue("Changed Contact");
     }],
-    ["action target binding", (pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>) => {
+    ["action target binding", (pending: PendingTaskGate) => {
       pending.binding.pageTask!.targetId = "mutated-send-target";
     }],
   ] as const)("server gate rejects a changed %s binding", async (_name, mutate) => {
@@ -513,7 +540,7 @@ describe("core server dialogue runner option", () => {
       await prepareCurrentPageTask(rig);
       await prepareObservedDraft(rig);
       const pending = await armObservedDraftSend(rig);
-      (mutate as (pending: typeof pending, rig: typeof rig) => void)(pending, rig);
+      (mutate as (current: PendingTaskGate, demo: DemoRig) => void)(pending, rig);
       sendRedeem(rig.voice, pending, { source: "voice" });
       await sleep(50);
       expect(rig.sendDispatches).toBe(0);
@@ -530,10 +557,17 @@ describe("core server dialogue runner option", () => {
       try {
         await prepareCurrentPageTask(rig);
         await prepareObservedDraft(rig);
-        const pending = await armObservedDraftSend(rig);
         if (invalidation === "interrupted speech") {
-          rig.voice.send("speak.done", { speakId: pending.speakId, interrupted: true });
-        } else if (invalidation === "stop" || invalidation === "repeat") {
+          const active = await beginObservedDraftSend(rig);
+          rig.voice.send("speak.done", { speakId: active.speakId, interrupted: true });
+          await vi.waitFor(() => expect(rig.server.session.pendingGatedAction).toBeNull());
+          sendRedeem(rig.voice, active, { grantId: "interrupted-no-grant", source: "voice" });
+          await sleep(30);
+          expect(rig.sendDispatches).toBe(0);
+          return;
+        }
+        const pending = await armObservedDraftSend(rig);
+        if (invalidation === "stop" || invalidation === "repeat") {
           rig.voice.send("control", { cmd: invalidation });
         } else if (invalidation === "cancel") {
           sendVoiceUtterance(rig.voice, "cancel task");
@@ -556,6 +590,7 @@ describe("core server dialogue runner option", () => {
 
   it("disconnect/reconnect and direct voice replacement invalidate the configured task grant", async () => {
     const rig = await startConfiguredTaskDemo();
+    let replacementRig: DemoRig | undefined;
     let replacement: TestClient | undefined;
     try {
       await prepareCurrentPageTask(rig);
@@ -568,20 +603,23 @@ describe("core server dialogue runner option", () => {
       sendRedeem(replacement, pending, { source: "voice" });
       await sleep(30);
       expect(rig.sendDispatches).toBe(0);
-      const second = replacement;
-      await prepareObservedDraft(rig);
-      const replaced = await armObservedDraftSend(rig);
-      const successor = await bindClient(rig.server.port, "voice");
-      rig.setVoice(successor);
+      replacement.close();
+
+      replacementRig = await startConfiguredTaskDemo();
+      await prepareCurrentPageTask(replacementRig);
+      await prepareObservedDraft(replacementRig);
+      const replaced = await armObservedDraftSend(replacementRig);
+      const successor = await bindClient(replacementRig.server.port, "voice");
+      replacementRig.setVoice(successor);
       sendRedeem(successor, replaced, { source: "voice" });
       await sleep(30);
-      expect(rig.sendDispatches).toBe(0);
-      expect(rig.server.session.voiceConnected).toBe(true);
-      second.close();
+      expect(replacementRig.sendDispatches).toBe(0);
+      expect(replacementRig.server.session.voiceConnected).toBe(true);
       successor.close();
     } finally {
       replacement?.close();
       await rig.stop();
+      await replacementRig?.stop();
     }
   });
 });
