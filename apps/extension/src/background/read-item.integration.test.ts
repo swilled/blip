@@ -32,6 +32,7 @@ function addSyntheticItem(): HTMLElement {
 describe("synthetic BrowserExecutor to live read-item route", () => {
   beforeEach(() => {
     document.documentElement.innerHTML = "<head></head><body></body>";
+    vi.spyOn(document.defaultView!.performance, "now").mockReturnValue(0);
     addVisibleRects();
   });
 
