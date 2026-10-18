@@ -25,20 +25,22 @@ export type PageTaskCommand =
   | { type: "read-item"; selection: PageTaskSelection }
   | { type: "summarize-item"; selection: PageTaskSelection }
   | { type: "question-item"; selection: PageTaskSelection; question: string }
-  | { type: "draft"; selection: PageTaskSelection; instruction: string }
+  | { type: "draft"; selection: PageTaskSelection; recipientWords: string; targetWords: string; instruction: string }
   | { type: "revise"; instruction: string }
+  | { type: "send-draft" }
   | { type: "cancel" }
   | { type: "clarify"; message: string };
 
 export type PageTaskContentRequest =
   | { type: "summary" | "page-question"; projection: PageContentProjection }
-  | { type: "draft"; sourceExcerpt: string; instruction: string }
+  | { type: "draft"; sourceExcerpt: string; recipientWords: string; targetWords: string; instruction: string }
   | { type: "revise"; sourceExcerpt: string; observedDraft: string; instruction: string };
 
 export type PageTaskCommandResult =
   | { type: "not-task" }
   | { type: "clarify"; message: string }
   | { type: "cancelled" }
+  | { type: "send-draft" }
   | { type: "read"; taskId: string; itemId: string; text: string }
   | { type: "model-request"; taskId: string; request: PageTaskContentRequest }
   | { type: "answer"; taskId: string; text: string }
@@ -83,6 +85,18 @@ function selectionFrom(raw: string): PageTaskSelection | null {
     : null;
 }
 
+/** Keep this grammar distinct from Phase 7's whole-page and heading/paragraph commands. */
+function explicitItemSelectionFrom(raw: string): PageTaskSelection | null {
+  const value = raw.trim().replace(/\s+/gu, " ");
+  if (/^(?:the\s+)?latest(?:\s+item)?$/iu.test(value)) return { type: "latest" };
+  const item = /^(?:the\s+)?item(?:\s+([\s\S]*))?$/iu.exec(value);
+  if (item !== null) return item[1] === undefined ? null : selectionFrom(item[1]);
+  if (/^(?:(?:the\s+)?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\s+item)?|(?:item\s+)?\d{1,2})$/iu.test(value)) {
+    return selectionFrom(value);
+  }
+  return null;
+}
+
 function parseQuestion(input: string): PageTaskCommand | null {
   const ask = /^ask\s+(latest|item\s+.+?):\s*([\s\S]+)$/iu.exec(input);
   const naturalLatest = /^what\s+does\s+(?:the\s+)?latest(?:\s+item)?\s+say\s+about\s+([\s\S]+)$/iu.exec(input);
@@ -124,6 +138,9 @@ export function parsePageTaskCommand(utterance: string): PageTaskCommand | null 
   const lower = input.toLocaleLowerCase();
 
   if (["cancel task", "cancel this task", "cancel the page task"].includes(lower)) return { type: "cancel" };
+  if (/^(?:send|submit)\s+(?:this\s+email|the\s+draft|the\s+message|this\s+message)$/iu.test(input)) {
+    return { type: "send-draft" };
+  }
 
   const revise = /^(?:revise|edit)\s+(?:the\s+)?draft\s+(?:to\s+say\s+)?([\s\S]+)$/iu.exec(input);
   if (revise !== null) {
@@ -137,27 +154,39 @@ export function parsePageTaskCommand(utterance: string): PageTaskCommand | null 
   const question = parseQuestion(input);
   if (question !== null) return question;
 
-  const summary = /^(?:summarize|summary\s+of)\s+(?:the\s+)?(.+)$/iu.exec(input);
+  const summary = /^(?:summarize|summary\s+of)\s+(?:the\s+)?(latest(?:\s+item)?|item(?:\s+[\s\S]*)?|(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\s+item)?|(?:item\s+)?\d{1,2})$/iu.exec(input);
   if (summary !== null) {
-    const selection = selectionFrom(summary[1]!);
+    const selection = explicitItemSelectionFrom(summary[1]!);
     return selection === null
       ? clarify("Say 'summarize latest' or name one visible item to summarize.")
       : { type: "summarize-item", selection };
   }
 
-  const read = /^read\s+(?:the\s+)?(.+)$/iu.exec(input);
+  const read = /^read\s+(?:the\s+)?(latest(?:\s+item)?|item(?:\s+[\s\S]*)?|(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)(?:\s+item)?|(?:item\s+)?\d{1,2})$/iu.exec(input);
   if (read !== null) {
-    const selection = selectionFrom(read[1]!);
+    const selection = explicitItemSelectionFrom(read[1]!);
     if (selection !== null) return { type: "read-item", selection };
-    if (/^(?:latest|item\b)/iu.test(read[1]!)) return clarify("Say 'read latest' or 'read item' followed by its visible text.");
+    return clarify("Say 'read latest' or 'read item' followed by its visible text.");
   }
 
-  const draft = /^(?:draft|write)\s+(?:a\s+)?(?:reply|response)\s+to\s+(.+)$/iu.exec(input);
+  const draft = /^(?:draft|write)\s+(?:a\s+)?(?:reply|response)\s+to\s+(.+?)\s+for\s+recipient\s+(.+?)\s+in\s+(?:the\s+)?field\s+(.+)$/iu.exec(input);
   if (draft !== null) {
     const selection = selectionFrom(draft[1]!);
-    return selection === null
-      ? clarify("Say 'draft a reply to latest' or name one visible item.")
-      : { type: "draft", selection, instruction: "Draft a response to the selected visible item." };
+    const recipientWords = draft[2]!.trim();
+    const targetWords = draft[3]!.trim();
+    const safeSelector = (value: string) => value !== "" && codePointLength(value) <= MAX_SELECTOR_CODE_POINTS &&
+      !INVALID_TEXT.test(value) && !containsSensitivePageText(value);
+    if (selection === null) return clarify("Name one visible item to use for the draft.");
+    if (!safeSelector(recipientWords) || !safeSelector(targetWords)) {
+      return clarify("Name a visible recipient or target value and a supported text field without private values.");
+    }
+    return { type: "draft", selection, recipientWords, targetWords, instruction: "Draft a response to the selected visible item." };
+  }
+  const incompleteDraft = /^(?:draft|write)\s+(?:a\s+)?(?:reply|response)\s+to\s+(.+)$/iu.exec(input);
+  if (incompleteDraft !== null) {
+    return selectionFrom(incompleteDraft[1]!) === null
+      ? clarify("Name one visible item to use for the draft.")
+      : clarify("To draft safely, say 'draft a reply to latest for recipient [visible value] in field [visible text field]'.");
   }
 
   return null;
@@ -240,7 +269,7 @@ function resolveItem(session: Session, selection: PageTaskSelection): ItemSelect
   return { ok: true, item: filtered.item };
 }
 
-function taskKind(command: Exclude<PageTaskCommand, { type: "cancel" | "clarify" | "revise" }>): ActivePageTask["taskKind"] {
+function taskKind(command: Exclude<PageTaskCommand, { type: "cancel" | "clarify" | "revise" | "send-draft" }>): ActivePageTask["taskKind"] {
   switch (command.type) {
     case "read-item": return "read-item";
     case "summarize-item": return "summarize-item";
@@ -292,7 +321,13 @@ function summarizeRequest(item: ReturnType<typeof BrowserContentItem.parse>, ide
     }], identity);
     return projection === null ? null : { type: "page-question", projection };
   }
-  if (command.type === "draft") return { type: "draft", sourceExcerpt: item.text, instruction: command.instruction };
+  if (command.type === "draft") return {
+    type: "draft",
+    sourceExcerpt: item.text,
+    recipientWords: command.recipientWords,
+    targetWords: command.targetWords,
+    instruction: command.instruction,
+  };
   return null;
 }
 
@@ -316,6 +351,7 @@ export async function runPageTaskCommand(
     session.clearPageTask();
     return { type: "cancelled" };
   }
+  if (command.type === "send-draft") return { type: "send-draft" };
 
   if (command.type === "revise") {
     const active = activeTaskForRevision(session);

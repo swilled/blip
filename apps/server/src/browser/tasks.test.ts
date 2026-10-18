@@ -61,10 +61,20 @@ describe("page task commands", () => {
     expect(parsePageTaskCommand("ask latest: what is the request?")).toEqual({
       type: "question-item", selection: { type: "latest" }, question: "what is the request?",
     });
-    expect(parsePageTaskCommand("draft a reply to latest")).toMatchObject({ type: "draft", selection: { type: "latest" } });
+    expect(parsePageTaskCommand("draft a reply to latest")).toMatchObject({ type: "clarify" });
+    expect(parsePageTaskCommand("draft a reply to latest for recipient Synthetic Contact in field Reply message")).toMatchObject({
+      type: "draft",
+      selection: { type: "latest" },
+      recipientWords: "Synthetic Contact",
+      targetWords: "Reply message",
+    });
+    expect(parsePageTaskCommand("send this email")).toEqual({ type: "send-draft" });
     expect(parsePageTaskCommand("revise draft make it shorter")).toEqual({ type: "revise", instruction: "make it shorter" });
     expect(parsePageTaskCommand("cancel this task")).toEqual({ type: "cancel" });
     expect(parsePageTaskCommand("yes")).toBeNull();
+    expect(parsePageTaskCommand("read the page")).toBeNull();
+    expect(parsePageTaskCommand("summarize this page")).toBeNull();
+    expect(parsePageTaskCommand("read paragraph containing secret")).toBeNull();
   });
 
   it("resolves latest only to the unique greatest valid current visible date", async () => {

@@ -22,6 +22,8 @@ import type { Session } from "./session/session";
 import { parseBrowserCommand, type BrowserCapture, type BrowserCommand } from "./browser/commands";
 import { createBrowserExecutor, type BrowserExecutorResult } from "./browser/executor";
 import { BROWSER_AUTHORIZATION_GUARD_MS, BROWSER_AUTHORIZATION_TTL_MS, type BrowserAuthorizationTarget } from "./browser/authorization";
+import { composePageDraft, revisePageDraft } from "./browser/drafting";
+import { parsePageTaskCommand, runPageTaskCommand } from "./browser/tasks";
 
 export type TurnContext = {
   message: Message;
@@ -676,6 +678,74 @@ async function handleBrowserUtterance(ctx: TurnContext): Promise<boolean> {
   return true;
 }
 
+/** Route explicit item tasks through deterministic selection, optional tool-less prose, and observed fills. */
+async function handlePageTaskUtterance(ctx: TurnContext): Promise<boolean> {
+  if (ctx.message.type !== "utterance") return false;
+  const { text } = ctx.message.payload;
+  const command = parsePageTaskCommand(text);
+  if (command === null) return false;
+  if (command.type === "send-draft") {
+    await executeGatedAction(ctx, { type: "draft-send" });
+    return true;
+  }
+
+  const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+  const result = await runPageTaskCommand(ctx.session, text, {
+    executor,
+    ...(ctx.agyProvider === undefined ? {} : {
+      requestContent: (projection) => ctx.agyProvider!.answerPageQuestion(projection),
+    }),
+  });
+  switch (result.type) {
+    case "not-task": return false;
+    case "clarify":
+      speak(ctx.hub, ctx.session, result.message, "answer");
+      return true;
+    case "cancelled":
+      speak(ctx.hub, ctx.session, "Cancelled. Nothing was sent.", "answer");
+      return true;
+    case "read":
+    case "answer":
+      speak(ctx.hub, ctx.session, result.text, "answer");
+      return true;
+    case "model-unavailable":
+      speak(ctx.hub, ctx.session, "I couldn't prepare that page response. Please try again.", "error");
+      return true;
+    case "send-draft":
+      await executeGatedAction(ctx, { type: "draft-send" });
+      return true;
+    case "model-request": {
+      if (result.request.type === "draft" || result.request.type === "revise") {
+        if (ctx.agyProvider === undefined) {
+          speak(ctx.hub, ctx.session, "Drafting is unavailable in this mode.", "error");
+          return true;
+        }
+        const draft = result.request.type === "draft"
+          ? await composePageDraft({ ...ctx, provider: ctx.agyProvider }, {
+            taskId: result.taskId,
+            recipientWords: result.request.recipientWords,
+            targetWords: result.request.targetWords,
+            instruction: result.request.instruction,
+          })
+          : await revisePageDraft({ ...ctx, provider: ctx.agyProvider }, {
+            taskId: result.taskId,
+            instruction: result.request.instruction,
+          });
+        if (draft.type === "draft-readback" || draft.type === "revision-readback") {
+          speak(ctx.hub, ctx.session, `Current draft in ${draft.fieldLabel}: ${draft.text}`, "answer");
+        } else if (draft.type === "clarify") {
+          speak(ctx.hub, ctx.session, draft.message, "answer");
+        } else {
+          speak(ctx.hub, ctx.session, "I couldn't prepare the draft. Please try again.", "error");
+        }
+        return true;
+      }
+      speak(ctx.hub, ctx.session, "Page-content answers are unavailable in this mode.", "error");
+      return true;
+    }
+  }
+}
+
 /** `stop`: cut off whatever the voice UI is saying. */
 export function sayStop(hub: Hub, session: Session): void {
   speak(hub, session, MSG_STOPPED, "answer", { interrupt: true, record: false });
@@ -927,6 +997,7 @@ export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
     return;
   }
 
+  if (await handlePageTaskUtterance(ctx)) return;
   if (await handleBrowserUtterance(ctx)) return;
 
   hub.send("voice", "earcon", { name: "thinking" });
