@@ -10,13 +10,13 @@
 
 ### Voice I/O
 
-- [ ] **VOX-01** (REGRESSION: user reports automatic hold termination; repair plans 04-04/05/08): User can press a global push-to-talk key that works while the form tab has focus
-- [ ] **VOX-02** (REGRESSION: user reports no usable voice commands and truncated phrases; repair plans 04-05/08): User's speech is transcribed per push-to-talk press (Web Speech API) and sent to the server as an utterance
+- [x] **VOX-01**: User can press a global push-to-talk key that works while the form tab has focus (user reports microphone input works after repair, 2026-10-18)
+- [x] **VOX-02**: User speech is captured during push-to-talk, transcribed locally by whisper.cpp, and sent as an utterance (user reports microphone input works after repair, 2026-10-18)
 - [x] **VOX-03**: User can type any command instead of speaking it
 - [ ] **VOX-04** (REGRESSION: user reports speech going silent after speed changes; repair plans 04-06/07/08): Blip speaks replies with its own voice, plays earcons (listening / thinking / blocked), and says "one moment" when a reply takes over ~1.5 s
 - [ ] **VOX-05** (PARTIAL: interrupt by holding push-to-talk or typed "stop" works; voice barge-in is built but forced off until core merges GATE-08, because Spike F showed Blip hears itself): The user can interrupt Blip by speaking (barge-in). The confirm phrase is never accepted while Blip is speaking or within 1 s after it stops, so Blip's own speech can't confirm a submit. Echo handling is settled by a Phase 1 spike.
 - [x] **VOX-06**: User can say "stop" to cut off speech immediately
-- [ ] **VOX-07** (REGRESSION: numeric changes do not establish audible rate changes; repair plans 04-06/08): User can say "faster" / "slower" to change Blip's speech rate
+- [x] **VOX-07**: User can say "faster" / "slower" to change Blip's speech rate (user reports rate changes work; slower output was also heard as slower, 2026-10-18)
 - [ ] **VOX-08** (HUMAN NEEDED: audible completion/cancellation and exact speakId matching on the demo workstation): In screen-reader mode, Blip's replies are spoken through NVDA (controller client DLL) instead of Blip's own voice, without double speech
 
 ### Dialogue & Commands
@@ -78,14 +78,14 @@
 | Auto-summary on every page load | Talks over the user's screen reader; user asks instead |
 | Always-on mic / wake word | Echo/feedback risk, privacy; push-to-talk only |
 | Voice entry of passwords / card numbers | Never spoken, never sent to the model |
-| On-device STT/TTS models | Heavy setup and VRAM; Web Speech API / OS speech first |
+| On-device TTS models | Local STT now uses whisper.cpp as documented in `04-LOCAL-STT-DECISION.md`; additional local speech-generation models remain future scope. |
 
 ## Traceability
 
 | Requirement | Workstream | Phase | Status |
 |-------------|------------|-------|--------|
-| VOX-01 | voice | Phase 1 | Pending |
-| VOX-02 | voice | Phase 1 | Pending |
+| VOX-01 | voice | Phase 1 | Complete |
+| VOX-02 | voice | Phase 1 | Complete |
 | VOX-03 | voice | Phase 1 | Pending |
 | VOX-04 | voice | Phase 1 | Pending |
 | VOX-05 | voice | Phase 1 | Pending |

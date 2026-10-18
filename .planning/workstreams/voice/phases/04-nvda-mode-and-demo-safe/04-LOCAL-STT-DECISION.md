@@ -30,7 +30,7 @@ No npm runtime dependency was added. The setup currently targets Windows x64. An
 
 ## Input and safety boundary
 
-The existing button and global hold still go through one TalkController and the server-owned PTT eligibility record. AudioWorklet records mono PCM into memory while held, flushes on physical release and sends one canonical 16 kHz WAV to the existing loopback server. Silence never ends a hold. The existing ten-second safety cap cancels rather than dispatching a partial command. Permission denial, lost device, cancellation, replacement, startup/flush failure and old callbacks discard the capture. No interim transcript is executed.
+The existing button and global hold still go through one TalkController and the server-owned PTT eligibility record. AudioWorklet records mono PCM into memory while held, flushes on physical release and sends one canonical 16 kHz WAV to the existing loopback server. Silence never ends a hold, and there is no fixed ten-second hold cap. Permission denial, lost device, cancellation, replacement, startup/flush failure and old callbacks discard the capture. No interim transcript is executed.
 
 The HTTP endpoint requires the current exact same Origin and a process-specific token, with no permissive CORS. It validates WAV layout, bounded Content-Length and duration, rejects malformed requests, serializes inference and filters near-zero energy. Input is passed to a hidden native child through stdin; transcripts return through stdout. User recordings/transcript files are not written. There is no shell invocation, prompt hint containing the confirmation phrase, model-granted action authority or transcript logging. Whisper's unavailable confidence is omitted rather than fabricated as zero or one.
 

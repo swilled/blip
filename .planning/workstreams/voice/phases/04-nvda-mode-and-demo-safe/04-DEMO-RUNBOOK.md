@@ -55,7 +55,7 @@ Start each run from a fresh response page or a cleared form. For each beat, wait
 
 For the speech repairs, follow [04-REPAIR-ACCEPTANCE.md](04-REPAIR-ACCEPTANCE.md) one check at a time. The updated launcher builds the current client and prints its build identity. Reopen the same running build with `npm.cmd run demo -- --reopen-voice`; if it reports a build mismatch, stop the demo terminal with Ctrl+C and restart `npm.cmd run demo -- --brain=fake`. Microphone permission belongs to Blip's separate voice Chrome profile. Startup alone does not prove microphone or audible speed behavior.
 
-Repair regression (2026-10-18): root suite passed 123 files / 1,298 tests, with 16 files / 28 tests skipped; root typecheck and voice build passed. Device acceptance and the original milestone rehearsals below remain pending.
+Repair regression (2026-10-18): root suite passed 127 files / 1,316 tests, with 16 files / 28 tests skipped; root typecheck, voice build, and extension build passed. The user reports microphone input and faster/slower speech work. The updated Microsoft Forms required-field check passed for Employment type, Department, Leave type, Leave date, and Return date, with optional questions excluded. The public form was not submitted. Device measurements and the original milestone rehearsals below remain pending.
 
 - One-command demo startup: from the repository root, run `npm.cmd run demo`. Verify the local voice window and expected form are ready before beginning; record the actual startup outcome below.
 - Local synthetic survey reset: `npm.cmd run reset -w @blip/mock-server`. This resets only the local broken survey and its fictional profile.
@@ -67,9 +67,10 @@ Repair regression (2026-10-18): root suite passed 123 files / 1,298 tests, with 
 
 | Check | Required evidence | Status / result |
 | --- | --- | --- |
-| Automated local preparation | Focused voice/runbook tests, full regression suite, and typecheck | PASS — focused 5 files / 26 tests; full suite 120 files / 1,257 tests passed (16 files / 28 skipped); root typecheck passed after review fixes |
+| Automated local preparation | Focused regression suite, full suite, typecheck, and current voice/extension builds | PASS — latest full suite 127 files / 1,316 tests passed (16 files / 28 skipped); root typecheck and voice/extension builds passed |
 | Demo startup | `npm.cmd run demo`, machine, date, ready outcome | PENDING — not run for this preparation |
-| Live form target and reset | Confirm the URL above and fresh-page/clear behavior | PENDING — no Phase 4 page visit |
+| Live form required-field identification | On updated demo, compare current required labels with visible required markers; no public submit | PASS — user confirmed exactly Employment type, Department, Leave type, Leave date, and Return date; optional questions excluded |
+| Live form target and reset | Confirm the URL above and fresh-page/clear behavior | PENDING for the full Phase 4 run sequence |
 | Negative validation attempt | Missing required field, each observed field-labeled error, remaining missing fields, and no success claim | PENDING |
 | Live run 1 | Reset, fictional values, user phrase, observed confirmation text/number or truthful unverifiable result | PENDING |
 | Live run 2 | Reset, same fictional values, user phrase, observed confirmation text/number or truthful unverifiable result | PENDING |

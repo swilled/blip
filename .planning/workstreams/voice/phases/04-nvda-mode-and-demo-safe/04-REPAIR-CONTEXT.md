@@ -17,7 +17,7 @@ This supplement is authoritative for repair plans 04-04 through 04-08. Existing 
 ## Design updates
 
 - Supersede the old one-start-per-press/no-restart assumption with one logical command per physical hold. Browser recognition sessions may recover within that hold, no faster than once per second, with generation-scoped cleanup.
-- Keep the existing 10-second physical-hold watchdog for the initial repair; report its expiry explicitly. Revisit only if the measured longer-command test proves the limit inadequate.
+- User instruction supersedes the initial 10-second watchdog decision: do not end capture on a fixed hold duration. End only when the user releases the button, or releases both Right Ctrl and Space. Device loss, cancellation, replacement, and capture/flush failure still discard incomplete audio; no partial utterance may execute.
 - Supersede D-05's original 0.8–1.5 linear steps, and the later unverified 0.5–2.0 linear-step patch, with source-informed presets 0.50, 0.63, 0.79, 1.00, 1.26, 1.59, 2.00. Both controls and exact voice commands share them. Device validation decides whether the selected voice makes those levels useful.
 - D-06 means one rate snapshot for the whole logical speech item, including every sentence. An active item finishes at its existing rate; queued items use the newly selected rate.
 - No fuzzy confirmation matching, no global “forum” -> “form” text replacement, and no execution of interim speech. A read-only command alias is optional only if an actual full final transcript demonstrates that particular misrecognition; it cannot alter values or confirm phrases.

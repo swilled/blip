@@ -4,10 +4,10 @@ milestone: v1.0
 current_phase: 4
 current_phase_name: NVDA Mode and Demo-Safe
 status: verifying
-stopped_at: Plans 04-04 through 04-07 executed; 04-08 device checkpoint pending
-last_updated: "2026-10-18T05:26:00Z"
+stopped_at: Plan 04-08 repair evidence recorded; original Phase 4 human acceptance remains open
+last_updated: "2026-10-18T07:05:03Z"
 last_activity: 2026-10-18
-last_activity_desc: Capture, synthesis, rate and confirmation repairs implemented and regression checked
+last_activity_desc: Microsoft Forms required-field repair verified on the updated build; Phase 4 regression suite passed
 state_head: 9b323c6b56063dbc074fa00cf199e1cec85d5516
 progress:
   total_phases: 4
@@ -30,9 +30,9 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 ## Current Position
 
 Phase: 4 (NVDA Mode and Demo-Safe) — EXECUTING
-Plan: 04-08 automated regression complete; microphone/speaker checkpoint next
-Status: Repairs implemented; live device verification remains open
-Last activity: 2026-10-18 — Root suite 1298 passed / 28 skipped, typecheck and voice build passed
+Plan: 04-08 repair regression and Microsoft required-field check recorded; remaining Phase 4 acceptance is human-led
+Status: Phase 4 remains human_needed for NVDA, live submission rehearsal, fallback/video, and freeze evidence
+Last activity: 2026-10-18 — Root suite 1,316 passed / 28 skipped; typecheck and voice/extension builds passed; user confirmed five Microsoft required fields
 
 Progress: [█████░░░░░] 50%
 
@@ -108,15 +108,15 @@ Recent decisions affecting the voice track:
 
 ### Pending Todos
 
-- Keep the “only ‘submit survey’ submits” criterion `human_needed` until HO-8's core Gate/Executor handoff and the separate I2 run pass.
+- Phase 2 I2 local gate check: user reported bare “yes” and “submit form” stayed blocked, while exact “submit survey” submitted once after the Gate/Executor integration. This confirms only the local synthetic gate path; it is not Phase 4 live-form submission evidence.
 
 ### Blockers/Concerns
 
 - Install NVDA (2026.2) on both machines before the NVDA spike
 - Voice sign-off is needed at M0 (~h0.75); it blocks both tracks
-- Unverified (LOW confidence): Web Speech recognition and speechSynthesis while the voice window is unfocused. Phase 1 spike
-- The team-owned public form (Google Form) must exist by ~h12 so core can test it before I3
-- Speech audio goes to Google STT, so use only fictional data in the demo profile
+- Unverified (LOW confidence): AudioWorklet microphone capture and speechSynthesis while the voice window is unfocused. Phase 1 spike
+- The team-owned Microsoft Form URL is available; Phase 4 live validation and submission rehearsal remain unverified
+- Speech recognition now runs locally through whisper.cpp; still use only fictional data in the demo profile
 
 ## Deferred Items
 
@@ -126,9 +126,9 @@ Recent decisions affecting the voice track:
 
 ## Session Continuity
 
-Last session: 2026-10-18T05:26:00Z
-Stopped at: 04-08 task 1 committed; task 2 microphone/speaker checkpoint awaiting user result
-Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-REPAIR-ACCEPTANCE.md
+Last session: 2026-10-18T07:05:03Z
+Stopped at: 04-08 repair evidence recorded; Phase 4 milestone acceptance remains open
+Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-UAT.md
 
 ### Voice repair planning, 2026-10-18
 
@@ -153,7 +153,7 @@ Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-RE
 - Official release/model artifacts are installed locally and hash verified; setup is reproducible with npm.cmd run stt:setup. Research, comparisons, sources and exact artifact hashes: phases/04-nvda-mode-and-demo-safe/04-LOCAL-STT-DECISION.md.
 - Final full suite passed 125 files / 1,311 tests, with 16 files / 28 tests skipped. Typecheck and voice build passed. Five real native synthetic speech samples passed in about one second each.
 - A dedicated real Chrome synthetic-microphone test passed with Chrome SpeechRecognition explicitly disabled: actual AudioWorklet -> native model -> one finalized voice frame after release. This test is separate from the unavailable interactive browser connector and does not prove physical microphone/audio acceptance.
-- Existing 04-08 human checkpoint remains open. Both real hold routes, paused dictation, background form focus, output rates and local exact-phrase submission still need current-build user evidence. No phase-complete or freeze claim is made.
+- At this point in the execution, the 04-08 human checkpoint remained open; the later repair evidence below records the updated user reports and Microsoft Forms check. The original Phase 4 milestone is still incomplete.
 - Updated demo is running through tool session 86898 with build 56ae0be-2026-10-18T05:41:00.454Z. Native recognition endpoint reports ready=true and engine=whisper.cpp base.en; global hold hook started successfully and voice-role connection was observed after reopening. Extension connection was observed, but the launcher's specific synthetic-page readiness condition has not yet passed. Do not infer form-reading readiness from the microphone engine status.
 
 ### Recognition accuracy investigation, 2026-10-18
@@ -163,3 +163,10 @@ Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-RE
 - Compared base/small/quantized medium on identical clean and 6 dB synthetic-noise samples: all ten cases per model passed, so no user accuracy improvement is established. Medians: 1.097 / 3.806 / 11.332 seconds. Medium is not the default because its delay is unsuitable for confirmation freshness.
 - Automated evidence: 1,315 tests passed / 28 skipped; root typecheck passed; final focused backend tests passed; actual Chrome synthetic microphone integration passed using small.en with Chrome recognition disabled and actual capture duration/levels shown.
 - Real microphone type, exact said/heard example and level remain pending. Debug session: .planning/debug/voice-recognition-accuracy.md. Sources/comparison: phases/04-nvda-mode-and-demo-safe/04-ACCURACY-RESEARCH.md. Phase 4 stays human_needed.
+
+### Microsoft Forms required-status repair, 2026-10-18
+
+- Microsoft Forms exposes required status through a question-level `requiredStar` note. `requiredStateOf` now reads that marker only within the matching `questionItem`; a regression test confirms an adjacent optional question remains optional.
+- Extension tests, extension typecheck/build, root typecheck, voice build, and the full root suite passed. Full suite: 127 files passed, 16 skipped; 1,316 tests passed, 28 skipped.
+- On the restarted updated build `67114f9-dirty-2026-10-18T07:00:58.786Z`, the user confirmed the five expected required fields—Employment type, Department, Leave type, Leave date, Return date—and that optional questions were excluded. No public-form submission was attempted.
+- The user reports microphone input and faster/slower operation work. Detailed per-route counts and rate timings were not retained. Phase 4 remains open for NVDA/D-16, live validation and three submissions, fallback/hotspot/recorder rehearsal, video, and freeze review; no `demo-safe` tag is authorized yet.

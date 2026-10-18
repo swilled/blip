@@ -58,13 +58,13 @@ The per-workstream copies under `.planning/workstreams/{core,voice}/REQUIREMENTS
 
 ### Voice I/O (voice)
 
-- [ ] **VOX-01**: User can press a global push-to-talk key that works while the form tab has focus
-- [ ] **VOX-02**: User's speech is transcribed per push-to-talk press (Web Speech API) and sent to the server as an utterance
+- [x] **VOX-01**: User can press a global push-to-talk key that works while the form tab has focus (user reports repaired microphone input works, 2026-10-18)
+- [x] **VOX-02**: User speech is captured per push-to-talk press, transcribed locally with whisper.cpp, and sent to the server as an utterance (user reports repaired microphone input works, 2026-10-18)
 - [ ] **VOX-03**: User can type any command instead of speaking it
 - [ ] **VOX-04**: Blip speaks replies with its own voice, plays earcons (listening / thinking / blocked), and says "one moment" when a reply takes over ~1.5 s
 - [ ] **VOX-05**: The user can interrupt Blip by speaking (barge-in). The confirm phrase is never accepted while Blip is speaking or within 1 s after it stops, so Blip's own speech can't confirm a submit. Echo handling is settled by a Phase 1 spike.
 - [ ] **VOX-06**: User can say "stop" to cut off speech immediately
-- [ ] **VOX-07**: User can say "faster" / "slower" to change Blip's speech rate
+- [x] **VOX-07**: User can say "faster" / "slower" to change Blip's speech rate (user reports rate changes work; slower output was heard as slower, 2026-10-18)
 - [ ] **VOX-08**: In screen-reader mode, Blip's replies are spoken through NVDA (controller client DLL) instead of Blip's own voice, without double speech
 
 ### Dialogue & Commands (voice)
@@ -166,13 +166,13 @@ Merged from `.planning/workstreams/core/REQUIREMENTS.md` and `.planning/workstre
 | BRAIN-03 | core | Phase 4 | Complete |
 | RES-01 | core | Phase 3 | Complete |
 | RES-02 | core | Phase 3 | Complete |
-| VOX-01 | voice | Phase 1 | Pending |
-| VOX-02 | voice | Phase 1 | Pending |
+| VOX-01 | voice | Phase 1 | Complete |
+| VOX-02 | voice | Phase 1 | Complete |
 | VOX-03 | voice | Phase 1 | Pending |
 | VOX-04 | voice | Phase 1 | Pending |
 | VOX-05 | voice | Phase 1 | Pending |
 | VOX-06 | voice | Phase 1 | Pending |
-| VOX-07 | voice | Phase 4 | Pending |
+| VOX-07 | voice | Phase 4 | Complete |
 | VOX-08 | voice | Phase 4 | Pending |
 | DLG-01 | voice | Phase 1 | Pending |
 | DLG-02 | voice | Phase 2 | Pending |
