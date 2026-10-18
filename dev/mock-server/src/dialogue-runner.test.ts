@@ -232,6 +232,7 @@ describe("real voice dialogue runner", () => {
       speakId: armed.payload.speakId,
       utteranceId: "u-duplicate-redeem",
       phrase: armed.payload.phrase,
+      source: "typed",
     });
     await waitFor(() => stateCount() > duplicateStateStart ? stateCount() : undefined, "duplicate redeem handling");
     const requests = requestSpy.mock.calls as unknown as Array<[string, string, unknown]>;

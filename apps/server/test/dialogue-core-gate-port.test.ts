@@ -122,6 +122,7 @@ describe("dialogue reducer to core GatePort integration", () => {
       speakId: armed.payload.speakId,
       utteranceId: "u-too-early",
       phrase: armed.payload.phrase,
+      source: "voice",
     });
 
     expect(rig.session.pendingGatedAction).toBeNull();
@@ -176,6 +177,7 @@ describe("dialogue reducer to core GatePort integration", () => {
       speakId: readback.payload.speakId,
       utteranceId: "u-replay",
       phrase: "submit survey",
+      source: "voice",
     });
     expect(rig.requests.filter((request) => request.type === "act.request" &&
       (request.payload as ActRequest).action.op === "click")).toHaveLength(1);

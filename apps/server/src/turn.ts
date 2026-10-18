@@ -952,7 +952,7 @@ export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
 export async function handleUtterance(ctx: TurnContext): Promise<void> {
   const { message, hub, session } = ctx;
   if (message.type !== "utterance") return;
-  const { utteranceId, text } = message.payload;
+  const { utteranceId, text, source } = message.payload;
 
   const hasPendingConfirmation = session.pendingGatedAction !== null;
   const pendingBrowserAuthorization = hasPendingConfirmation ? null : session.pendingBrowserAuthorization;
@@ -972,7 +972,7 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
   hub.pushState();
   try {
     if (hasPendingConfirmation) {
-      const confirmation: GatedCommand = { type: "confirmation", text };
+      const confirmation: GatedCommand = { type: "confirmation", text, source };
       await executeGatedAction(ctx, confirmation);
       return;
     }

@@ -166,7 +166,7 @@ function sendUtterance(text, source = "typed", confidence) {
   if (!connected || warningPending || confirmationReducer.pending?.redeeming === true || trimmed.length === 0 || trimmed.length > 500) return false;
   utteranceNumber += 1;
   const utteranceId = `voice-${crypto.randomUUID()}-${utteranceNumber}`;
-  const redemption = confirmationReducer.redeem(trimmed, utteranceId);
+  const redemption = confirmationReducer.redeem(trimmed, utteranceId, source);
   if (redemption !== null) {
     heard.textContent = "Confirmation sent";
     const sent = send("confirm.redeem", redemption);

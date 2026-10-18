@@ -73,7 +73,7 @@ describe("createStubGate", () => {
     if (minted.ok) grantIds.push(minted.grantId);
 
     for (const grantId of grantIds) {
-      await expect(gate.redeem({ grantId, speakId: "tracked", utteranceId: "u1", phrase: "submit survey" })).resolves.toEqual({
+      await expect(gate.redeem({ grantId, speakId: "tracked", utteranceId: "u1", phrase: "submit survey", source: "voice" })).resolves.toEqual({
         ok: false,
         reason: "gate-not-connected",
       });

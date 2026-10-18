@@ -127,6 +127,16 @@ describe("invalid payloads fail with invalid-payload", () => {
     expect(invalid("act.request", { actId: "a1" })).toBe(true);
   });
 
+  it("accepts legacy confirmation frames without source but rejects unknown source values", () => {
+    const legacy = buildRawFrame("confirm.redeem", {
+      grantId: "g1", speakId: "k1", utteranceId: "u1", phrase: "submit survey",
+    });
+    expect(parseFrame(JSON.stringify(legacy)).ok).toBe(true);
+    expect(invalid("confirm.redeem", {
+      grantId: "g1", speakId: "k1", utteranceId: "u1", phrase: "send this email", source: "microphone-ish",
+    })).toBe(true);
+  });
+
   it("rejects an unknown ActionKind in confirm.armed", () => {
     expect(invalid("confirm.armed", { grantId: "g", speakId: "s", phrase: "p", kind: "approve", actionLabel: "x", expiresAt: 1 })).toBe(true);
   });

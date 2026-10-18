@@ -322,6 +322,9 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
             speakId: effect.speakId,
             utteranceId: effect.utteranceId,
             phrase: effect.phrase,
+            // This legacy reducer effect carries no source metadata; its gated forms retain the
+            // existing phrase behavior and cannot start the core page-task send flow.
+            source: "typed",
           });
         } catch {
           outcome = { ok: false, reason: "gate-error" };

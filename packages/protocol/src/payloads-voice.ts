@@ -69,6 +69,9 @@ export const ConfirmRedeemPayload = z.object({
   speakId: z.string().min(1).max(64),
   utteranceId: z.string().min(1).max(64),
   phrase: z.string().min(1).max(128),
+  /** New clients transmit provenance; the core requires voice provenance for page-task sends. */
+  /** Optional for older clients, whose page-task redemptions fail closed in core. */
+  source: z.enum(["voice", "typed"]).optional(),
 });
 export type ConfirmRedeemPayload = z.infer<typeof ConfirmRedeemPayload>;
 

@@ -579,6 +579,7 @@ describe("gated Executor read-back preparation", () => {
         speakId: rig.prompt.payload.speakId,
         utteranceId: "exact-redeem-1",
         phrase: "Submit survey!",
+        source: "voice",
       });
       await nextMatching(rig.voice, (frame) => frame.type === "speak" && frame.payload.category === "error" && frame.payload.text.includes("page refused"));
 
@@ -597,6 +598,7 @@ describe("gated Executor read-back preparation", () => {
         speakId: rig.prompt.payload.speakId,
         utteranceId: "replay-redeem-2",
         phrase: "submit survey",
+        source: "voice",
       });
       await sleep(25);
       expect(rig.extension.received().filter((message) => message.type === "act.request")).toHaveLength(1);
@@ -614,6 +616,7 @@ describe("gated Executor read-back preparation", () => {
         speakId: "stale-readback-id",
         utteranceId: "stale-redeem-1",
         phrase: "submit survey",
+        source: "voice",
       });
       const cleared = await nextMatching(rig.voice, (frame) => frame.type === "confirm.cleared");
       expect(cleared.payload).toMatchObject({ grantId: rig.armed.payload.grantId, reason: "cancelled" });
@@ -646,6 +649,7 @@ describe("gated Executor read-back preparation", () => {
           speakId: rig.prompt.payload.speakId,
           utteranceId: `after-${reason}`,
           phrase: "submit survey",
+          source: "voice",
         });
         await sleep(25);
         expect(rig.extension.received().filter((message) => message.type === "act.request")).toHaveLength(0);

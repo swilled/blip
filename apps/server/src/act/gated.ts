@@ -1,12 +1,17 @@
+import { createHash } from "node:crypto";
 import { isGatedKind, newId, type ActResult, type Intent, type SpeakDonePayload } from "@blip/protocol";
 import { formDigest, requiredEmpty } from "@blip/dialogue";
-import { matchesConfirmationPhrase, phraseForKind } from "@blip/policy/confirmation";
+import { matchesConfirmationPhrase, matchesExactConfirmationPhrase, phraseForKind } from "@blip/policy/confirmation";
 import type { Hub } from "../hub/hub";
 import { createGatePort, type GatePort } from "./gate-port";
 import { log } from "../log";
 import type { Refresher } from "../session/refresh";
 import type { PendingGatedAction, Session } from "../session/session";
 import { formatResultSpeech, interpretResult } from "../results/interpret";
+import { containsSensitivePageText } from "../brain/agy/privacy";
+import { containsPageActionInstruction } from "../brain/agy/content-projection";
+import { MAX_PAGE_TASK_DRAFT_CODE_POINTS, pageTaskMatchesCapture } from "../browser/task-state";
+import { grantBindingsMatch, type GrantBinding, type PageTaskSendBinding } from "./grants";
 
 const MAX_READBACK_CHARS = 20_000;
 const COOLDOWN_MS = 1_000;
@@ -22,6 +27,7 @@ const MSG_EXTENSION_REFUSED = "The page refused the action. It was not carried o
 const MSG_DISPATCH_UNKNOWN = "I couldn't verify what the page did. I won't retry; please check the page before trying again.";
 const MSG_RESULT_UNVERIFIED = "I couldn't verify the page outcome.";
 const MSG_GRANT_EXPIRED = "The confirmation expired. Nothing was carried out; please ask me to read the form back again.";
+const MSG_DRAFT_TASK_UNAVAILABLE = "I couldn't verify one current draft, recipient, and visible send action, so nothing was sent. Please review the page and try again.";
 
 export type GatedContext = {
   hub: Hub;
@@ -40,8 +46,13 @@ export type GatedCommand = GatedIntent | {
   actionId: string;
   expectedKind?: NonNullable<Session["model"]>["actions"][number]["kind"];
 } | {
+  /** Core-only binding request for the active page draft; never exposed as a model Intent. */
+  type: "draft-send";
+} | {
   type: "confirmation";
   text: string;
+  /** Source is supplied by direct utterances and new confirm.redeem clients. */
+  source?: "voice" | "typed";
   /** Present for the reducer protocol; legacy typed/recognized utterances use the server session. */
   grantId?: string;
   speakId?: string;
@@ -105,6 +116,8 @@ function finishPending(
 ): void {
   if (ctx.session.pendingGatedAction === pending) ctx.session.clearPendingGatedAction();
   else if (pending.grantId !== undefined) ctx.session.grants.clear(pending.grantId);
+  const pageTaskId = pending.binding.pageTask?.taskId;
+  if (pageTaskId !== undefined && ctx.session.activePageTask?.taskId === pageTaskId) ctx.session.clearPageTask();
   if (pending.grantId !== undefined && options.wireReason !== undefined) {
     ctx.hub.send("voice", "confirm.cleared", { grantId: pending.grantId, reason: options.wireReason });
   }
@@ -137,7 +150,12 @@ export function clearVoiceGatedAction(
   return true;
 }
 
-function safeBinding(session: Session, targetId: string, kind: NonNullable<Session["model"]>["actions"][number]["kind"]) {
+function safeBinding(
+  session: Session,
+  targetId: string,
+  kind: NonNullable<Session["model"]>["actions"][number]["kind"],
+  pageTask?: PageTaskSendBinding,
+): GrantBinding {
   const model = session.model!;
   return {
     targetId,
@@ -152,6 +170,69 @@ function safeBinding(session: Session, targetId: string, kind: NonNullable<Sessi
         value: field.sensitive === "none" ? field.value : null,
       })),
     },
+    ...(pageTask === undefined ? {} : { pageTask }),
+  };
+}
+
+function draftTaskSendBinding(session: Session, speakId: string, expectedGrantId: string | null = null): {
+  target: NonNullable<Session["model"]>["actions"][number];
+  binding: GrantBinding;
+  draft: string;
+  recipientLabel: string;
+  recipientValue: string;
+} | null {
+  const model = session.model;
+  const task = session.activePageTask;
+  const capture = session.browserCapture;
+  if (
+    model === null || task === null || session.tabId === null || session.stale ||
+    (task.taskKind !== "draft" && task.taskKind !== "revise") || task.associatedGrantId !== expectedGrantId ||
+    task.draftTargetId === null || task.lastObservedDraftValue === null || task.recipientBinding === null ||
+    task.identity.tabId !== session.tabId || task.identity.pageUrl !== model.url ||
+    !pageTaskMatchesCapture(task, capture, session.tabId)
+  ) return null;
+
+  const recipientBinding = task.recipientBinding;
+  const draftFields = model.fields.filter((field) => field.id === task.draftTargetId);
+  const recipientFields = model.fields.filter((field) => field.id === recipientBinding.fieldId);
+  const draftField = draftFields.length === 1 ? draftFields[0]! : null;
+  const recipientField = recipientFields.length === 1 ? recipientFields[0]! : null;
+  const draft = task.lastObservedDraftValue;
+  if (
+    draftField === null || draftField.disabled || draftField.sensitive !== "none" ||
+    (draftField.type !== "text" && draftField.type !== "textarea") || draftField.value !== draft ||
+    !draftField.hasValue || Array.from(draft).length > MAX_PAGE_TASK_DRAFT_CODE_POINTS ||
+    containsSensitivePageText(draft) || containsPageActionInstruction(draft) || draft.trim() === "" ||
+    recipientField === null || recipientField.disabled || recipientField.sensitive !== "none" ||
+    recipientField.type === "password" || recipientField.type === "file" || recipientField.type === "unknown" ||
+    recipientField.id === draftField.id || !recipientField.hasValue || recipientField.value === null ||
+    recipientField.value.trim() === "" || containsSensitivePageText(recipientField.value) ||
+    containsPageActionInstruction(recipientField.value) ||
+    createHash("sha256").update(recipientField.value, "utf8").digest("hex") !== recipientBinding.valueHash
+  ) return null;
+
+  const sendActions = model.actions.filter((action) => action.kind === "send");
+  if (sendActions.length !== 1) return null;
+  const target = sendActions[0]!;
+  const pageTask: PageTaskSendBinding = {
+    taskId: task.taskId,
+    draftHash: createHash("sha256").update(draft, "utf8").digest("hex"),
+    recipientFieldId: recipientField.id,
+    recipientValueHash: recipientBinding.valueHash,
+    sourceItemId: task.itemId,
+    sourceIdentity: { ...task.identity },
+    tabId: session.tabId,
+    operation: "send",
+    targetId: target.id,
+    targetKind: "send",
+    speakId,
+  };
+  return {
+    target,
+    binding: safeBinding(session, target.id, "send", pageTask),
+    draft,
+    recipientLabel: spokenText(recipientField.label) || "recipient",
+    recipientValue: spokenText(recipientField.value),
   };
 }
 
@@ -241,9 +322,71 @@ export async function armDialogueReadback(
   };
 }
 
+async function beginDraftSend(ctx: GatedContext): Promise<void> {
+  const { session } = ctx;
+  invalidateGatedAction(ctx, "cancelled", "superseded-by-draft-send");
+  if (!session.extensionConnected) {
+    audit("refused", "extension-disconnected", "send");
+    speak(ctx, MSG_NO_EXTENSION, "error");
+    return;
+  }
+  if (session.outputMode !== "agent-voice") {
+    audit("refused", "voice-completion-unavailable", "send");
+    speak(ctx, MSG_DRAFT_TASK_UNAVAILABLE, "error");
+    return;
+  }
+
+  const refreshed = await ctx.refresher.request("refresh");
+  if (!refreshed.ok || session.model === null || session.stale || session.tabId === null) {
+    audit("refused", refreshed.ok ? "stale-snapshot" : refreshed.kind, "send");
+    speak(ctx, MSG_READ_FAILED, "error");
+    return;
+  }
+
+  const phrase = phraseForKind("email-message-send");
+  const speakId = newId();
+  const resolved = phrase === undefined ? null : draftTaskSendBinding(session, speakId);
+  if (resolved === null || phrase === undefined) {
+    audit("refused", "draft-task-binding-unavailable", "send");
+    speak(ctx, MSG_DRAFT_TASK_UNAVAILABLE, "error");
+    return;
+  }
+
+  const actionLabel = spokenText(resolved.target.label).slice(0, 120) || "Send message";
+  const text = `Recipient: ${resolved.recipientLabel}, ${resolved.recipientValue}. Current message draft: ${resolved.draft} Requested action: ${actionLabel}. Can you say '${phrase}'?`;
+  if (text.length > MAX_READBACK_CHARS) {
+    audit("refused", "readback-too-large", "send", resolved.target.id);
+    speak(ctx, MSG_READBACK_TOO_LARGE, "error");
+    return;
+  }
+
+  const pending: PendingGatedAction = {
+    targetId: resolved.target.id,
+    kind: "send",
+    actionLabel,
+    phrase,
+    tabId: session.tabId,
+    url: session.model.url,
+    snapshotVersion: session.model.snapshotVersion,
+    speakId,
+    speechCompletedAt: null,
+    readyAt: null,
+    binding: resolved.binding,
+  };
+  session.pendingGatedAction = pending;
+  session.dialogue = "reading-back";
+  if (speak(ctx, text, "confirm-prompt", speakId) === null) {
+    session.clearPendingGatedAction();
+    audit("refused", "voice-disconnected", "send", resolved.target.id);
+    return;
+  }
+  ctx.hub.pushState();
+}
+
 /** The sole server path from a gated request or voice-role confirmation to dispatch. */
 export async function executeGatedAction(ctx: GatedContext, command: GatedCommand): Promise<void> {
   if (command.type === "confirmation") return acceptConfirmation(ctx, command);
+  if (command.type === "draft-send") return beginDraftSend(ctx);
 
   const { session } = ctx;
   const clock = ctx.clock ?? Date.now;
@@ -358,13 +501,32 @@ function armAfterCooldown(ctx: GatedContext, pending: PendingGatedAction): void 
     return;
   }
 
-  const grant = ctx.session.grants.arm(pending.binding);
+  let liveBinding = pending.binding;
+  const pageTask = pending.binding.pageTask;
+  if (pageTask !== undefined) {
+    const current = draftTaskSendBinding(ctx.session, pageTask.speakId);
+    if (
+      current === null || current.target.id !== pending.targetId ||
+      !grantBindingsMatch(pending.binding, current.binding)
+    ) {
+      finishPending(ctx, pending, "value-changed", { wireReason: "value-changed", reply: MSG_VALUE_CHANGED });
+      return;
+    }
+    liveBinding = current.binding;
+  }
+
+  const grant = ctx.session.grants.arm(liveBinding);
   if (grant === null) {
     finishPending(ctx, pending, "grant-unavailable", { wireReason: "cancelled", reply: MSG_READ_FAILED });
     return;
   }
   pending.grantId = grant.grantId;
   pending.expiresAt = grant.expiresAt;
+  if (pageTask !== undefined && !ctx.session.associatePageTaskGrant(grant.grantId)) {
+    ctx.session.grants.clear(grant.grantId);
+    finishPending(ctx, pending, "page-task-grant-association-failed", { wireReason: "page-changed", reply: MSG_PAGE_CHANGED });
+    return;
+  }
   ctx.session.dialogue = "awaiting-confirm";
   if (!ctx.hub.send("voice", "confirm.armed", {
     grantId: grant.grantId,
@@ -462,6 +624,18 @@ async function acceptConfirmation(ctx: GatedContext, command: Extract<GatedComma
   if (pending === null) return;
   if (pending.dispatching) return;
 
+  const taskBoundSend = pending.binding.pageTask !== undefined;
+  if (taskBoundSend && (command.source !== "voice" ||
+    command.grantId !== pending.grantId || command.speakId !== pending.speakId ||
+    typeof command.utteranceId !== "string" || command.utteranceId.length === 0 ||
+    pending.speechCompletedAt === null
+  )) {
+    return finishPending(ctx, pending, "voice-redeem-binding-mismatch", {
+      wireReason: "cancelled",
+      reply: MSG_CONFIRMATION_REQUIRED,
+    });
+  }
+
   if (
     (command.grantId !== undefined || command.speakId !== undefined || command.utteranceId !== undefined) &&
     (command.grantId !== pending.grantId || command.speakId !== pending.speakId ||
@@ -479,7 +653,10 @@ async function acceptConfirmation(ctx: GatedContext, command: Extract<GatedComma
   } catch {
     now = Number.NaN;
   }
-  if (!matchesConfirmationPhrase(pending.kind, command.text)) {
+  const phraseMatches = taskBoundSend
+    ? matchesExactConfirmationPhrase(pending.phrase, command.text)
+    : matchesConfirmationPhrase(pending.kind, command.text);
+  if (!phraseMatches) {
     return finishPending(ctx, pending, "phrase-mismatch", { wireReason: "cancelled", reply: MSG_CONFIRMATION_REQUIRED });
   }
   if (!Number.isFinite(now) || pending.readyAt === null || now < pending.readyAt || pending.grantId === undefined) {
@@ -520,13 +697,31 @@ async function acceptConfirmation(ctx: GatedContext, command: Extract<GatedComma
   }
 
   const grantId = pending.grantId;
+  let liveBinding = safeBinding(ctx.session, pending.targetId, target.kind);
+  const expectedPageTask = pending.binding.pageTask;
+  if (expectedPageTask !== undefined) {
+    const current = draftTaskSendBinding(ctx.session, expectedPageTask.speakId, pending.grantId ?? null);
+    if (current === null || current.target.id !== pending.targetId) {
+      return finishPending(ctx, pending, "page-task-binding-unavailable", { wireReason: "value-changed", reply: MSG_VALUE_CHANGED });
+    }
+    if (!grantBindingsMatch(pending.binding, current.binding)) {
+      return finishPending(ctx, pending, "page-task-binding-changed", { wireReason: "value-changed", reply: MSG_VALUE_CHANGED });
+    }
+    if (current.target.kind !== target.kind) {
+      return finishPending(ctx, pending, "value-changed", { wireReason: "value-changed", reply: MSG_VALUE_CHANGED });
+    }
+    liveBinding = current.binding;
+  }
   const authorization = ctx.session.grants.consumeForDispatch(
     grantId,
-    safeBinding(ctx.session, pending.targetId, target.kind),
+    liveBinding,
     ctx.session.tabId,
   );
   if (authorization === null) {
-    return finishPending(ctx, pending, "value-changed", { wireReason: "value-changed", reply: MSG_VALUE_CHANGED });
+    return finishPending(ctx, pending, taskBoundSend ? "page-task-grant-mismatch" : "value-changed", {
+      wireReason: "value-changed",
+      reply: MSG_VALUE_CHANGED,
+    });
   }
 
   // Consume is synchronous and precedes the only extension dispatch. A duplicate voice frame sees
@@ -548,9 +743,16 @@ async function acceptConfirmation(ctx: GatedContext, command: Extract<GatedComma
   if (result.payload.liveKind !== undefined && result.payload.liveKind !== pending.kind) {
     return finishPending(ctx, pending, "result-kind-mismatch", { wireReason: "executed", reply: MSG_DISPATCH_UNKNOWN });
   }
+  const requireFreshPageConfirmation = taskBoundSend;
+  const expectedResultTabId = pending.tabId;
   finishPending(ctx, pending, "dispatched", { outcome: "allowed", wireReason: "executed" });
   const resultSnapshot = await ctx.refresher.request("post-act");
-  if (!resultSnapshot.ok || resultSnapshot.snapshot === undefined || ctx.session.model === null || ctx.session.stale) {
+  if (
+    !resultSnapshot.ok || resultSnapshot.snapshot === undefined || ctx.session.model === null || ctx.session.stale ||
+    (requireFreshPageConfirmation && (
+      resultSnapshot.snapshot.tabId !== expectedResultTabId || ctx.session.tabId !== expectedResultTabId
+    ))
+  ) {
     speak(ctx, MSG_RESULT_UNVERIFIED, "answer");
     return;
   }

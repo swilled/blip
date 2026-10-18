@@ -40,6 +40,7 @@ export function createVoiceGateAdapter(ctx: GatedContext): VoiceGateAdapter {
       return executeGatedAction(ctx, {
         type: "confirmation",
         text: payload.phrase,
+        source: payload.source,
         grantId: payload.grantId,
         speakId: payload.speakId,
         utteranceId: payload.utteranceId,

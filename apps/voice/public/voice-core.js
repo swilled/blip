@@ -93,11 +93,12 @@ export class ConfirmationReducer {
     return true;
   }
 
-  redeem(text, utteranceId) {
+  redeem(text, utteranceId, source = "typed") {
     const pending = this.#pending;
     if (
       pending === null || pending.redeeming ||
       typeof utteranceId !== "string" || utteranceId.length === 0 ||
+      (source !== "voice" && source !== "typed") ||
       normalizeConfirmation(text) !== pending.phrase
     ) return null;
 
@@ -107,6 +108,7 @@ export class ConfirmationReducer {
       speakId: pending.speakId,
       utteranceId,
       phrase: text.trim(),
+      source,
     };
   }
 

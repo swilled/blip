@@ -36,17 +36,31 @@ describe("voice safety protocol helpers", () => {
   it("redeems only the armed exact phrase once, bound to its grant and tracked read-back id", () => {
     const reducer = new ConfirmationReducer();
     expect(reducer.arm({ grantId: "grant-1", speakId: "readback-1", phrase: "submit survey" })).toBe(true);
-    expect(reducer.redeem("submit booking", "utterance-wrong")).toBeNull();
-    expect(reducer.redeem("Submit survey!", "utterance-1")).toEqual({
+    expect(reducer.redeem("submit booking", "utterance-wrong", "voice")).toBeNull();
+    expect(reducer.redeem("Submit survey!", "utterance-1", "voice")).toEqual({
       grantId: "grant-1",
       speakId: "readback-1",
       utteranceId: "utterance-1",
       phrase: "Submit survey!",
+      source: "voice",
     });
-    expect(reducer.redeem("submit survey", "utterance-2")).toBeNull();
+    expect(reducer.redeem("submit survey", "utterance-2", "voice")).toBeNull();
     expect(reducer.clear({ grantId: "old-grant" })).toBe(false);
     expect(reducer.clear({ grantId: "grant-1" })).toBe(true);
     expect(reducer.pending).toBeNull();
+  });
+
+  it("preserves typed input provenance so the core can reject it for task-bound sends", () => {
+    const reducer = new ConfirmationReducer();
+    reducer.arm({ grantId: "grant-typed", speakId: "readback-typed", phrase: "send this email" });
+
+    expect(reducer.redeem("send this email", "typed-1", "typed")).toMatchObject({
+      grantId: "grant-typed",
+      speakId: "readback-typed",
+      utteranceId: "typed-1",
+      phrase: "send this email",
+      source: "typed",
+    });
   });
 
   it("builds protocol v1 frames without changing the payload", () => {
