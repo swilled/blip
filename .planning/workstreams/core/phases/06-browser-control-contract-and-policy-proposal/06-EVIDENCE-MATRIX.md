@@ -68,18 +68,18 @@ For A15–A19, the authorization is for the configured **browser default search 
 
 ## Approval gates and sequencing
 
-### Written voice-owner approval required before protocol or live-policy change
+### Voice-owner approval record
 
-**Status: approval pending.** The core owner reports that the teammate is comfortable with the direction, but that report is not the required written voice-owner decision on this exact contract. It does not satisfy this gate.
+**Status: cleared for integration based on reported approval.** The core owner reports that the voice owner reviewed and approved the full diff. The reviewed scope and provenance are recorded in `06-VOICE-OWNER-APPROVAL.md`. M0 and Phase 5 release gates remain separate.
 
-Before any protocol schema or live link-policy change, record the voice owner's written decision on all of the following exact contract details:
+The reported review covered the following exact contract details:
 
 1. The additive message/request and result schema, including correlation, size bounds, and compatibility behavior.
 2. Link eligibility for the proposed ungated safe-GET set, including exact top-level `URL.origin`, top-level comparison for framed candidates, and the non-empty rel exclusion.
 3. Destination and search confirmation semantics, including resolved-host read-back, exact query plus “browser default search” read-back, tracked speech identity, one-use purpose-bound authorization, and invalidation conditions.
 4. The privacy projection boundary: direct heading/paragraph reads make no AGY call; only explicit summaries or page questions may send a separately bounded, filtered excerpt; ordinary intent projection remains value-free.
 
-Record that decision in a future `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md` artifact and link it from the protocol change proposal/PR. That artifact does not exist yet. Until it is recorded, this evidence packet grants no authority to change `PROTOCOL.md`, protocol runtime schemas, the live classifier, or the manifest. Phase 6 authorizes no merge, push, or live behavior change.
+The approval record is `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`. The Phase 6 review gate is cleared for the reviewed diff. This does not clear the separate M0 protocol-freeze or Phase 5 release gates.
 
 ### Phase 5 release gates remain independent
 
@@ -89,4 +89,4 @@ Phase 5 technical acceptance is recorded as passed. Its remaining release gates 
 
 Implement the reviewed protocol and basic browser primitives in separately scoped follow-on phases. Place optional multi-step **AGENT-01** in its own later phase after contract review and the basic primitives. AGENT-01 may coordinate typed steps, but every page action remains bound to the deterministic Executor and existing policy. It cannot confirm actions, mint grants, or treat page text or model output as authority.
 
-Changes to shared `.planning/PROJECT.md` and shared `.planning/REQUIREMENTS.md` remain proposals until both owners agree. This matrix records no shared-file decision, requirement change, teammate approval, or release-gate change.
+Changes to shared `.planning/PROJECT.md` and shared `.planning/REQUIREMENTS.md` remain proposals until both owners agree. The reported approval applies only to the reviewed `core/browser-control` diff; it does not record a shared-file decision, requirement change, or release-gate change.

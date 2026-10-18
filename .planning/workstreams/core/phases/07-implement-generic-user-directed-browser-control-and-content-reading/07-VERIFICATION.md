@@ -67,13 +67,13 @@ The new coverage verifies direct same-origin selection by voice and typing, spok
 
 ## Remaining External Review
 
-Before merge or push, the voice owner must review the exact shared diff for `BrowserLinkRecord.navigationSafety`, `BrowserOperation.authorizationMode`, and the same-origin safe-GET policy. The user reported teammate agreement with the product choice; written review of this exact diff is still the documented merge gate.
+At the time of this verification, review of the exact shared diff for `BrowserLinkRecord.navigationSafety`, `BrowserOperation.authorizationMode`, and the same-origin safe-GET policy remained open. On 2026-10-18, the core owner reported that the voice owner reviewed and approved the full `core/browser-control` diff, including this Phase 7 scope. The approval provenance is recorded in `../06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`; this integration review gate is cleared.
 
 The selected-link path was also exercised in Edge 155 with an isolated profile and a local synthetic fixture. The broader browser suite passed its test bodies; one run encountered a Windows temporary-profile cleanup lock that cleared on an isolated rerun. These checks do not substitute for review of the exact shared diff.
 
 ## Conclusion
 
-The Phase 7 implementation goal is met locally. Ordinary same-origin HTTP(S) GET links open only after explicit unique selection. Cross-origin and action-like links retain exact spoken confirmation. The extension rechecks live state before navigation, and the new link policy does not change form button or action classification. The shared review and real-browser checks remain open before integration.
+The Phase 7 implementation goal is met. Ordinary same-origin HTTP(S) GET links open only after explicit unique selection. Cross-origin and action-like links retain exact spoken confirmation. The extension rechecks live state before navigation, and the new link policy does not change form button or action classification. Synthetic Edge browser checks passed as recorded above, and the reported voice-owner review gate is cleared for integration.
 
 ---
 

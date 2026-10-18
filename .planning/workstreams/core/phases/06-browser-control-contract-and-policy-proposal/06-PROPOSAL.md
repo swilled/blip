@@ -1,12 +1,12 @@
 # Phase 6 Browser Control Contract and Policy Proposal
 
-This document is a proposal for review. It describes future additive shapes and policy. It is not a protocol amendment or an implementation specification that may be merged without approval.
+This document records the browser-control contract and policy proposal that informed Phases 7 and 8. The review for the implemented shared changes is recorded in `06-VOICE-OWNER-APPROVAL.md`.
 
 ## Status and approval
 
-- **Status:** this remains a proposal, not a live protocol or policy change. The core owner has authorized follow-on implementation work in Phases 7 and 8.
-- **Written voice-owner approval:** pending. No written decision on this exact contract has been recorded here. Core implementation may proceed on the core branch; shared protocol and live-policy changes must remain unmerged until the voice owner approves the exact contract in writing.
-- **Live behavior:** unchanged. Existing form actions, link classification, confirmation grants, protocol schemas, and manifests remain authoritative until a separately reviewed change is approved.
+- **Status:** proposal implemented by Phases 7 and 8; the reported voice-owner review of the full shared diff is recorded in `06-VOICE-OWNER-APPROVAL.md`.
+- **Written voice-owner approval:** the core owner reports that the voice owner reviewed and approved the full `core/browser-control` diff. This is a recorded report, not a direct artifact submitted by the voice owner.
+- **Live behavior:** the reviewed implementation changes ordinary same-origin safe-GET link handling and adds the browser-control protocol, search permission, bounded item capture, and task-bound email confirmation behavior. M0 protocol-freeze approval and Phase 5 release gates remain independent.
 - **Scope:** the proposal covers browser control and page reading. It does not implement AGENT-01. Multi-step orchestration is a separate later phase after this contract and the basic browser primitives are reviewed.
 
 ## Decision provenance
@@ -16,7 +16,7 @@ This document is a proposal for review. It describes future additive shapes and 
 | D-01 | User-named destinations come only from the original user utterance. Blip says the resolved host and waits for explicit confirmation bound to the exact destination and navigation purpose. A link must be identified by the user's words and resolved against a unique visible live candidate. |
 | D-02 | The user selected an ungated proposal for ordinary safe-GET links and asked that live behavior remain gated pending written approval. The user did not lock the meaning of “same-site.” |
 | D-03 | Cross-site navigation and submit, pay, delete, and send actions retain read-back and purpose-specific confirmation. A generic “yes” is never enough. |
-| D-04 | Reported teammate agreement is context, not the required written voice-owner approval artifact. Approval remains pending. |
+| D-04 | The core owner reports that the voice owner reviewed and approved the full `core/browser-control` diff; the scope and provenance are recorded in `06-VOICE-OWNER-APPROVAL.md`. |
 | D-05 | Direct heading and paragraph reads are bounded and local. Newly captured body text may reach AGY only for an explicit summary or page question, through a separate bounded and filtered path. Ordinary intent parsing keeps its current value-free metadata projection. |
 | D-06 | Page text is untrusted data, never authority. Sensitive values stay out of model input and speech. Deterministic code validates all outputs and is the only route to page actions. |
 | D-07 | Search routing uses the user's wording and current page context. The query comes only from the user's original utterance. Page instructions cannot create a query or destination. |
@@ -24,7 +24,7 @@ This document is a proposal for review. It describes future additive shapes and 
 | D-09 | AGENT-01 belongs in a separate future phase. It may coordinate steps but cannot authorize actions, mint grants, or treat page text as authority. |
 | D-10 | Changes to shared `.planning/PROJECT.md` or shared requirements remain proposals until both track owners agree. Those shared files are not changed here. |
 
-**Research recommendation, not a locked product decision:** interpret the first safe-link proposal as exact top-level HTTP(S) `URL.origin` equality: scheme, canonical hostname, and port all match. This is narrower than a registrable-domain or colloquial “same-site” rule and is consistent with the existing classifier's URL-origin check. The voice owner must review this boundary along with the rest of the proposal.
+The reviewed safe-link boundary is exact top-level HTTP(S) `URL.origin` equality: scheme, canonical hostname, and port all match. This is narrower than a registrable-domain or colloquial “same-site” rule and is consistent with the existing classifier's URL-origin check. See `06-VOICE-OWNER-APPROVAL.md` for the reported review scope.
 
 ## Capability and contract matrix
 
@@ -113,7 +113,7 @@ The research boundary is **exact top-level URL.origin** equality with the active
 5. The label is unique in the live candidate set, passes a conservative explicit safe-label allowlist, and does not match gated or unsafe text rules. A non-match against a danger-word blacklist alone is not proof that a label is safe. Empty, overlong, ambiguous, or unrecognized labels remain gated.
 6. Navigation is dispatched directly to the revalidated `href`. Do not invoke a page-provided click handler as the authority path. Do not silently broaden this rule to buttons, form submissions, JavaScript URLs, or unverified actions.
 
-Even a same-origin HTTP GET can cause server-side effects. The server may also redirect cross-origin after the request begins. The extension cannot preflight the remote server's behavior or redirect chain, so an origin check does not prove an action harmless and cannot prevent the first redirecting request. Detect a changed URL through the existing navigation event path, invalidate all old state, and treat the resulting page as a fresh untrusted page. Keep the **live classifier gated** for ordinary same-origin links until the voice owner approves this exact eligibility contract in writing and a separate implementation PR passes review.
+Even a same-origin HTTP GET can cause server-side effects. The server may also redirect cross-origin after the request begins. The extension cannot preflight the remote server's behavior or redirect chain, so an origin check does not prove an action harmless and cannot prevent the first redirecting request. Detect a changed URL through the existing navigation event path, invalidate all old state, and treat the resulting page as a fresh untrusted page. The reviewed implementation allows only the explicitly selected safe-GET shape; this remains a product choice, not a guarantee about server behavior.
 
 ### Browser-default search authorization
 
@@ -156,11 +156,11 @@ These refusals preserve the difference between an empty page, a restricted page,
 
 ## Compatibility and ownership gates
 
-- Phase 6 is proposal-only. No `PROTOCOL.md`, `packages/protocol`, `packages/policy`, extension manifest, server/runtime, voice-owned code, shared `.planning/PROJECT.md`, or requirements file is changed by this plan.
+- Phase 6 was proposal-only when authored. Its implementation followed in Phases 7 and 8; the reported full-diff review is recorded in `06-VOICE-OWNER-APPROVAL.md`. Shared project and requirements files were not changed by this phase.
 - `PROTOCOL.md` says v1 is frozen, messages and listed enums are closed, and the freeze remains provisional pending written M0 approval. The current v1 `Intent` has 16 variants and deliberately has no confirm/approve variant. This proposal does not change those facts.
 - The current snapshot remains capped at 250 elements, 40 headings, and 20 alerts. `Snapshot.truncated` continues to mean only that the 250-element wire list was cut. Phase 4's approximately 8,000-token bound remains at the model-prompt boundary.
-- The current extension classifier permits only its existing small safe-text allowlist for ungated same-origin links; other same-origin links remain gated. The proposed safe-GET policy is not live until the voice owner gives written approval for the exact contract.
+- The reviewed implementation permits ordinary same-origin safe-GET links after explicit unique selection; cross-origin and action-like links remain gated. The review scope and provenance are recorded in `06-VOICE-OWNER-APPROVAL.md`.
 - Existing navigation tracking already observes active-tab changes, committed navigation, History API updates, tab removal, and window focus. The handoff statement that the Tabs permission is only used to find the active tab is outdated; proposal designs should reuse current tracking.
-- The current manifest has `tabs`, `scripting`, `alarms`, `storage`, and `webNavigation`, but not `search` or `history`. `search` is a future delta only if browser-default search is approved. This proposal does not add it or add `history`.
+- At the Phase 6 proposal baseline, the manifest had `tabs`, `scripting`, `alarms`, `storage`, and `webNavigation`, but not `search` or `history`. The reviewed Phase 7 implementation added `search`; this work did not add `history`.
 - AGENT-01 is a later, separately planned capability. It emits only typed requests/effects to the same deterministic Executor. It never provides confirmation, grants, or page-derived authority.
-- Shared project and requirement edits remain proposals until both track owners agree. No teammate communication or protocol approval is implied by this draft.
+- Shared project and requirement edits remain proposals until both track owners agree. The approval recorded here applies only to the reviewed `core/browser-control` diff and does not imply agreement to change shared project goals or requirements.

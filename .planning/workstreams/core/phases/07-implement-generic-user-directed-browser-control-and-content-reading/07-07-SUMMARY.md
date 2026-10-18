@@ -34,7 +34,7 @@ key-decisions:
   - "Ordinary same-origin HTTP(S) GET links may open after explicit unique selection; this does not change form action classification."
   - "Cross-origin and action-like links require tracked read-back, exact spoken phrase, one-use authorization, and live validation."
   - "The extension navigates with tabs.update and never invokes page click handlers."
-  - "The exact shared protocol/live-policy diff remains pending written voice-owner review before merge or push."
+  - "The exact shared protocol/live-policy diff has reported voice-owner approval recorded in the Phase 6 approval artifact."
 completed: 2026-10-18
 ---
 
@@ -65,7 +65,7 @@ No public site, personal account, or live provider was used. The selected-link p
 
 ## Remaining Integration Gate
 
-The user reported teammate agreement with the safe-GET product choice. The exact shared protocol/live-policy diff still needs written voice-owner review before merge or push. This is an integration gate, not an unresolved Phase 7 implementation gap.
+The core owner reports that the voice owner reviewed and approved the full `core/browser-control` diff, including the safe-GET product choice. The scope and provenance are recorded in `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`; the review gate is cleared for integration. This was an integration gate, not an unresolved Phase 7 implementation gap.
 
 ---
 

@@ -1,6 +1,6 @@
 import type { ActionKind } from "@blip/protocol";
 
-/** Fixed, core-selected phrase contexts. The page-task phrase is local pending written voice-owner review. */
+/** Fixed, core-selected phrase contexts. The page-task phrase is included in the reviewed diff recorded in the Phase 6 approval artifact. */
 export type ConfirmationPhraseKind = ActionKind | "email-message-send";
 
 const CONFIRMATION_PHRASES: Readonly<Partial<Record<ConfirmationPhraseKind, string>>> = {

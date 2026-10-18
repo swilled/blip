@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phases 7 and 8 complete locally; shared review gates remain
-stopped_at: Verified Phase 7 safe-GET closure and Phase 8; waiting on integration review
+status: Phases 7 and 8 complete; full-diff voice-owner approval reported and recorded for integration
+stopped_at: Verified Phase 7 and Phase 8; integration review gate cleared
 last_updated: "2026-10-18T08:49:00Z"
 progress:
   total_phases: 8
@@ -20,7 +20,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 7 and Phase 8 implementation are locally complete and verified. Written voice-owner review is required before shared browser protocol and policy changes merge or push.
+**Current focus:** Phase 7 and Phase 8 implementation are complete and verified. The core owner reports voice-owner approval of the full shared diff; the approval record is in the Phase 6 directory. M0 protocol-freeze approval and Phase 5 release gates remain independent.
 
 ## Current Position
 

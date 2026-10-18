@@ -37,7 +37,7 @@ re_verification:
 | 9 | Only the exact voice phrase with live task bindings dispatches once; typed, source-less, affirmative, incorrect, stale, or mutated attempts dispatch zero times. | VERIFIED | dialogue-runner-server.test.ts tests missing/typed source, yes/okay/yeah/sure, wrong phrase, stale grant/speech IDs, and task/page/draft/recipient/target mutations. |
 | 10 | Successful send is reported only after fresh validated confirmation from the bound synthetic page. | VERIFIED | Positive loopback returns a fresh success alert; missing confirmation performs one accepted dispatch but reports an unverified outcome. |
 | 11 | Task grant is invalidated on interrupted speech, stop, repeat, cancel, PTT, page/tab change, output-mode settings, voice disconnect/reconnect, and replacement. | VERIFIED | Runner-mode loopback cases clear the grant before a saved redemption; every case asserts zero dispatch, including current voice replacement. |
-| 12 | Acceptance remains synthetic; shared phrase/protocol change is pending written voice-owner review. | VERIFIED | 08-07 plan/summary, PROTOCOL.md, and packages/policy/src/confirmation.ts; no shared phrase or protocol edits were part of 08-07. |
+| 12 | Acceptance remains synthetic; the shared phrase/protocol review gate is cleared based on the reported full-diff approval. | VERIFIED | 08-07 plan/summary, PROTOCOL.md, and `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`. |
 
 **Plan must-have score:** 30/30 verified across all seven plans.
 
@@ -74,7 +74,7 @@ re_verification:
 | 27 | 08-07 | Only exact voice redemption with live bindings dispatches once; source, phrase, ID, and binding attacks dispatch zero. | VERIFIED | Loopback denial table and one-success case. |
 | 28 | 08-07 | Success requires fresh confirmation from the bound synthetic page. | VERIFIED | Success and no-fresh-confirmation loopback cases. |
 | 29 | 08-07 | Runner task grants clear on interruption, stop/repeat/cancel, page/tab, settings, PTT, and voice lifecycle changes. | VERIFIED | Loopback invalidation cases include disconnect/reconnect and direct replacement. |
-| 30 | 08-07 | Acceptance is fake/synthetic and shared phrase/protocol review stays pending. | VERIFIED | Test rig and current protocol/policy review markers. |
+| 30 | 08-07 | Acceptance is fake/synthetic and the shared phrase/protocol review gate is cleared based on the reported full-diff approval. | VERIFIED | Test rig and Phase 6 approval record. |
 
 ### Required Artifacts
 
@@ -87,7 +87,7 @@ re_verification:
 | apps/server/src/browser/tasks.ts, task-state.ts | Task parsing, item resolution, live reread, and cancellation | VERIFIED | One bounded current task; ambiguous or stale selection clarifies. |
 | apps/server/src/brain/agy/content-projection.ts, provider | Explicit filtered model input and prose-only output | VERIFIED | Direct reads stay local; provider is tool-less and receives bounded filtered data. |
 | apps/server/src/browser/drafting.ts, act/ungated.ts | Deterministic draft/revision and observed readback | VERIFIED | Target is core-selected; accepted value must match extension observation and refreshed FormModel. |
-| packages/policy/src/confirmation.ts | Deterministic exact context phrase | VERIFIED | Local email-message-send maps to send this email; shared review remains pending. |
+| packages/policy/src/confirmation.ts | Deterministic exact context phrase | VERIFIED | Local email-message-send maps to `send this email`; the reported full-diff approval is recorded in the Phase 6 approval artifact. |
 | apps/server/src/act/grants.ts, gated.ts | Bound one-use grant, invalidation, and fresh result interpretation | VERIFIED | Fingerprint includes draft/recipient hashes, source identity/item, tab, operation, target, and speak ID. |
 | apps/server/src/turn.ts | Page-task route into read/model/draft/gate code | VERIFIED | Default server turn path plus selective runner route both reach existing core task handling. |
 | apps/server/src/server.ts | Composed dialogueRunner and Phase 8 handlers | VERIFIED | Task commands, task-bound redemption, speech completion, and lifecycle cleanup wrap reducer handlers. |
@@ -146,13 +146,13 @@ No human-only check is required to verify the specified server-side task and con
 
 ### Review and Release State
 
-The shared item protocol and send this email phrase/policy delta remain pending written voice-owner review. PROTOCOL.md says the exact shared diff is unmerged and unpushed until review; packages/policy/src/confirmation.ts labels the task phrase local pending review. Current branch is core/browser-control; no remote branch contains HEAD, and git rev-list --left-right --count origin/main...HEAD reports 0 196. The local changes therefore remain unpushed and unmerged. This is a review/release limitation, not an implementation gap.
+At the time of this verification, the shared item protocol and `send this email` phrase/policy delta were awaiting voice-owner review, and the branch was local. On 2026-10-18, the core owner reported that the voice owner reviewed and approved the full `core/browser-control` diff, including the Phase 8 item schema and phrase. The reported scope and provenance are recorded in `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`; this integration review gate is cleared. M0 protocol-freeze approval and Phase 5 release gates remain separate.
 
 ### Gaps Summary
 
 The previous configured-handler integration gap is closed. In startServer({ dialogueRunner: true }), explicit Phase 8 tasks now use the same deterministic core turn/task route, and a task-bound redemption reaches the existing voice gate with its original source and IDs. Ordinary dialogue remains on the reducer. The loopback acceptance test proves the complete read/draft/revise/readback/guard/redeem/fresh-confirmation path, plus zero dispatch for invalid input and invalidation events. No implementation gaps remain in the 30 plan must-haves.
 
-The shared phrase/protocol review is still pending; keep the changes unmerged and unpushed until written voice-owner review is recorded. The roadmap phase was not marked complete by this verification.
+The reported voice-owner review gate is cleared for integration. The roadmap phase was not marked complete by this verification.
 
 ---
 
