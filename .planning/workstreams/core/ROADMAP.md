@@ -239,7 +239,7 @@ Plans:
 - [x] 07-01-PLAN.md — Add closed browser operation and content result schemas
 - [x] 07-02-PLAN.md
 - [x] 07-03-PLAN.md
-- [ ] 07-04-PLAN.md
+- [x] 07-04-PLAN.md
 - [ ] 07-05-PLAN.md
 - [ ] 07-06-PLAN.md
 
