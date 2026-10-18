@@ -7,6 +7,7 @@ import {
   type BrowserResultPayload as BrowserResult,
 } from "@blip/protocol";
 import type { Hub } from "../hub/hub";
+import { log } from "../log";
 import type { Session } from "../session/session";
 
 const BROWSER_REQUEST_TIMEOUT_MS = 8_000;
@@ -156,7 +157,9 @@ export function createBrowserExecutor(options: { hub: Hub; session: Session }): 
           checkedRequest.data,
           { expect: "browser.result", timeoutMs: BROWSER_REQUEST_TIMEOUT_MS },
         );
-      } catch {
+      } catch (error) {
+        // Record why the extension did not answer (timeout, closed socket, ...) without page data.
+        log("warn", { msg: "browser request failed", type: operation.op, code: error instanceof Error ? error.message : "unknown" });
         return { ok: false, reason: "request-failed" };
       }
       const checkedResult = BrowserResultPayload.safeParse(response.payload);

@@ -14,6 +14,7 @@
   "scripts": {
     "dev": "tsx scripts/dev.ts",
     "demo": "tsx scripts/demo.ts",
+    "start": "tsx scripts/start.ts",
     "stt:setup": "tsx scripts/setup-local-stt.ts",
     "stt:check": "tsx scripts/check-local-stt.ts",
     "stt:check:browser": "tsx scripts/check-local-stt-browser.ts",
