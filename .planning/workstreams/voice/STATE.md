@@ -30,7 +30,7 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 ## Current Position
 
 Phase: 4 (NVDA Mode and Demo-Safe) — EXECUTING
-Plan: 04-04 next; original 3 plans executed and 5 repair plans pending
+Plan: 04-05 next; 04-04 launch and diagnostics complete
 Status: Repair plans ready for execution; live verification remains open
 Last activity: 2026-10-18 — Research-backed voice repair planning completed
 
