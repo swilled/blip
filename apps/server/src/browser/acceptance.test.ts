@@ -79,6 +79,7 @@ function makeBrowserRig(options: {
   captureStatus?: ContentStatus;
   searchAvailable?: boolean;
   contentAnswer?: string;
+  advanceIdentityOnRead?: boolean;
 } = {}) {
   let now = 1_000;
   let currentIdentity = pageIdentity();
@@ -133,6 +134,9 @@ function makeBrowserRig(options: {
     const operation = request.operation;
     switch (operation.op) {
       case "capture": {
+        if (options.advanceIdentityOnRead) {
+          currentIdentity = pageIdentity(currentIdentity.tabId, currentIdentity.captureRevision + 1, currentIdentity.pageUrl);
+        }
         if (changeCaptureOnNextRead) {
           currentIdentity = pageIdentity(currentIdentity.tabId, currentIdentity.captureRevision + 1, currentIdentity.pageUrl);
           changeCaptureOnNextRead = false;
@@ -190,6 +194,9 @@ function makeBrowserRig(options: {
         };
       }
       case "list-links": {
+        if (options.advanceIdentityOnRead) {
+          currentIdentity = pageIdentity(currentIdentity.tabId, currentIdentity.captureRevision + 1, currentIdentity.pageUrl);
+        }
         if (changeCaptureAfterNextLinkList) changeCaptureOnNextRead = true;
         const status = statusFor(currentIdentity);
         const links = status === "supported" ? visibleLinks(currentIdentity) : [];
@@ -207,6 +214,11 @@ function makeBrowserRig(options: {
       }
       case "open-link":
         if (!linksAreLive) return browserFailure(request, "stale-capture");
+        if (changeCaptureOnNextRead) {
+          currentIdentity = pageIdentity(currentIdentity.tabId, currentIdentity.captureRevision + 1, currentIdentity.pageUrl);
+          changeCaptureOnNextRead = false;
+          return browserFailure(request, "stale-capture");
+        }
         chromeEffects.push({ op: "open-link", linkId: operation.linkId, identity: operation.identity });
         return { ok: true, requestId: request.requestId, operation: "open-link", result: { tabId: currentIdentity.tabId, status: "dispatched" } };
       case "scroll":
@@ -407,6 +419,17 @@ describe("Phase 7 generic browser-control acceptance", () => {
     expect(rig.chromeEffects).toHaveLength(1);
     expect(rig.chromeEffects[0]?.op).toBe("open-link");
 
+    // Real captures can allocate a new ID for every read. Reuse the just-listed identity
+    // for authorization instead of invalidating the selected link with another capture.
+    const changingCaptureIds = makeBrowserRig({ advanceIdentityOnRead: true });
+    const changingAuthorization = await authorizeBrowserRequest(changingCaptureIds, "open link Read the regional update");
+    expect(changingAuthorization.sourcePageIdentity).toMatchObject(pageIdentity(7, 2));
+    expect(changingCaptureIds.browserCalls.map(({ request }) => request.operation.op))
+      .toEqual(["list-links", "open-link"]);
+    expect(changingCaptureIds.chromeEffects).toEqual([
+      { op: "open-link", linkId: "link-regional", identity: pageIdentity(7, 2) },
+    ]);
+
     const changedHref = makeBrowserRig();
     await changedHref.utter("list links");
     changedHref.setLinksAreLive(false);
@@ -416,7 +439,7 @@ describe("Phase 7 generic browser-control acceptance", () => {
     expect(changedHref.sent.some((frame) => frame.type === "speak" && /page changed/i.test(frame.payload.text))).toBe(true);
   });
 
-  it("D-04 clarifies duplicate and hidden link labels and refuses an identity change between listing and authorization", async () => {
+  it("D-04 clarifies duplicate and hidden link labels and refuses a page change before link dispatch", async () => {
     const duplicate = makeBrowserRig();
     await duplicate.utter("list links");
     const linksSpeech = duplicate.sent.findLast((frame) => frame.type === "speak" && /visible links/i.test(frame.payload.text));
@@ -432,9 +455,19 @@ describe("Phase 7 generic browser-control acceptance", () => {
     await stale.utter("list links");
     stale.changeCaptureAfterLinkList();
     await stale.utter("open link Read the regional update");
-    expect(stale.session.pendingBrowserAuthorization).toBeNull();
-    expect(protectedCalls(stale)).toHaveLength(0);
+    expect(stale.session.pendingBrowserAuthorization).not.toBeNull();
+    const auth = stale.session.pendingBrowserAuthorization!;
+    const prompt = lastConfirmPrompt(stale.sent);
+    handleBrowserSpeakDone({ hub: stale.hub, session: stale.session, clock: stale.clock, schedule: stale.schedule }, {
+      speakId: prompt.speakId, interrupted: false,
+    });
+    const guard = [...stale.scheduled].reverse().find((task) => task.delay === BROWSER_AUTHORIZATION_GUARD_MS)!;
+    stale.setNow(auth.issuedAt + BROWSER_AUTHORIZATION_GUARD_MS);
+    guard.callback();
+    await stale.utter(auth.phrase);
+    expect(protectedCalls(stale).map(({ request }) => request.operation.op)).toEqual(["open-link"]);
     expect(stale.chromeEffects).toHaveLength(0);
+    expect(stale.sent.some((frame) => frame.type === "speak" && /page changed/i.test(frame.payload.text))).toBe(true);
   });
 
   // D-05: generic browser primitives all share the extension request path and current identity.

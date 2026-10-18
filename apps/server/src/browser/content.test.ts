@@ -207,6 +207,8 @@ describe("direct page content speech privacy", () => {
     "Password is hunter2.",
     "Card number 4111 1111 1111 1111.",
     "Social security number 123-45-6789.",
+    "API key: synthetic-api-key-value.",
+    "Access token=synthetic-access-token-value.",
   ])("omits sensitive content shaped as %s before speech or model routing", async (privateText) => {
     const result = await readCurrentPage(privateText);
     const speech = result.sent
@@ -214,8 +216,11 @@ describe("direct page content speech privacy", () => {
       .map((message) => message.payload);
     const serialized = JSON.stringify({ speech, requests: result.requests });
     expect(serialized).not.toContain(privateText.replace(/[.!]$/, ""));
-    expect(serialized).not.toContain(privateText.includes("hunter2") ? "hunter2" :
-      privateText.includes("4111") ? "4111" : "123-45-6789");
+    const privateValue = privateText.includes("hunter2") ? "hunter2" :
+      privateText.includes("4111") ? "4111" :
+        privateText.includes("123-45-6789") ? "123-45-6789" :
+          privateText.includes("api-key") ? "synthetic-api-key-value" : "synthetic-access-token-value";
+    expect(serialized).not.toContain(privateValue);
     expect(serialized).toContain("Public article text is safe to read.");
     expect(serialized).toContain("I found page content that may contain private information, so I didn't read it aloud.");
     expect(result.parseIntent).not.toHaveBeenCalled();

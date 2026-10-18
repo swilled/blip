@@ -8,7 +8,6 @@ import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
 import { containsSensitivePageText, containsSensitiveUtterance, decideUtteranceForBrain } from "./brain/agy/privacy";
 import { projectExplicitPageContentRequest } from "./brain/agy/content-projection";
-import { classifySensitiveShape } from "@blip/policy/sensitive-shapes";
 import { routeIntent, type IntentRoutePage } from "./brain/agy/intent-router";
 import type { AgyProvider } from "./brain/agy/provider";
 import type { Snapshot } from "@blip/protocol";
@@ -186,9 +185,7 @@ function speakLinks(ctx: TurnContext, result: Extract<BrowserResultPayload, { ok
 }
 
 function speakContent(ctx: TurnContext, blocks: BrowserContentBlock[], mode: "read" | "summary" | "question", query?: string): void {
-  const privateBlocks = blocks.filter((block) =>
-    containsSensitiveUtterance(block.text) || classifySensitiveShape(block.text) !== null,
-  );
+  const privateBlocks = blocks.filter((block) => containsSensitivePageText(block.text));
   const safeBlocks = blocks.filter((block) => !privateBlocks.includes(block));
   const safeQuery = query !== undefined && containsSensitiveUtterance(query) ? "that text" : query;
   if (safeBlocks.length === 0) {
@@ -379,13 +376,25 @@ async function beginBrowserAuthorization(
   if (session.pendingGatedAction !== null) return speak(ctx.hub, session, "Please finish or cancel the current form confirmation first.", "error");
   if (session.outputMode !== "agent-voice") return speak(ctx.hub, session, "I can't verify the browser confirmation read-back in the current output mode. Nothing was done.", "error");
   const executor = createBrowserExecutor({ hub: ctx.hub, session });
-  const captured = await executor.execute({ op: "capture" });
-  if (!captured.ok || !captured.payload.ok || captured.payload.operation !== "capture") return speakBrowserFailure(ctx, captured);
-  const identity = captured.payload.result;
-  if (target.op === "open-link" && !identityMatches(target.identity, identity)) {
-    return speak(ctx.hub, session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+  let identity: BrowserPageIdentity;
+  if (target.op === "open-link") {
+    // `handleBrowserUtterance` just resolved this link from a fresh list-links result.
+    // A second capture can advance capture IDs even when the page has not changed, making
+    // the selected link appear stale before we can ask for its confirmation phrase.
+    const current = session.browserCapture?.identity;
+    if (current === undefined || !identityMatches(target.identity, current)) {
+      return speak(ctx.hub, session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+    }
+    const selected = session.browserCapture?.links.find((link) => link.linkId === target.linkId);
+    if (selected === undefined || !identityMatches(selected.identity, current)) {
+      return speak(ctx.hub, session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+    }
+    identity = current;
+  } else {
+    const captured = await executor.execute({ op: "capture" });
+    if (!captured.ok || !captured.payload.ok || captured.payload.operation !== "capture") return speakBrowserFailure(ctx, captured);
+    identity = captured.payload.result;
   }
-  if (identity.status !== "supported" && target.op === "open-link") return speak(ctx.hub, session, "This page does not expose links that can be opened.", "error");
   if (session.tabId !== null && session.tabId !== identity.tabId) return speak(ctx.hub, session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
   if (!session.stale && session.model !== null && session.model.url !== identity.pageUrl) return speak(ctx.hub, session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
 
