@@ -12,6 +12,7 @@ import { startTestPages, type TestPagesServer } from "../tools/test-pages/serve.
 import { startPttWire } from "../dev/mock-server/src/ptt-wire.js";
 import { resolveBrowser } from "./browser.js";
 import { build as buildVoiceClient } from "vite";
+import { discoverLocalWhisper } from "../apps/server/src/voice/local-whisper";
 
 const modulePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(modulePath), "..");
@@ -291,6 +292,8 @@ async function runDemo(options: DemoOptions): Promise<number> {
     await buildExtensionForDemo();
     await buildVoiceClientForDemo();
     const voiceBuildId = await readVoiceBuildId();
+    const transcribeAudio = await discoverLocalWhisper();
+    process.stdout.write(transcribeAudio ? "Recognition: local whisper.cpp base.en (offline CPU)\n" : "Recognition unavailable: run npm.cmd run stt:setup before microphone testing.\n");
     await mkdir(profileDirectory, { recursive: true });
     server = await startServer({
       port: DEFAULT_PORT,
@@ -300,6 +303,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
       repairCacheDirectory: DEMO_REPAIR_CACHE,
       staticRoots: [demoVoiceStaticRoot()],
       voiceBuildId,
+      ...(transcribeAudio ? { transcribeAudio } : {}),
       extraVoiceOrigins: configuredVoiceTarget === undefined ? [] : [configuredVoiceTarget.origin],
     });
     stopPtt = await startPttWire(server.port);

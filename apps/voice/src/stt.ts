@@ -22,7 +22,7 @@ export interface RecognitionLike {
   onend: (() => void) | null;
   start(): void; stop(): void; abort?(): void;
 }
-export interface SttFinal { text: string; confidence: number; alternatives: string[] }
+export interface SttFinal { text: string; confidence?: number; alternatives: string[] }
 export type SttErrorKind = "no-speech" | "not-allowed" | "audio-capture" | "network" | "unfocused" | "other";
 export interface SttError { kind: SttErrorKind; message: string }
 export interface SttOptions {

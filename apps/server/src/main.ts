@@ -16,6 +16,7 @@ import { DEFAULT_PORT, WS_PATH, LOOPBACK_HOST } from "@blip/protocol";
 import { parseAllowedOrigin } from "./hub/guard";
 import type { StaticRoot } from "./hub/static";
 import { startServer } from "./server";
+import { discoverLocalWhisper } from "./voice/local-whisper";
 
 function die(message: string, code: number): never {
   process.stderr.write(`${message}\n`);
@@ -82,6 +83,7 @@ async function main(): Promise<void> {
 
   let running;
   try {
+    const transcribeAudio = await discoverLocalWhisper();
     running = await startServer({
       port,
       dev,
@@ -90,6 +92,7 @@ async function main(): Promise<void> {
       extraVoiceOrigins,
       staticRoots,
       voiceBuildId,
+      ...(transcribeAudio ? { transcribeAudio } : {}),
       ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
     });
   } catch (err) {

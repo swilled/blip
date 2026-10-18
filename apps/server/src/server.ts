@@ -20,6 +20,8 @@ import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
 import { createDialogueHandlers } from "./voice/dialogue-runner";
 import { createCoreDialogueGatePort } from "./voice/core-gate-port";
 import type { SpeechOutput } from "./voice/speech-routing";
+import { createTranscriptionHttp } from "./voice/transcription-http";
+import type { TranscribeAudio } from "./voice/local-whisper";
 
 function clearPendingThroughVoiceGate(
   ctx: GatedContext,
@@ -34,6 +36,7 @@ function clearPendingThroughVoiceGate(
 export type StartServerOptions = {
   /** Immutable identity of the client this process was started with. */
   voiceBuildId?: string;
+  transcribeAudio?: TranscribeAudio;
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
   port?: number;
   dev?: boolean;
@@ -117,6 +120,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   const clock = options.clock ?? Date.now;
   const schedule = options.schedule;
   let boundPort = options.port ?? DEFAULT_PORT;
+  const transcriptionToken = newId();
+  let transcriptionHttp: ReturnType<typeof createTranscriptionHttp>;
   const serveStatic =
     options.staticRoots && options.staticRoots.length > 0 ? createStaticHandler(options.staticRoots) : undefined;
 
@@ -133,6 +138,14 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     }
     // /healthz stays ahead of static roots so a static file can never shadow it.
     if (req.method === "GET" && pathname === "/healthz") return json(res, 200, { ok: true });
+    if (pathname === "/_blip/stt" && req.method === "GET") {
+      res.setHeader("Cache-Control", "no-store");
+      return json(res, 200, { engine: "whisper.cpp base.en", ready: options.transcribeAudio !== undefined, token: transcriptionToken });
+    }
+    if (pathname === "/_blip/stt" && req.method === "POST") {
+      void transcriptionHttp(req, res);
+      return;
+    }
     if (req.method === "GET" && pathname === "/_blip/voice-runtime" && options.voiceBuildId) {
       return json(res, 200, { buildId: options.voiceBuildId });
     }
@@ -170,6 +183,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   }
 
   const session = new Session(brainMode, clock);
+  transcriptionHttp = createTranscriptionHttp(options.transcribeAudio, session, transcriptionToken);
 
   // Turns run one at a time so busy/state pushes and reply order stay coherent.
   let turnQueue: Promise<void> = Promise.resolve();

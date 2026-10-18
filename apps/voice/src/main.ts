@@ -1,6 +1,5 @@
 // Voice window wiring: start gate, typed input, log, earcons, socket, tts.
 // The window never matches a confirm phrase; that lives in server code.
-import { STT_ENABLED_WHEN_UNFOCUSED } from "./config";
 import { applyArmed, applyCleared, applyClose, applyState, createBannerModel, renderBanner } from "./banner";
 import { createEarcons } from "./earcons";
 import { createHoldClient } from "./hold-client";
@@ -14,9 +13,9 @@ import { createSocket, type VoiceSocket } from "./socket";
 import { createSpeakBridge } from "./speak-bridge";
 import { createSpeechRate, createRateCommandController, parseSpeechRateCommand } from "./speech-rate";
 import { createVoiceState } from "./state";
-import { createStt, type RecognitionLike } from "./stt";
+import { createRecordedStt, createLocalTranscriber, openPcmMicrophone } from "./recorded-stt";
 import { createTalkController } from "./talk-controller";
-import { checkMicrophone, createSpeechDiagnostics, observeRecognition } from "./speech-diagnostics";
+import { checkMicrophone, createSpeechDiagnostics } from "./speech-diagnostics";
 import { createTts } from "./tts";
 import { createNativeSynth } from "./native-synth";
 import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log";
@@ -265,12 +264,6 @@ document.querySelectorAll<HTMLInputElement>('input[name="output-mode"]').forEach
   });
 });
 
-type RecognitionCtor = new () => RecognitionLike;
-const RecognitionImpl = ((window as unknown as { SpeechRecognition?: RecognitionCtor }).SpeechRecognition ??
-  (window as unknown as { webkitSpeechRecognition?: RecognitionCtor }).webkitSpeechRecognition) as
-  | RecognitionCtor
-  | undefined;
-
 talk = createTalkController({
   socket: {
     sendPtt: (s) => socket?.sendPtt(s),
@@ -278,20 +271,18 @@ talk = createTalkController({
   },
   handleLocalUtterance: handleLocalRateUtterance,
   makeStt: (h) =>
-    createStt({
-      makeRecognition: () => {
-        if (!RecognitionImpl) throw new Error("speech recognition unavailable");
-        const recognition = new RecognitionImpl();
-        const remove = observeRecognition(recognition as unknown as EventTarget, ++nativeRecognitionId, recordSpeechEvent);
-        (recognition as unknown as EventTarget).addEventListener("end", remove, { once: true });
+    createRecordedStt({
+      open: async signal => {
+        ++nativeRecognitionId;
         recordSpeechEvent({ event: "capture-request", generation: nativeRecognitionId, focused: document.hasFocus(), visible: document.visibilityState === "visible" });
-        return recognition;
+        const recording = await openPcmMicrophone(signal);
+        recordSpeechEvent({ event: "audiostart", generation: nativeRecognitionId });
+        return recording;
       },
-      onInterim: h.onInterim,
-      onFinal: h.onFinal,
-      onError: h.onError,
+      transcribe: createLocalTranscriber(),
+      onFinal: final => { recordSpeechEvent({ event: "result", generation: nativeRecognitionId, results: 1 }); h.onFinal(final); },
+      onError: error => { recordSpeechEvent({ event: "error", generation: nativeRecognitionId, code: error.kind }); h.onError(error); },
       onStage: h.onStage,
-      canListen: () => STT_ENABLED_WHEN_UNFOCUSED || document.hasFocus(),
     }),
   tts,
   state,
