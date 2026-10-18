@@ -4,15 +4,15 @@ milestone: v1.0
 current_phase: 4
 current_phase_name: NVDA Mode and Demo-Safe
 status: verifying
-stopped_at: Prepared 04-03 runbook; human rehearsal evidence pending
-last_updated: "2026-10-18T03:25:03.247Z"
-last_activity: 2026-10-17
-last_activity_desc: Phase 4 execution started
+stopped_at: Researched repair plans 04-04 through 04-08 ready; voice device acceptance pending
+last_updated: "2026-10-18T05:02:14Z"
+last_activity: 2026-10-18
+last_activity_desc: User-reported voice regressions researched and planned
 state_head: 9b323c6b56063dbc074fa00cf199e1cec85d5516
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 25
+  total_plans: 30
   completed_plans: 25
 milestone_name: milestone
 ---
@@ -30,9 +30,9 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 ## Current Position
 
 Phase: 4 (NVDA Mode and Demo-Safe) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-10-17 — Phase 4 execution started
+Plan: 04-04 next; original 3 plans executed and 5 repair plans pending
+Status: Repair plans ready for execution; live verification remains open
+Last activity: 2026-10-18 — Research-backed voice repair planning completed
 
 Progress: [█████░░░░░] 50%
 
@@ -126,6 +126,15 @@ Recent decisions affecting the voice track:
 
 ## Session Continuity
 
-Last session: 2026-10-18T03:25:02.676Z
-Stopped at: Prepared 04-03 runbook; human rehearsal evidence pending
-Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-DEMO-RUNBOOK.md
+Last session: 2026-10-18T05:02:14Z
+Stopped at: Five researched repair plans ready; 04-04 next and device evidence pending
+Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-REPAIR-OVERVIEW.md
+
+### Voice repair planning, 2026-10-18
+
+- Five sequential gap-closure plans: 04-04 through 04-08.
+- Official browser and seven existing code repositories informed the repair; sources and revision identifiers are in 04-REPAIR-RESEARCH.md.
+- VOX-01, VOX-02, VOX-04, and VOX-07 reopened from the user's live regression reports.
+- Static planning checks do not establish microphone or audible speech success. No application test suite or live audio check ran during planning.
+- The interrupted stt.ts implementation draft remains unverified for reconciliation in 04-05.
+- Next command: `$gsd-execute-phase 4 --ws voice --gaps-only`.

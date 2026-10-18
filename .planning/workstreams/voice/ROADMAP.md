@@ -184,12 +184,20 @@ Plans:
 - If the NVDA path isn't solid by ~h30, demo in agent-voice mode and show NVDA only in the opening hook.
 - The demo script follows the four beats in research/FEATURES.md: hook, repair, fill, then the gate (bare "yes" blocked, injection ignored, phrase submits).
 
-**Plans**: 3/3 plans executed
+**Plans**: 3/8 plans executed; 5 researched repair plans ready for execution
 
 Plans:
 - [x] 04-01-PLAN.md — Exclusive NVDA output routing and tracked completion
 - [x] 04-02-PLAN.md — Session-scoped speech-rate commands
 - [x] 04-03-PLAN.md — Live-form rehearsal, offline fallbacks, and freeze evidence
+- [ ] 04-04-PLAN.md — Current Chrome build, reopen flow, microphone readiness, and diagnostics
+- [ ] 04-05-PLAN.md — Reliable held capture and complete speech transcription
+- [ ] 04-06-PLAN.md — Audible Windows rate levels and speech-output recovery
+- [ ] 04-07-PLAN.md — Tracked acknowledgement speech and real PTT confirmation integration
+- [ ] 04-08-PLAN.md — Regression proof, short device checklist, and remaining milestone evidence
+
+Repair research, coverage, and execution order: [04-REPAIR-OVERVIEW.md](phases/04-nvda-mode-and-demo-safe/04-REPAIR-OVERVIEW.md).
+These close user-reported regressions; previous implementation checkmarks do not establish current live microphone/audio acceptance.
 
 ## Progress
 
@@ -201,4 +209,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
 | 2. Fill and Gated Submit on the Broken Form | 6/7 | In Progress | - |
 | 3. Full Command Set with Real Claude | 4/4 | Complete    | 2026-10-17 |
-| 4. NVDA Mode and Demo-Safe | 3/3 | In Progress | - |
+| 4. NVDA Mode and Demo-Safe | 3/8 | In Progress | - |
