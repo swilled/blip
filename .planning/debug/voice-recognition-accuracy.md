@@ -37,4 +37,5 @@ Next action: Obtain the exact caption plus current capture duration/level and se
 
 Root cause: Not yet established for the user's physical microphone.
 Status: Implementation and synthetic regression checks pass; actual user accuracy remains unverified. Do not mark this debug session resolved or Phase 4 complete from synthetic tests.
+Current runtime: b6de2d3-2026-10-18T05:58:58.810Z, tool session 32329. Demo reported local small.en, global hold ready, extension and voice connected, DEMO_READY. Selectable output voices are restricted to local English voices; the final voice-selection regression passed five tests. Current physical microphone evidence remains pending.
 Research: ../workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-ACCURACY-RESEARCH.md
