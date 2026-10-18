@@ -4,6 +4,7 @@ export const HOLD_URL = "ws://127.0.0.1:7778";
 const RECONNECT_MS = 2000;
 
 export interface HoldSocketLike {
+  onopen?: (() => void) | null;
   onmessage: ((ev: { data: unknown }) => void) | null;
   onclose: (() => void) | null;
   onerror: (() => void) | null;
@@ -13,6 +14,7 @@ export interface HoldSocketLike {
 export interface HoldClientDeps {
   makeWebSocket: (url: string) => HoldSocketLike;
   onHold: (state: "start" | "end") => void;
+  onConnection?: (connected: boolean) => void;
   setTimer: (fn: () => void, ms: number) => unknown;
   url?: string;
 }
@@ -38,12 +40,14 @@ export function createHoldClient(deps: HoldClientDeps): { close(): void } {
   function connect(): void {
     const s = deps.makeWebSocket(deps.url ?? HOLD_URL);
     sock = s;
+    s.onopen = () => deps.onConnection?.(true);
     s.onmessage = (ev) => {
       const h = parseHold(ev.data);
       if (h) deps.onHold(h);
     };
     s.onerror = () => {};
     s.onclose = () => {
+      deps.onConnection?.(false);
       sock = null;
       if (!stopped) deps.setTimer(connect, RECONNECT_MS);
     };

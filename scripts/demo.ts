@@ -31,6 +31,7 @@ export interface DemoOptions {
   brain: DemoBrain;
   smoke: boolean;
   help?: boolean;
+  reopenVoice?: boolean;
 }
 
 export interface VoiceTarget {
@@ -46,6 +47,7 @@ export interface ReadinessWaitOptions {
 }
 
 const USAGE = `usage: npm run demo -- [--brain=fake|agy] [--smoke]
+  --reopen-voice        reopen Blip on the already-running current demo; leave the form unchanged
   --brain=fake|agy  local brain; defaults to fake
   --smoke              exit after extension and voice readiness and print a pass marker
   --help               show this help
@@ -60,9 +62,12 @@ export function parseDemoArgs(args: string[]): DemoOptions {
   let brain: DemoBrain = "fake";
   let smoke = false;
   let help = false;
+  let reopenVoice = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === "--smoke") {
+    if (arg === "--reopen-voice") {
+      reopenVoice = true;
+    } else if (arg === "--smoke") {
       smoke = true;
     } else if (arg === "--help" || arg === "-h") {
       help = true;
@@ -78,7 +83,7 @@ export function parseDemoArgs(args: string[]): DemoOptions {
       throw new Error(`unknown option: ${arg ?? "(missing)"}`);
     }
   }
-  return { brain, smoke, ...(help ? { help: true } : {}) };
+  return { brain, smoke, ...(help ? { help: true } : {}), ...(reopenVoice ? { reopenVoice: true } : {}) };
 }
 
 /** Accept only the HTTP loopback origins currently supported by the hub's role allowlist. */
@@ -217,6 +222,28 @@ export async function readVoiceBuildId(): Promise<string> {
   return info.id;
 }
 
+export function verifyReopenIdentity(remote: unknown, expected: string): void {
+  if (typeof remote !== "object" || remote === null || !("buildId" in remote) || remote.buildId !== expected) {
+    throw new Error("The running demo uses an older voice build. Stop its demo terminal with Ctrl+C, then run npm.cmd run demo.");
+  }
+}
+
+export async function reopenVoice(): Promise<number> {
+  const expected = await readVoiceBuildId();
+  let remote: unknown;
+  try {
+    const response = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/_blip/voice-runtime`, { signal: AbortSignal.timeout(1500) });
+    remote = await response.json();
+  } catch { throw new Error("No current demo server is available. Run npm.cmd run demo first."); }
+  verifyReopenIdentity(remote, expected);
+  const browser = resolveBrowser();
+  const child = spawn(browser, voiceLaunchArgs(demoVoiceProfilePath(), `http://127.0.0.1:${DEFAULT_PORT}/voice/`), { stdio: "ignore", windowsHide: true, detached: true });
+  await new Promise<void>((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
+  child.unref();
+  process.stdout.write("Blip reopened. The form was left unchanged.\n");
+  return 0;
+}
+
 async function stopChild(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) return;
   await new Promise<void>((resolve) => {
@@ -255,6 +282,12 @@ async function runDemo(options: DemoOptions): Promise<number> {
   };
 
   try {
+    try {
+      const occupied = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/healthz`, { signal: AbortSignal.timeout(500) });
+      if (occupied.ok) throw new Error("DEMO_ALREADY_RUNNING: use npm.cmd run demo -- --reopen-voice, or stop the old demo with Ctrl+C before restarting.");
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("DEMO_ALREADY_RUNNING")) throw error;
+    }
     await buildExtensionForDemo();
     await buildVoiceClientForDemo();
     const voiceBuildId = await readVoiceBuildId();
@@ -401,6 +434,7 @@ async function main(): Promise<number> {
     process.stdout.write(`${USAGE}\n`);
     return 0;
   }
+  if (options.reopenVoice) return reopenVoice();
   return runDemo(options);
 }
 

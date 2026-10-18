@@ -357,6 +357,11 @@ function setManualHold(active: boolean): void {
 // Global hold (PTT_DELIVERY B): loopback sidecar next to the hub connection.
 createHoldClient({
   makeWebSocket: (url) => new WebSocket(url) as never,
+  onConnection: connected => {
+    el("hold-to-talk-help").textContent = connected
+      ? "Hold the button or Right Ctrl + Space. Speak after the cue, then release both keys."
+      : "The global shortcut is unavailable. Use Hold to talk, or type a command.";
+  },
   onHold: (h) => {
     if (manualHoldActive) return;
     globalHoldActive = h === "start";

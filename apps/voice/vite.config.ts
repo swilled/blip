@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
-import { voiceBuildInfo } from "./build-info";
+import { voiceBuildInfo } from "./build-info.js";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const info = voiceBuildInfo(fileURLToPath(new URL("../..", import.meta.url)));

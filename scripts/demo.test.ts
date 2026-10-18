@@ -18,9 +18,15 @@ import {
   voiceLaunchArgs,
   waitForExtensionReady,
   readVoiceBuildId,
+  verifyReopenIdentity,
 } from "./demo.js";
 
 describe("local demo launcher inputs", () => {
+  it("reopens only the matching process build and leaves the form launch path out of it", () => {
+    expect(parseDemoArgs(["--reopen-voice"])).toMatchObject({ reopenVoice: true });
+    expect(() => verifyReopenIdentity({ buildId: "current" }, "current")).not.toThrow();
+    for (const other of [null, {}, { buildId: "stale" }]) expect(() => verifyReopenIdentity(other, "current")).toThrow("older voice build");
+  });
   it("defaults to the offline fake brain and supports an explicit smoke run", () => {
     expect(parseDemoArgs([])).toEqual({ brain: "fake", smoke: false });
     expect(parseDemoArgs(["--brain=fake", "--smoke"])).toEqual({ brain: "fake", smoke: true });
