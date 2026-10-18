@@ -97,7 +97,7 @@ Each task was committed atomically:
 2. **Task 2: Write the user-led demo and fallback runbook** - `a40b716` (docs)
 3. **Task 3: Prepare startup and fallback paths while leaving rehearsal evidence pending** - `9b323c6` (docs)
 
-**Plan metadata:** pending final Voice planning commit.
+**Plan metadata:** `6754fc5` (docs: complete plan).
 
 ## Files Created/Modified
 
