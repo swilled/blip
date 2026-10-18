@@ -43,7 +43,7 @@ The server returns text only. The normal finalized utterance still passes determ
 - Actual CPU/model test (`npm.cmd run stt:check`): five fictional synthetic utterances correctly recognized, including complete long dictation, read the form, what is required, submit form and submit survey. Latencies: 1,094 / 1,023 / 1,027 / 956 / 933 ms, including model startup for each invocation. These are synthetic samples, not measured user accuracy.
 - Actual browser test (`npm.cmd run stt:check:browser`): isolated headless Chrome, synthetic microphone, real AudioWorklet and native model. Chrome SpeechRecognition constructors were deliberately replaced with throwing constructors. No utterance was sent while held; after release exactly one voice frame contained `Read the form.` without a fabricated confidence value. No personal microphone was opened and no form was submitted.
 - Focused recording/HTTP/gate tests passed; permission and late-result races, bounded capture, WAV conversion, silence, origin/token validation, connection replacement and inference serialization are covered. Existing exact-phrase gate regressions pass.
-- Root regression: 125 files / 1,311 tests passed; 16 files / 28 tests skipped. Typecheck and voice build passed. Follow-up full suite after the final confidence/device-loss adjustment is recorded in the execution handoff.
+- Final root regression after the confidence/device-loss adjustment: 125 files / 1,311 tests passed; 16 files / 28 tests skipped. Typecheck and voice build passed. The actual Chrome synthetic-microphone test also passed against the final built implementation.
 
 ## Remaining device acceptance
 
