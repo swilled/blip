@@ -3,12 +3,15 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { EXTENSION_ID } from "@blip/protocol";
+import { startServer } from "../apps/server/src/server.js";
 import {
   browserLaunchArgs,
+  buildVoiceClientForDemo,
   classifyExtensionReadiness,
   demoProfilePath,
   demoRepairCachePath,
   demoVoiceProfilePath,
+  demoVoiceStaticRoot,
   hasExtensionInProfile,
   parseDemoArgs,
   resolveVoiceTarget,
@@ -34,6 +37,13 @@ describe("local demo launcher inputs", () => {
     expect(demoVoiceProfilePath("C:\\repo")).toBe("C:\\repo\\.chrome-profile\\demo-voice");
   });
 
+  it("serves the built Phase 4 voice client instead of the legacy public page", () => {
+    expect(demoVoiceStaticRoot("C:\\repo")).toEqual({
+      urlPrefix: "/voice",
+      dir: "C:\\repo\\apps\\voice\\dist",
+    });
+  });
+
   it("launches only the local fixture in the isolated profile without extension-load flags", () => {
     const args = browserLaunchArgs("C:\\repo\\.chrome-profile\\demo", "http://127.0.0.1:7790/injection.html");
     expect(args).toContain("--user-data-dir=C:\\repo\\.chrome-profile\\demo");
@@ -47,6 +57,24 @@ describe("local demo launcher inputs", () => {
     expect(args).toContain("--user-data-dir=C:\\repo\\.chrome-profile\\demo-voice");
     expect(args).toContain("--app=http://127.0.0.1:7777/voice/");
     expect(args.some((arg) => arg.includes("--load-extension"))).toBe(false);
+  });
+});
+
+describe("Phase 4 voice client in the demo", () => {
+  it("builds and serves the current voice controls at /voice", async () => {
+    await buildVoiceClientForDemo();
+    const server = await startServer({ port: 0, dev: true, staticRoots: [demoVoiceStaticRoot()] });
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.port}/voice/`);
+      const html = await response.text();
+      expect(response.status).toBe(200);
+      expect(html).toContain("Speech output");
+      expect(html).toContain("Screen reader (NVDA)");
+      expect(html).toContain("Blip voice speed");
+      expect(html).not.toContain("Talk to Blip");
+    } finally {
+      await server.close();
+    }
   });
 });
 

@@ -48,5 +48,11 @@ pending: 5
 skipped: 0
 blocked: 0
 
+## Observations
+
+- Test 1 is still pending. The visible page had the legacy `Talk to Blip` interface, and the served `/voice/` HTML came from `apps/voice/public`; that page has no Phase 4 speech-rate or output-mode controls. The demo launcher now builds the Phase 4 Vite client and serves `apps/voice/dist`. The already-running server still needs a restart before retesting. The voice window also had to be opened by URL, so automatic window visibility remains unverified.
+
 ## Gaps
+
+- Restart the demo with the updated launcher, confirm the Phase 4 controls appear, and repeat the rate-control check. Record whether the launcher itself opens a visible voice window.
 

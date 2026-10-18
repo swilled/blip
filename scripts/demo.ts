@@ -10,11 +10,13 @@ import { startServer, type RunningServer } from "../apps/server/src/server.js";
 import type { StaticRoot } from "../apps/server/src/hub/static.js";
 import { startTestPages, type TestPagesServer } from "../tools/test-pages/serve.js";
 import { resolveBrowser } from "./browser.js";
+import { build as buildVoiceClient } from "vite";
 
 const modulePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(modulePath), "..");
 const extensionDist = path.join(repoRoot, "apps", "extension", "dist");
-const voicePublic = path.join(repoRoot, "apps", "voice", "public");
+const voiceRoot = path.join(repoRoot, "apps", "voice");
+const voiceDist = path.join(voiceRoot, "dist");
 const DEMO_PAGES_PORT = 7791;
 export function demoRepairCachePath(root = repoRoot): string {
   return path.resolve(root, ".chrome-profile", "demo-repair-cache-v1");
@@ -114,6 +116,10 @@ export function demoVoiceProfilePath(root = repoRoot): string {
   return path.resolve(root, ".chrome-profile", "demo-voice");
 }
 
+export function demoVoiceStaticRoot(root = repoRoot): StaticRoot {
+  return { urlPrefix: "/voice", dir: path.resolve(root, "apps", "voice", "dist") };
+}
+
 export function browserLaunchArgs(profileDirectory: string, fixtureUrl: string): string[] {
   return [
     `--user-data-dir=${profileDirectory}`,
@@ -196,6 +202,14 @@ async function buildExtensionForDemo(): Promise<void> {
   await buildExtension({ socketUrl });
 }
 
+export async function buildVoiceClientForDemo(): Promise<void> {
+  await buildVoiceClient({ configFile: path.join(voiceRoot, "vite.config.ts") });
+  const index = await readFile(path.join(voiceDist, "index.html"), "utf8");
+  if (!index.includes("Blip voice speed") || !index.includes("Screen reader (NVDA)")) {
+    throw new Error("The Phase 4 voice client build is missing its output-mode or speech-rate controls");
+  }
+}
+
 async function stopChild(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) return;
   await new Promise<void>((resolve) => {
@@ -233,6 +247,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
 
   try {
     await buildExtensionForDemo();
+    await buildVoiceClientForDemo();
     await mkdir(profileDirectory, { recursive: true });
     server = await startServer({
       port: DEFAULT_PORT,
@@ -240,7 +255,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
       brain: options.brain,
       dialogueRunner: true,
       repairCacheDirectory: DEMO_REPAIR_CACHE,
-      staticRoots: [{ urlPrefix: "/voice", dir: voicePublic } satisfies StaticRoot],
+      staticRoots: [demoVoiceStaticRoot()],
       extraVoiceOrigins: configuredVoiceTarget === undefined ? [] : [configuredVoiceTarget.origin],
     });
     pages = await startTestPages({ port: DEMO_PAGES_PORT, build: true });
