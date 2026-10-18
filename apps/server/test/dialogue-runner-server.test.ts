@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { newId } from "@blip/protocol";
+import { loadSnapshot } from "@blip/protocol/fixtures-loader";
+import type { BrowserContentItem, BrowserPageIdentity, Snapshot } from "@blip/protocol";
 import { startServer } from "../src/server";
 import type { AgyRoleConfig, AgyRoleSession, AgyCliAdapter } from "../src/brain/agy/session";
 import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
@@ -12,6 +14,286 @@ async function waitForFrame(client: TestClient, predicate: (frame: Frame) => boo
     if (predicate(frame)) return frame;
   }
   throw new Error("timed out waiting for expected voice frame");
+}
+
+const TASK_PAGE_URL = "http://127.0.0.1:8787/browser-task.html";
+const TASK_ITEM_TEXT = "The community workshop moved to the north room. Please reply with your preferred arrival time.";
+
+function taskSnapshot(): Snapshot {
+  const snapshot = loadSnapshot("booking");
+  snapshot.url = TASK_PAGE_URL;
+  snapshot.origin = new URL(TASK_PAGE_URL).origin;
+  snapshot.title = "Community notice board";
+  snapshot.capturedAt = 100_000;
+  snapshot.version = 1;
+  const recipient = snapshot.elements.find((element) => element.id === "e2")!;
+  recipient.inputType = "text";
+  recipient.labelCandidates = [{ text: "Recipient", source: "label", confidence: 1 }];
+  recipient.value = "Synthetic Contact";
+  recipient.hasValue = true;
+  const reply = snapshot.elements.find((element) => element.id === "e8")!;
+  reply.labelCandidates = [{ text: "Reply message", source: "label", confidence: 1 }];
+  reply.inputType = "textarea";
+  reply.tag = "textarea";
+  reply.role = "textbox";
+  reply.value = null;
+  reply.hasValue = false;
+  snapshot.elements.push({
+    id: "synthetic-send",
+    frameId: 0,
+    category: "action",
+    tag: "button",
+    inputType: "submit",
+    role: "button",
+    labelCandidates: [{ text: "Send message", source: "label", confidence: 1 }],
+    required: false,
+    requiredSource: "none",
+    invalid: false,
+    errorText: null,
+    value: null,
+    hasValue: false,
+    sensitive: "none",
+    disabled: false,
+    visible: true,
+    order: 20,
+    text: "Send message",
+    buttonType: "submit",
+    inForm: true,
+    kind: "send",
+    kindReasons: ["local synthetic page"],
+  });
+  return snapshot;
+}
+
+function setSnapshotField(snapshot: Snapshot, id: string, value: string): void {
+  const field = snapshot.elements.find((element) => element.id === id);
+  if (field === undefined) throw new Error(`Missing synthetic field ${id}`);
+  field.value = value;
+  field.hasValue = value !== "";
+}
+
+type ScheduledTask = { callback: () => void; delayMs: number };
+
+/** Real loopback clients with a local-only snapshot/browser/act responder and no AGY process. */
+async function startConfiguredTaskDemo() {
+  let now = 100_000;
+  let snapshot = taskSnapshot();
+  let captureRevision = 1;
+  let captureId = "synthetic-capture-1";
+  let recipientValue = "Synthetic Contact";
+  let draftValue = "";
+  let successfulPageResult = true;
+  let sendDispatches = 0;
+  let draftNumber = 0;
+  const scheduled: ScheduledTask[] = [];
+  const identity = (): BrowserPageIdentity => ({
+    captureId,
+    captureRevision,
+    tabId: snapshot.tabId,
+    pageUrl: snapshot.url,
+  });
+  const items = (): BrowserContentItem[] => [{
+    itemId: "notice-current",
+    text: TASK_ITEM_TEXT,
+    visibleDate: "2026-10-18T12:00:00Z",
+    identity: identity(),
+    frameId: 0,
+  }];
+  const adapter: AgyCliAdapter = {
+    createSession(config: AgyRoleConfig): AgyRoleSession {
+      let bootstrapped = false;
+      return {
+        async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
+        async call() {
+          if (!bootstrapped) {
+            bootstrapped = true;
+            return config.role === "intent" ? '{"type":"describe"}' : config.role === "content" ? '{"prose":"Ready."}' : '{"fields":[]}';
+          }
+          if (config.role === "content") {
+            draftNumber += 1;
+            return JSON.stringify({ prose: draftNumber % 2 === 1
+              ? "I can arrive before the workshop begins."
+              : "I can arrive at the updated time." });
+          }
+          return config.role === "intent" ? '{"type":"unknown"}' : '{"fields":[]}';
+        },
+        abort() {},
+        async close() {},
+      };
+    },
+  };
+  const server = await startServer({
+    port: 0,
+    brain: "agy",
+    agyAdapter: adapter,
+    repairProvider: {
+      async repairFormModel() { return { fields: [] }; },
+      async abortRole() {},
+      async recreateRole() {},
+    },
+    dialogueRunner: true,
+    fakeDelayMs: 0,
+    snapshotTimeoutMs: 1_000,
+    clock: () => now,
+    schedule: (callback, delayMs) => scheduled.push({ callback, delayMs }),
+  });
+  const extension = await bindClient(server.port, "extension");
+  let accepting = true;
+  const responder = (async () => {
+    while (accepting) {
+      let frame: Frame;
+      try { frame = await extension.nextMessage(30_000); } catch { return; }
+      if (frame.type === "snapshot.request") {
+        snapshot = structuredClone(snapshot);
+        snapshot.capturedAt += 1;
+        setSnapshotField(snapshot, "e2", recipientValue);
+        setSnapshotField(snapshot, "e8", draftValue);
+        if (frame.payload.reason === "post-act" && successfulPageResult) {
+          snapshot.alerts = [...snapshot.alerts, "Message successfully sent."];
+        }
+        extension.send("snapshot.result", { ok: true, snapshot }, { replyTo: frame.id });
+      } else if (frame.type === "browser.request") {
+        const request = frame.payload;
+        if (request.operation.op === "capture") {
+          extension.send("browser.result", {
+            ok: true,
+            requestId: request.requestId,
+            operation: "capture",
+            result: {
+              ...identity(),
+              status: "supported",
+              blocks: [],
+              items: items(),
+              truncated: false,
+            },
+          }, { replyTo: frame.id });
+        } else if (request.operation.op === "read-item") {
+          const item = items().find((candidate) => candidate.itemId === request.operation.itemId)!;
+          extension.send("browser.result", {
+            ok: true,
+            requestId: request.requestId,
+            operation: "read-item",
+            result: item,
+          }, { replyTo: frame.id });
+        } else {
+          extension.send("browser.result", {
+            ok: false,
+            requestId: request.requestId,
+            operation: request.operation.op,
+            error: { code: "unavailable", message: "Synthetic operation not implemented." },
+          }, { replyTo: frame.id });
+        }
+      } else if (frame.type === "act.request") {
+        const request = frame.payload;
+        if (request.action.op === "fill") {
+          draftValue = request.action.value;
+          extension.send("act.result", { actId: request.actId, ok: true, observedValue: draftValue }, { replyTo: frame.id });
+        } else if (request.action.op === "click" && request.action.targetId === "synthetic-send") {
+          sendDispatches += 1;
+          extension.send("act.result", { actId: request.actId, ok: true, liveKind: "send" }, { replyTo: frame.id });
+        } else {
+          extension.send("act.result", { actId: request.actId, ok: false, error: "exception" }, { replyTo: frame.id });
+        }
+      }
+    }
+  })();
+  void responder.catch(() => {});
+  let voice = await bindClient(server.port, "voice");
+  return {
+    server,
+    get voice() { return voice; },
+    extension,
+    scheduled,
+    get sendDispatches() { return sendDispatches; },
+    get now() { return now; },
+    setNow(value: number) { now = value; },
+    setSuccessfulPageResult(value: boolean) { successfulPageResult = value; },
+    setRecipientValue(value: string) { recipientValue = value; },
+    setDraftValue(value: string) { draftValue = value; },
+    setCaptureIdentity(value: { captureId: string; captureRevision: number }) {
+      captureId = value.captureId;
+      captureRevision = value.captureRevision;
+    },
+    setVoice(value: TestClient) { voice = value; },
+    changePage() {
+      snapshot = structuredClone(snapshot);
+      snapshot.tabId += 1;
+      snapshot.url = "http://127.0.0.1:8787/other.html";
+      snapshot.origin = new URL(snapshot.url).origin;
+      snapshot.capturedAt += 1;
+      captureId = "synthetic-capture-after-tab-change";
+      captureRevision += 1;
+      extension.send("page.changed", { tabId: snapshot.tabId, url: snapshot.url, reason: "tab-activated" });
+    },
+    async stop() {
+      accepting = false;
+      voice.close();
+      extension.close();
+      await server.close();
+    },
+  };
+}
+
+function sendVoiceUtterance(client: TestClient, text: string, source: "voice" | "typed" = "voice"): void {
+  client.send("utterance", { utteranceId: newId(), text, source });
+}
+
+async function speakText(client: TestClient, text: string, timeoutMs = 5_000): Promise<Frame> {
+  return waitForFrame(client, (frame) => frame.type === "speak" && frame.payload.text === text, timeoutMs);
+}
+
+async function prepareCurrentPageTask(rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>): Promise<void> {
+  if (rig.server.session.model === null) {
+    sendVoiceUtterance(rig.voice, "what's here");
+    await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.category === "answer");
+  }
+  if (rig.server.session.browserCapture?.items?.length !== 1) {
+    sendVoiceUtterance(rig.voice, "read the page");
+    await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.category === "answer");
+    await vi.waitFor(() => expect(rig.server.session.browserCapture?.items).toHaveLength(1));
+  }
+}
+
+async function prepareObservedDraft(rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>): Promise<void> {
+  sendVoiceUtterance(rig.voice, "draft a reply to latest for recipient Synthetic Contact in field Reply message");
+  await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.text.startsWith("Current draft in Reply message:"));
+  expect(rig.server.session.activePageTask?.lastObservedDraftValue).toBeTruthy();
+  sendVoiceUtterance(rig.voice, "revise draft make it more concise");
+  await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.text.startsWith("Current draft in Reply message:"));
+  expect(rig.server.session.activePageTask?.lastObservedDraftValue).toContain("updated time");
+}
+
+async function armObservedDraftSend(rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>): Promise<NonNullable<typeof rig.server.session.pendingGatedAction>> {
+  sendVoiceUtterance(rig.voice, "send this email");
+  const prompt = await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt");
+  expect(prompt.payload.text).toContain("Can you say 'send this email'?");
+  const pending = rig.server.session.pendingGatedAction;
+  if (pending === null) throw new Error("Core task send did not create its read-back grant state.");
+  rig.voice.send("speak.done", { speakId: pending.speakId, interrupted: false });
+  await sleep(20);
+  const cooldown = rig.scheduled.find((entry) => entry.delayMs === 1_000);
+  expect(cooldown, "PHASE8_COMPOSITION_GAP: task read-back completion must reach the core gate").toBeDefined();
+  if (cooldown === undefined) throw new Error("Tracked task read-back did not schedule its one-second guard.");
+  rig.scheduled.splice(rig.scheduled.indexOf(cooldown), 1);
+  rig.setNow(rig.now + 1_000);
+  cooldown.callback();
+  await waitForFrame(rig.voice, (frame) => frame.type === "confirm.armed" && frame.payload.speakId === pending.speakId);
+  return pending;
+}
+
+function sendRedeem(
+  client: TestClient,
+  pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>,
+  overrides: { source?: "voice" | "typed"; omitSource?: boolean; grantId?: string; speakId?: string; phrase?: string } = {},
+): void {
+  const payload = {
+    grantId: overrides.grantId ?? pending.grantId!,
+    speakId: overrides.speakId ?? pending.speakId,
+    utteranceId: newId(),
+    phrase: overrides.phrase ?? "send this email",
+    ...(overrides.omitSource ? {} : { source: overrides.source ?? "voice" }),
+  };
+  client.send("confirm.redeem", payload);
 }
 
 describe("core server dialogue runner option", () => {
@@ -148,6 +430,158 @@ describe("core server dialogue runner option", () => {
       voice.close();
       extension.close();
       await server.close();
+    }
+  });
+
+  it("demo configured Phase 8 handler composition", async () => {
+    const rig = await startConfiguredTaskDemo();
+    try {
+      await prepareCurrentPageTask(rig);
+
+      sendVoiceUtterance(rig.voice, "read latest");
+      await speakText(rig.voice, TASK_ITEM_TEXT);
+      expect(rig.server.session.activePageTask?.itemId).toBe("notice-current");
+
+      await prepareObservedDraft(rig);
+      const pending = await armObservedDraftSend(rig);
+      expect(pending.grantId).toBeDefined();
+      expect(rig.server.session.activePageTask?.associatedGrantId).toBe(pending.grantId);
+
+      sendRedeem(rig.voice, pending, { source: "voice" });
+      await speakText(rig.voice, "The page confirms the action.");
+      expect(rig.sendDispatches).toBe(1);
+      expect(rig.server.session.pendingGatedAction).toBeNull();
+      expect(rig.server.session.activePageTask).toBeNull();
+
+      // A second, locally accepted click with no fresh page-owned result is reported as unverified.
+      await prepareObservedDraft(rig);
+      const unverified = await armObservedDraftSend(rig);
+      rig.setSuccessfulPageResult(false);
+      sendRedeem(rig.voice, unverified, { source: "voice" });
+      await speakText(rig.voice, "I couldn't verify the page outcome.");
+      expect(rig.sendDispatches).toBe(2);
+      expect(rig.voice.frames.some((frame) => frame.type === "speak" && frame.payload.text === "The page confirms the action.")).toBe(true);
+    } finally {
+      await rig.stop();
+    }
+  });
+
+  it.each([
+    ["missing source", { omitSource: true }],
+    ["typed source", { source: "typed" as const }],
+    ["bare yes", { phrase: "yes" }],
+    ["bare okay", { phrase: "okay" }],
+    ["bare yeah", { phrase: "yeah" }],
+    ["bare sure", { phrase: "sure" }],
+    ["wrong phrase", { phrase: "submit survey" }],
+    ["stale grant", { grantId: "stale-grant-id" }],
+    ["stale speak", { speakId: "stale-speak-id" }],
+  ] as const)("server gate rejects %s through the configured runner", async (_name, redemption) => {
+    const rig = await startConfiguredTaskDemo();
+    try {
+      await prepareCurrentPageTask(rig);
+      await prepareObservedDraft(rig);
+      const pending = await armObservedDraftSend(rig);
+      sendRedeem(rig.voice, pending, redemption);
+      await sleep(40);
+      expect(rig.sendDispatches).toBe(0);
+      expect(rig.server.session.pendingGatedAction).toBeNull();
+    } finally {
+      await rig.stop();
+    }
+  });
+
+  it.each([
+    ["task identity", (pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>) => {
+      pending.binding.pageTask!.taskId = "mutated-task-id";
+    }],
+    ["page identity", (pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>) => {
+      pending.binding.pageTask!.sourceIdentity.pageUrl = "http://127.0.0.1:8787/other.html";
+    }],
+    ["draft binding", (_pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>, rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>) => {
+      rig.server.session.activePageTask!.lastObservedDraftValue = "mutated outside the task";
+    }],
+    ["recipient binding", (_pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>, rig: Awaited<ReturnType<typeof startConfiguredTaskDemo>>) => {
+      rig.setRecipientValue("Changed Contact");
+    }],
+    ["action target binding", (pending: NonNullable<Awaited<ReturnType<typeof startConfiguredTaskDemo>>["server"]["session"]["pendingGatedAction"]>) => {
+      pending.binding.pageTask!.targetId = "mutated-send-target";
+    }],
+  ] as const)("server gate rejects a changed %s binding", async (_name, mutate) => {
+    const rig = await startConfiguredTaskDemo();
+    try {
+      await prepareCurrentPageTask(rig);
+      await prepareObservedDraft(rig);
+      const pending = await armObservedDraftSend(rig);
+      (mutate as (pending: typeof pending, rig: typeof rig) => void)(pending, rig);
+      sendRedeem(rig.voice, pending, { source: "voice" });
+      await sleep(50);
+      expect(rig.sendDispatches).toBe(0);
+      expect(rig.server.session.pendingGatedAction).toBeNull();
+    } finally {
+      await rig.stop();
+    }
+  });
+
+  it.each(["interrupted speech", "stop", "repeat", "cancel", "ptt", "settings", "page changed"] as const)(
+    "configured runner invalidates a task grant on %s",
+    async (invalidation) => {
+      const rig = await startConfiguredTaskDemo();
+      try {
+        await prepareCurrentPageTask(rig);
+        await prepareObservedDraft(rig);
+        const pending = await armObservedDraftSend(rig);
+        if (invalidation === "interrupted speech") {
+          rig.voice.send("speak.done", { speakId: pending.speakId, interrupted: true });
+        } else if (invalidation === "stop" || invalidation === "repeat") {
+          rig.voice.send("control", { cmd: invalidation });
+        } else if (invalidation === "cancel") {
+          sendVoiceUtterance(rig.voice, "cancel task");
+        } else if (invalidation === "ptt") {
+          rig.voice.send("ptt", { state: "start" });
+        } else if (invalidation === "settings") {
+          rig.voice.send("settings", { outputMode: "screen-reader" });
+        } else {
+          rig.changePage();
+        }
+        await vi.waitFor(() => expect(rig.server.session.pendingGatedAction).toBeNull());
+        sendRedeem(rig.voice, pending, { source: "voice" });
+        await sleep(30);
+        expect(rig.sendDispatches).toBe(0);
+      } finally {
+        await rig.stop();
+      }
+    },
+  );
+
+  it("disconnect/reconnect and direct voice replacement invalidate the configured task grant", async () => {
+    const rig = await startConfiguredTaskDemo();
+    let replacement: TestClient | undefined;
+    try {
+      await prepareCurrentPageTask(rig);
+      await prepareObservedDraft(rig);
+      const pending = await armObservedDraftSend(rig);
+      rig.voice.close();
+      await vi.waitFor(() => expect(rig.server.session.voiceConnected).toBe(false));
+      replacement = await bindClient(rig.server.port, "voice");
+      rig.setVoice(replacement);
+      sendRedeem(replacement, pending, { source: "voice" });
+      await sleep(30);
+      expect(rig.sendDispatches).toBe(0);
+      const second = replacement;
+      await prepareObservedDraft(rig);
+      const replaced = await armObservedDraftSend(rig);
+      const successor = await bindClient(rig.server.port, "voice");
+      rig.setVoice(successor);
+      sendRedeem(successor, replaced, { source: "voice" });
+      await sleep(30);
+      expect(rig.sendDispatches).toBe(0);
+      expect(rig.server.session.voiceConnected).toBe(true);
+      second.close();
+      successor.close();
+    } finally {
+      replacement?.close();
+      await rig.stop();
     }
   });
 });
