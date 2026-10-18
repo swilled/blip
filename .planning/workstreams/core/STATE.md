@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 08-05-PLAN.md
-last_updated: "2026-10-18T07:52:17.422Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 08-06-PLAN.md
+last_updated: "2026-10-18T08:05:33.865Z"
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 90
-  completed_plans: 74
+  completed_plans: 75
 ---
 
 # Project State
@@ -95,6 +95,7 @@ Plan: 6 of 6
 | Phase 08 P08-03 | 8m | 2 tasks | 5 files |
 | Phase 08 P08-04 | 12m | 2 tasks | 7 files |
 | Phase 08 P08-05 | 11m | 2 tasks | 22 files |
+| Phase 08 P06 | 6m | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -178,6 +179,9 @@ Recent decisions affecting current work:
 - [Phase 08]: Leave the existing exact context-specific phrase gate separate; this plan neither models nor accepts a bare yes as authorization.
 - [Phase 08]: Page-task send grants require source voice, exact phrase, live task bindings, and one-use GatePort consumption.
 - [Phase 08]: Keep the new phrase vocabulary and protocol delta local pending written voice-owner review.
+- [Phase 08]: Phase 8 page-task grammar is limited to explicit latest/item/ordinal selectors so Phase 7 whole-page and heading/paragraph commands keep their route.
+- [Phase 08]: Recipient and text-field selectors come from explicit user words and deterministic live-page matching; ambiguity requires clarification.
+- [Phase 08]: Exact spoken phrase redemption stays separate from task state; typed input and general affirmations never authorize dispatch.
 
 ### Pending Todos
 
@@ -210,6 +214,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T07:52:17.417Z
-Stopped at: Completed 08-05-PLAN.md
+Last session: 2026-10-18T08:05:33.861Z
+Stopped at: Completed 08-06-PLAN.md
 Resume file: None
