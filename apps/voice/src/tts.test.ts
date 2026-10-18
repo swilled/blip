@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createTts, type Synth, type SynthHandlers, type TtsDone } from "./tts";
+import { createTts, type Synth, type SynthHandlers, type TtsDeps, type TtsDone } from "./tts";
 
 function setup() {
   const spoken: string[] = [];
+  const spokenRates: Array<number | undefined> = [];
   const handlers: SynthHandlers[] = [];
+  let currentRate = 1.0;
   const cancel = vi.fn();
   const synth: Synth = {
-    speak(text, h) {
+    speak(text, h, rate) {
       spoken.push(text);
+      spokenRates.push(rate);
       handlers.push(h);
     },
     cancel,
@@ -15,18 +18,33 @@ function setup() {
   const done: TtsDone[] = [];
   const tts = createTts({
     synth,
+    getRate: () => currentRate,
     now: () => Date.now(),
     setTimer: (fn, ms) => setTimeout(fn, ms),
     clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     onDone: (d) => done.push(d),
-  });
-  return { tts, spoken, handlers, done, cancel };
+  } as unknown as TtsDeps);
+  return { tts, spoken, spokenRates, handlers, done, cancel, setRate: (rate: number) => (currentRate = rate) };
 }
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe("tts", () => {
+  it("captures rate when each utterance starts without restarting active speech", () => {
+    const harness = setup();
+    const { tts, handlers, spokenRates, cancel, setRate } = harness;
+    tts.speak("current item.");
+    expect(spokenRates).toEqual([1.0]);
+    setRate(1.4);
+    tts.speak("queued acknowledgement.");
+    expect(spokenRates).toEqual([1.0]);
+    handlers[0].onend();
+    vi.advanceTimersByTime(400);
+    expect(spokenRates).toEqual([1.0, 1.4]);
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
   it("speaks sentence by sentence in order", () => {
     const { tts, spoken, handlers } = setup();
     tts.speak("a. b.", { speakId: "s1" });
