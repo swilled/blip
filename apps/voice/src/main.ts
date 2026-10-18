@@ -13,7 +13,7 @@ import {
 } from "./output-mode";
 import { createSocket, type VoiceSocket } from "./socket";
 import { createSpeakBridge } from "./speak-bridge";
-import { adjustSpeechRate, createSpeechRate, parseSpeechRateCommand, type SpeechRateDirection } from "./speech-rate";
+import { createSpeechRate, createRateCommandController, parseSpeechRateCommand } from "./speech-rate";
 import { createVoiceState } from "./state";
 import { createStt, type RecognitionLike } from "./stt";
 import { createTalkController } from "./talk-controller";
@@ -234,26 +234,27 @@ const outputMode = createOutputModeController({
   onModeChange: renderOutputMode,
 });
 
-function rateAcknowledgement(direction: SpeechRateDirection): string {
-  const result = adjustSpeechRate(speechRate, direction);
-  speechRate = result.rate;
-  el<HTMLOutputElement>("speech-rate-value").value = `${speechRate.toFixed(2)}×`;
-  if (result.limit === "fastest") return "Already at the fastest rate.";
-  if (result.limit === "slowest") return "Already at the slowest rate.";
-  return direction === "faster" ? "Speaking faster." : "Speaking slower.";
-}
+const rateCommands = createRateCommandController({
+  changed: (rate, acknowledgement) => {
+    speechRate = rate;
+    el<HTMLOutputElement>("speech-rate-value").value = `${rate.toFixed(2)}×`;
+    el("output-mode-status").textContent = acknowledgement;
+  },
+  acknowledge: announceRateAcknowledgement,
+});
 
 function handleLocalRateUtterance(text: string): boolean {
   const direction = parseSpeechRateCommand(text);
   if (!direction) return false;
-  announceRateAcknowledgement(rateAcknowledgement(direction));
+  state.noTranscript();
+  rateCommands.adjust(direction);
   return true;
 }
 
 function announceRateAcknowledgement(acknowledgement: string): void {
   el("output-mode-status").textContent = acknowledgement;
-  state.messageSent();
   if (shouldSpeakLocalAcknowledgement(outputMode.getMode())) {
+    if (!tts.isSpeaking()) state.messageSent();
     tts.speak(acknowledgement, { speakId: LOCAL_RATE_ACK_ID });
   }
 }
@@ -262,7 +263,7 @@ document.querySelectorAll<HTMLButtonElement>("[data-speech-rate]").forEach((butt
   button.addEventListener("click", () => {
     const direction = button.dataset.speechRate;
     if (direction !== "faster" && direction !== "slower") return;
-    announceRateAcknowledgement(rateAcknowledgement(direction));
+    rateCommands.adjust(direction);
   });
 });
 
@@ -381,7 +382,7 @@ holdButton.addEventListener("keyup", (ev) => {
   }
 });
 window.addEventListener("blur", () => setManualHold(false, "The Blip window lost focus. Nothing was sent."));
-window.addEventListener("pagehide", () => { holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); tts.cancel(); nativeSynth.dispose(); });
+window.addEventListener("pagehide", () => { rateCommands.cancel(); holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); tts.cancel(); nativeSynth.dispose(); });
 
 // Typed input.
 const input = el<HTMLInputElement>("typed-input");

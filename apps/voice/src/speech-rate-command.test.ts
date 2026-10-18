@@ -1,9 +1,21 @@
-import { describe, expect, it } from "vitest";
-import { parseSpeechRateCommand } from "./speech-rate";
+import { describe, expect, it, vi } from "vitest";
+import { parseSpeechRateCommand, createRateCommandController } from "./speech-rate";
 import { createVoiceState } from "./state";
 import { createTalkController, type SttHandlers, type UtteranceOut } from "./talk-controller";
 
 describe("speech rate command parsing", () => {
+  it("coalesces twenty rapid changes and cancels pending acknowledgement on close", () => {
+    vi.useFakeTimers();
+    try {
+      const changed: number[] = [], messages: string[] = [];
+      const c = createRateCommandController({ changed: rate => changed.push(rate), acknowledge: message => messages.push(message) });
+      for (let i = 0; i < 20; i++) c.adjust(i % 2 ? "slower" : "faster");
+      expect(changed).toHaveLength(20); expect(messages).toEqual([]);
+      vi.advanceTimersByTime(200);
+      expect(messages).toEqual(["Speaking slower."]); expect(c.get()).toBe(1);
+      c.adjust("faster"); c.cancel(); vi.advanceTimersByTime(200); expect(messages).toHaveLength(1);
+    } finally { vi.useRealTimers(); }
+  });
   it("accepts only exact normalized faster and slower commands", () => {
     expect(parseSpeechRateCommand("Faster!")).toBe("faster");
     expect(parseSpeechRateCommand("  SLOWER  ")).toBe("slower");
