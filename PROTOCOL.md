@@ -6,6 +6,8 @@ M0 approval: pending
 
 The freeze is provisional until the M0 PR is approved in writing by the voice developer. When that approval arrives, replace the line above with `M0 approval: received (<where the written approval lives>)` in the same PR, before it merges. Never write `received` without a location.
 
+Local browser-control contract status: additive messages and policy changes were reviewed and approved by the voice owner, as reported by the core owner and recorded in `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`. The review gate for integrating this exact core diff is cleared. M0 approval above remains a separate, pending protocol-freeze gate. Existing v1 voice and form message semantics remain unchanged.
+
 The registry in `packages/protocol/src/messages.ts` is the source of truth. A test (`packages/protocol/test/protocol-md.test.ts`) fails if a message type or its from/to columns differ between this file and the registry.
 
 ## Transport
@@ -30,7 +32,7 @@ Every frame is an envelope:
 
 ## Messages
 
-In the tables below `from` is the role allowed to put the frame on the wire and `to` is the role that receives it. Roles are `extension`, `voice` and `server`. There are 25 types. The server enforces `from` per connection (D-04): a frame whose type the connection's role may not send is answered with a `role-violation` error and never routed.
+In the tables below `from` is the role allowed to put the frame on the wire and `to` is the role that receives it. Roles are `extension`, `voice` and `server`. There are 27 types. The server enforces `from` per connection (D-04): a frame whose type the connection's role may not send is answered with a `role-violation` error and never routed.
 
 ### Handshake and shared
 
@@ -50,6 +52,8 @@ Includes the server-to-extension requests, listed next to the replies they expec
 | `snapshot.result` | extension | server | `{ ok: true, snapshot }` or `{ ok: false, error: { code, message } }` | `ok`-discriminated union; `Snapshot.untrustedInstructionDetected?` is an optional warning-only boolean |
 | `act.request` | server | extension | `ActRequest` (see below) | the extension replies `act.result` (timeout 5 s) |
 | `act.result` | extension | server | `ActResult` (see below) | carries `observedValue` for verify-after-write |
+| `browser.request` | server | extension | `BrowserRequestPayload` (see below) | additive browser operation request; bounded and role-validated |
+| `browser.result` | extension | server | `BrowserResultPayload` (see below) | matches the request ID and operation; stale results are discarded |
 | `page.changed` | extension | server | `{ tabId: int, url, reason: navigation, mutation or tab-activated, structuralHash? }` | debounced 500 ms; the server decides whether to re-snapshot |
 | `announce` | server | extension | `{ text (max 500), politeness: polite or assertive }` | in-page live region for NVDA mode |
 | `highlight` | server | extension | `{ targetId: string or null }` | visual aid for a sighted audience; null clears |
@@ -68,13 +72,49 @@ Includes the server-to-voice pushes.
 | `speak.done` | voice | server | `{ speakId, interrupted: boolean }` | required for read-back before arming a confirmation |
 | `settings` | voice | server | `{ outputMode: agent-voice, screen-reader or both, rate?: number, verbosity?: short or normal }` | |
 | `control` | voice | server | `{ cmd: stop, repeat or reconnect-browser }` | `stop` also works from a button and a hotkey |
-| `confirm.redeem` | voice | server | `{ grantId, speakId, utteranceId, phrase }` | reducer redemption for the tracked read-back; server rechecks the exact phrase and consumes the grant |
+| `confirm.redeem` | voice | server | `{ grantId, speakId, utteranceId, phrase, source?: voice or typed }` | reducer redemption for the tracked read-back; new clients carry input source and the core requires voice source for task-bound sends |
 | `speak` | server | voice | `{ speakId, text, category, interrupt, spell? }` | the UI queues it; `interrupt` flushes the queue. `category` is answer, filler, readback, confirm-prompt, error or result |
 | `earcon` | server | voice | `{ name: listening, thinking, done, blocked or error }` | non-verbal latency cue |
 | `confirm.armed` | server | voice | `{ grantId, speakId, phrase, kind: ActionKind, actionLabel, expiresAt: number }` | the UI displays the server-owned confirmation prompt and binds redemption to its read-back id |
 | `confirm.cleared` | server | voice | `{ grantId, reason: executed, cancelled, expired, page-changed or value-changed }` | |
 | `state` | server | voice | `{ dialogue: DialogueStateName, page: object or null, focusFieldId?, busy, extensionConnected, brain }` | pushed on every change; `page` is `{ url, title, step?, fieldCount: int, requiredEmpty: int, untrustedInstructionDetected?: boolean }` |
 | `transcript` | server | voice | `{ utteranceId, heardAs, routedTo: grammar or model }` | debug and demo panel |
+
+## BrowserRequestPayload and BrowserResultPayload
+
+The `browser.request` message is server-to-extension and `browser.result` is extension-to-server. Both are separate from `Snapshot`, `ActRequest`, and `Intent`; no existing snapshot limits or action semantics change. The voice-owner review for this additive contract is recorded in `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`.
+
+`BrowserRequestPayload` contains a bounded `requestId`, optional current `tabId`, and a closed `operation` union. IDs are 1–64 ASCII letters, digits, dots, underscores, colons, or hyphens, beginning with a letter or digit. Tab IDs are non-negative 32-bit integers. Operation fields are typed:
+
+| `op` | Fields |
+|---|---|
+| `location` | none |
+| `capture` | none |
+| `navigate` | canonical HTTP(S) `url` without credentials; required non-empty one-use `authorizationId` |
+| `history` | `direction: back or forward` |
+| `reload` | none |
+| `search` | `route: site or browser-default`, user-derived `query` (1–500 Unicode code points), and required one-use `authorizationId` |
+| `tabs` | `action: list, switch, or open-blank`; `targetTabId` is required only for `switch` |
+| `list-links` | none |
+| `read-content` | `kind: heading or paragraph`, user-derived `target`, and captured `identity` |
+| `read-item` | capture-local `itemId` and captured `identity` |
+| `open-link` | stable `linkId`, captured `identity`, required one-use `authorizationId`, and optional `authorizationMode: user-command or spoken` (missing means `spoken`) |
+| `scroll` | `direction: up or down`, `pixels: 1–2000` |
+| `find` | user-derived `query` (1–500 Unicode code points) |
+
+The protocol validates shape only. Deterministic server code must keep URLs and queries sourced from the user's words, resolve links from a uniquely selected visible candidate, and authorize gated work before dispatch. Navigation, browser search, cross-origin links, same-document links, and action-like links require a read-back of the exact operation and target followed by its matching spoken phrase; a bare "yes" never authorizes them. Anchors carrying a `download` attribute are refused; links labeled for downloads require spoken confirmation. Ordinary same-origin HTTP(S) GET links may use `authorizationMode: user-command` only after an explicit user command selects one unique link classified `same-origin-safe-get`. Both modes carry a one-use request ID, and the extension recomputes link safety from the live DOM before dispatch. A missing mode is treated as `spoken`. The extension navigates through the browser tab API and never invokes page click handlers. Page text and model output cannot invent or rewrite a destination, query, link, tab, or action target. These fields do not add confirmation authority to `Intent`.
+
+Browser-default search calls `chrome.search.query` with the exact user query and `CURRENT_TAB`. It requires the manifest `search` permission and fails closed when the API or permission is unavailable; the extension never builds a provider URL. The `search` manifest permission is included in the reviewed diff recorded in `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`.
+
+`BrowserResultPayload` has `ok: true` and a typed result for its `operation`, or `ok: false` with the same bounded `requestId`, operation (or `unknown` for an invalid discriminant), and a closed error code plus a message of at most 300 Unicode code points. History refusal uses `unsupported-destination-check` when the next destination cannot be established. Successful location results distinguish `supported` from `restricted` pages. Tab results expose at most 50 entries, with a bounded title and host hint rather than a navigable URL. A created `about:blank` tab is a navigation target only and remains restricted for content capture.
+
+Content and link results carry an independent `captureId`, positive `captureRevision`, `tabId`, and canonical `pageUrl`. Page URLs may use HTTP(S), `about:`, `chrome:`, or `chrome-extension:` so restricted pages can be identified; navigation destinations accept HTTP(S) only and reject credentials and unsupported schemes. Content blocks are visible heading/paragraph text, at most 20 blocks, 400 Unicode code points per block and 4,000 total. The Phase 8 local proposal adds an optional `items` list to content captures for backward compatibility: at most 20 generic visible article/list-item records, 400 Unicode code points per item and 4,000 total. Each item contains only its bounded visible text, a capture-local ID, frame ID, exact capture identity, and nullable `visibleDate`. A date is populated only from visible semantic `time` evidence whose displayed value and strict ISO-8601 `datetime` agree; missing, malformed, or inconsistent evidence is `null` (unknown). The result `truncated` flag covers the bounded excerpts and does not alter `Snapshot.truncated`. A restricted result carries no blocks, items, or links, distinct from a supported empty result. Link lists contain at most 100 records; each record exposes only a bounded stable `linkId`, visible label (at most 200 code points), and safe host hint, never an `href`.
+
+Content/item/link references are bound to the captured tab, canonical page URL, and capture revision. `read-content`, `read-item`, and `open-link` carry that identity; an item read also carries its exact capture-local `itemId`. Link records may include `navigationSafety`, a non-authoritative extension hint, and a host hint that can include a port. The server and extension discard references and late results when the tab, URL, page, capture revision, request, or active session changes, and clear pending IDs on cancellation or timeout. A refreshed capture creates new IDs. The reviewed policy permits ordinary same-origin HTTP(S) GETs after the user explicitly selects a visible link; cross-origin and action-like links retain the exact spoken gate. The approval record covers this shared-protocol/live-policy change. A GET request can still have site-specific side effects, so this policy is a product choice rather than a guarantee about server behavior. Back/forward still must be refused when the next destination cannot be established before dispatch; a valid schema does not make an operation safe by itself.
+
+The bounded item fields and `read-item` operation/result are included in the reviewed shared-protocol diff recorded in `.planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-VOICE-OWNER-APPROVAL.md`.
+
+The new registry entries allow only the server to send `browser.request` to the extension and only the extension to send `browser.result` to the server. They do not alter voice message permissions. `Intent` remains a closed 16-variant union without `confirm`, `approve`, or `submit_now`.
 
 ## ActOp, ActRequest and ActResult
 
@@ -99,7 +139,7 @@ Includes the server-to-voice pushes.
 
 The model (or the grammar) produces an `Intent`, a union on `type` with 16 variants: `describe`, `read_form`, `whats_required`, `what_went_wrong`, `read_back`, `fill_profile`, `go_to_field` (`fieldId`), `set_fields` (`fills`, up to 20 of `{ fieldId, value }`), `spell` (`fieldId`), `undo`, `stop`, `request_action` (`actionId`), `click_safe` (`actionId`), `answer` (`text`), `clarify` (`question`), `unknown`.
 
-There is deliberately no `confirm`, `approve` or `submit_now` Intent variant. The model may request an action but can never grant one. Voice may send `confirm.redeem` only with its currently armed grant, tracked read-back id and phrase; the server rechecks all three before it consumes the one-use grant and reaches GatePort. Ordinary `utterance` frames remain available for typed/recognized speech and cancel a pending confirmation when they do not match.
+There is deliberately no `confirm`, `approve` or `submit_now` Intent variant. The model may request an action but can never grant one. Voice may send `confirm.redeem` only with its currently armed grant, tracked read-back id, phrase, and input source; the server rechecks the identifiers and exact phrase before it consumes the one-use grant and reaches GatePort. Legacy frames may omit `source`; the core refuses those frames for task-bound sends. Ordinary `utterance` frames remain available for typed/recognized speech and cancel a pending confirmation when they do not match.
 
 ## DialogueStateName
 

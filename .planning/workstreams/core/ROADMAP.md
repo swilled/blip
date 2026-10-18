@@ -3,11 +3,11 @@
 **Workstream:** `core` (Person A, Pranav)
 **Owns:** `@blip/protocol`, server hub, Chrome MV3 extension, Executor + policy gate (`packages/policy`), AGY subscription brain (intent-as-data), result reading
 **Scope:** the 26 core v1 requirements (PROT, PAGE, ACT, GATE, BRAIN, RES). Voice-track requirements (VOX, DLG, VIS, DEMO) are planned in `.planning/workstreams/voice/` and appear here only as dependencies.
-**Granularity:** coarse (5 phases) | **Project mode:** mvp (vertical slices; the build is demoable at the end of every phase)
+**Granularity:** coarse (5 v1 phases plus follow-on phases) | **Project mode:** mvp (vertical slices; the build is demoable at the end of every phase)
 
 ## Overview
 
-Core builds Blip's trust machinery from the contract outward. Phase 1 freezes the shared `@blip/protocol` package and stands up a loopback-only server with a fake extension, a fake brain and a typed REPL, so neither developer waits on a model subscription. Phase 2 swaps the fake extension for a real one that reads a live form and fills it the way a person would, reporting only what the DOM actually holds. Phase 3 adds the policy gate and the single Executor (nothing irreversible happens without a read-back and the exact spoken phrase) and reads the result page back, which lands I2 with no model in the loop. Phase 4 adds a locked-down, tool-less subscription brain for free-form intents and background label repair; the current implementation is AGY via the Antigravity CLI using Gemini 3.8 Flash. Phase 5 hardens Blip against a seeded prompt-injection page and validates the demo against a self-hosted synthetic survey, adds one-command startup, and ends at the `demo-safe` feature freeze. The owner confirmed this hackathon has no public-form URL; Core's local survey is the Phase 5 acceptance target, while voice-owned DEMO-03 remains deferred. Gate before brain: everything through Phase 3 demos without AGY.
+Core builds Blip's trust machinery from the contract outward. Phase 1 freezes the shared `@blip/protocol` package and stands up a loopback-only server with a fake extension, a fake brain and a typed REPL, so neither developer waits on a model subscription. Phase 2 swaps the fake extension for a real one that reads a live form and fills it the way a person would, reporting only what the DOM actually holds. Phase 3 adds the policy gate and the single Executor (nothing irreversible happens without a read-back and the exact spoken phrase) and reads the result page back, which lands I2 with no model in the loop. Phase 4 adds a locked-down, tool-less subscription brain for free-form intents and background label repair; the current implementation is AGY via the Antigravity CLI using Gemini 3.8 Flash. Phase 5 hardens Blip against a seeded prompt-injection page and validates the demo against a self-hosted synthetic survey, adds one-command startup, and ends at the `demo-safe` feature freeze. The owner confirmed this hackathon has no public-form URL; Core's local survey is the Phase 5 acceptance target, while voice-owned DEMO-03 remains deferred. Follow-on phases start after v1 technical acceptance and leave the existing v1 release gates intact. Phase 6 defines the contract and policy proposal for user-directed browser control. Gate before brain: everything through Phase 3 demos without AGY.
 
 ## Phases
 
@@ -22,6 +22,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2) (completed 2026-10-17)
 - [x] **Phase 4: AGY Subscription Brain and Label Repair** - Current runtime uses the locked-down Antigravity CLI with Gemini 3.8 Flash; provider checks and live synthetic startup/roundtrip passed (2026-10-17)
 - [ ] **Phase 5: Hostile Pages, Local Synthetic Web and Freeze** - AGY hostile, full I3, and launcher-cache acceptance pass; written M0 sign-off, teammate review, and mainline release gates remain
+- [x] **Phase 6: Browser Control Contract and Policy Proposal** - Proposal complete; core-owner authorized follow-on implementation, with voice-owner review still required before shared protocol or policy changes merge
+- [x] **Phase 7: Generic Browser Control and Content Reading** - Add user-directed navigation, page reading, links, search, tabs, scrolling and find-on-page on supported sites (completed locally 2026-10-18; review gate remains before integration)
+- [x] **Phase 8: Multi-Step Web Reading and Drafting** - Add generic page-grounded read, summarize, draft, revise and confirmation-gated actions (completed 2026-10-18)
 
 ## Shared Milestones
 
@@ -198,7 +201,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
+V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase 5 technical acceptance; Phases 7 and 8 build on the Phase 6 proposal. Outstanding v1 release gates remain independent and unchanged. Voice-owner review is required before shared protocol or live policy changes merge.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -207,8 +210,55 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. AGY Subscription Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
+| 6. Browser Control Contract and Policy Proposal | 2/2 | Proposal complete; follow-on phases authorized, review pending before merge | 2026-10-18 |
+| 7. Generic Browser Control and Content Reading | 2/6 | In Progress - 07-01 and 07-02 complete; four plans remain | - |
+| 8. Multi-Step Web Reading and Drafting | 6/6 | Complete    | 2026-10-18 |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
+
+### Phase 6: Browser control contract and policy proposal
+
+**Goal:** Define a teammate-reviewable, additive protocol and policy proposal for user-directed page reading, navigation, links, search, tabs, scrolling, and summaries. Preserve the existing form flow, privacy rules, and confirmation gates. This phase does not implement browser-control features. No contract change may merge before the voice owner approves it in writing.
+**Requirements**: TBD
+**Planning note:** Proposal-only phase; no v1 requirement IDs change. AGENT-01 and multi-step page workflows are scoped to Phase 8.
+**Depends on:** Phase 5 technical acceptance (passed); written v1 release gates remain independent.
+**Plans:** 2/2 plans executed
+
+Plans:
+- [x] 06-01-PLAN.md — Draft the additive contract and policy proposal
+- [x] 06-02-PLAN.md — Create the evidence matrix, adversarial cases, and approval gates
+
+### Phase 7: Generic browser control and content reading
+
+**Goal:** Implement core-owned browser primitives from the Phase 6 proposal so users can direct Blip from a new tab to supported sites, navigate, read bounded page content, follow selected links, search, switch tabs, scroll, and find text. Every target must come from the user's words or a user-selected live page item. Page text stays untrusted and actions remain in the Executor.
+**Requirements**: No shared requirement changes in this phase
+**Depends on:** Phase 6 proposal; core owner has authorized local implementation. Written voice-owner review remains required before shared protocol or live policy changes merge.
+**Plans:** 7/7 plans executed
+
+Plans:
+- [x] 07-01-PLAN.md — Add closed browser operation and content result schemas
+- [x] 07-02-PLAN.md
+- [x] 07-03-PLAN.md
+- [x] 07-04-PLAN.md
+- [x] 07-05-PLAN.md
+- [x] 07-06-PLAN.md
+- [x] 07-07-PLAN.md â€” Close selected-link eligibility gap with explicit same-origin safe-GET route
+
+### Phase 8: Multi-step web reading and drafting
+
+**Goal:** Add generic, page-grounded workflows that can read requested content, summarize it on request, draft and revise text, read the final draft back, and carry out a send or other gated action only after explicit confirmation bound to that exact draft and page. Site names and the email example are not hardcoded.
+**Requirements**: No shared requirement changes in this phase
+**Depends on:** Phase 7
+**Plans:** 7/7 plans complete
+
+Plans:
+- [x] 08-01-PLAN.md — Capture generic visible items with bounded recency evidence
+- [x] 08-02-PLAN.md — Route item reads through the full extension path with live DOM revalidation
+- [x] 08-03-PLAN.md — Add per-session task state and deterministic item resolution
+- [x] 08-04-PLAN.md — Compose and revise drafts with observed field read-back
+- [x] 08-05-PLAN.md — Gate sending on exact phrase and draft-bound grant
+- [x] 08-06-PLAN.md — Integrate and verify the synthetic end-to-end workflow
+- [x] 08-07-PLAN.md — Connect Phase 8 task routing and guarded send through the demo dialogue runner
 
 ---
 *Roadmap created: 2026-10-16*

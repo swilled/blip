@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { ActionKind, FormModel } from "@blip/protocol";
+import type { ActionKind, BrowserPageIdentity, FormModel } from "@blip/protocol";
 import { setLogSink } from "../src/log";
-import { createGrantStore, type GrantBinding } from "../src/act/grants";
+import { createGrantStore, type GrantBinding, type PageTaskSendBinding } from "../src/act/grants";
 
 const emailField: FormModel["fields"][number] = {
   id: "email",
@@ -63,6 +63,30 @@ function armedId(store: ReturnType<typeof createGrantStore>, binding: GrantBindi
   const armed = store.arm(binding);
   expect(armed).not.toBeNull();
   return armed!.grantId;
+}
+
+const sourceIdentity: BrowserPageIdentity = {
+  captureId: "send-capture-1",
+  captureRevision: 4,
+  tabId: 9,
+  pageUrl: "https://example.test/messages",
+};
+
+function taskBinding(overrides: Partial<PageTaskSendBinding> = {}): PageTaskSendBinding {
+  return {
+    taskId: "draft-task-1",
+    draftHash: "a".repeat(64),
+    recipientFieldId: "recipient-field",
+    recipientValueHash: "b".repeat(64),
+    sourceItemId: "visible-message-1",
+    sourceIdentity,
+    tabId: 9,
+    operation: "send",
+    targetId: "send-button",
+    targetKind: "send",
+    speakId: "final-readback-1",
+    ...overrides,
+  };
 }
 
 describe("createGrantStore", () => {
@@ -165,6 +189,48 @@ describe("createGrantStore", () => {
     const grantId = armedId(store, binding);
     store.clear(grantId);
     expect(store.consume(grantId, binding)).toBe(false);
+  });
+
+  it.each([
+    ["task id", (task: PageTaskSendBinding) => ({ ...task, taskId: "draft-task-2" })],
+    ["draft hash", (task: PageTaskSendBinding) => ({ ...task, draftHash: "c".repeat(64) })],
+    ["recipient field id", (task: PageTaskSendBinding) => ({ ...task, recipientFieldId: "other-recipient" })],
+    ["recipient value hash", (task: PageTaskSendBinding) => ({ ...task, recipientValueHash: "d".repeat(64) })],
+    ["source item id", (task: PageTaskSendBinding) => ({ ...task, sourceItemId: "visible-message-2" })],
+    ["source capture id", (task: PageTaskSendBinding) => ({ ...task, sourceIdentity: { ...task.sourceIdentity, captureId: "send-capture-2" } })],
+    ["source capture revision", (task: PageTaskSendBinding) => ({ ...task, sourceIdentity: { ...task.sourceIdentity, captureRevision: task.sourceIdentity.captureRevision + 1 } })],
+    ["source tab id", (task: PageTaskSendBinding) => ({ ...task, tabId: task.tabId + 1, sourceIdentity: { ...task.sourceIdentity, tabId: task.tabId + 1 } })],
+    ["source page URL", (task: PageTaskSendBinding) => ({ ...task, sourceIdentity: { ...task.sourceIdentity, pageUrl: "https://example.test/other" } })],
+    ["operation", (task: PageTaskSendBinding) => ({ ...task, operation: "reply" as PageTaskSendBinding["operation"] })],
+    ["action target id", (task: PageTaskSendBinding) => ({ ...task, targetId: "other-send-button" })],
+    ["action target kind", (task: PageTaskSendBinding) => ({ ...task, targetKind: "submit" as PageTaskSendBinding["targetKind"] })],
+    ["tracked speak id", (task: PageTaskSendBinding) => ({ ...task, speakId: "another-readback" })],
+  ] as const)("rejects a page-task grant when its %s changes", (_name, changeTask) => {
+    const store = createGrantStore(() => 100);
+    const pageTask = taskBinding();
+    const binding = makeBinding({
+      kind: "send",
+      targetId: pageTask.targetId,
+      model: makeModel({ url: sourceIdentity.pageUrl }),
+      pageTask,
+    });
+    const grantId = armedId(store, binding);
+    const changedTask = changeTask(pageTask) as PageTaskSendBinding;
+    const changed = makeBinding({
+      kind: "send",
+      targetId: changedTask.targetId,
+      model: makeModel({ url: sourceIdentity.pageUrl }),
+      pageTask: changedTask,
+    });
+
+    expect(store.consume(grantId, changed)).toBe(false);
+    expect(store.consume(grantId, binding)).toBe(false);
+  });
+
+  it("stores only hashes for page-task draft and recipient values", () => {
+    const task = taskBinding();
+    expect(JSON.stringify(task)).not.toContain("The final message text");
+    expect(JSON.stringify(task)).not.toContain("alex@example.test");
   });
 
   it("excludes sensitive values from fingerprints, serialized state, and logs", () => {

@@ -59,9 +59,9 @@ type ReportData = {
   approvalUsed: boolean;
   stage?: Stage;
   elapsedMs?: number;
-  dispatches?: { total: number; bootstrap: number; prompt: number; intent: number; repair: number };
-  noToolsAgentAccepted?: { intent: boolean; repair: boolean };
-  startupFailure?: { intent: string; repair: string };
+  dispatches?: { total: number; bootstrap: number; prompt: number; intent: number; repair: number; content: number };
+  noToolsAgentAccepted?: { intent: boolean; repair: boolean; content: boolean };
+  startupFailure?: { intent: string; repair: string; content: string };
   extensionConnected?: boolean;
   voiceConnected?: boolean;
   exactDemoIdentity?: boolean;
@@ -84,8 +84,8 @@ type ReportData = {
 };
 
 function renderReport(data: ReportData): string {
-  const dispatches = data.dispatches ?? { total: 0, bootstrap: 0, prompt: 0, intent: 0, repair: 0 };
-  const noToolsAgent = data.noToolsAgentAccepted ?? { intent: false, repair: false };
+  const dispatches = data.dispatches ?? { total: 0, bootstrap: 0, prompt: 0, intent: 0, repair: 0, content: 0 };
+  const noToolsAgent = data.noToolsAgentAccepted ?? { intent: false, repair: false, content: false };
   return [
     "---",
     "phase: 05-hostile-pages-real-web-and-freeze",
@@ -106,10 +106,13 @@ function renderReport(data: ReportData): string {
     `promptDispatches: ${dispatches.prompt}`,
     `intentDispatches: ${dispatches.intent}`,
     `repairDispatches: ${dispatches.repair}`,
+    `contentDispatches: ${dispatches.content}`,
     `intentNoToolsAgentAccepted: ${noToolsAgent.intent}`,
     `repairNoToolsAgentAccepted: ${noToolsAgent.repair}`,
+    `contentNoToolsAgentAccepted: ${noToolsAgent.content}`,
     `intentStartupFailure: ${data.startupFailure?.intent ?? "none"}`,
     `repairStartupFailure: ${data.startupFailure?.repair ?? "none"}`,
+    `contentStartupFailure: ${data.startupFailure?.content ?? "none"}`,
     `extensionConnected: ${data.extensionConnected ?? false}`,
     `voiceConnected: ${data.voiceConnected ?? false}`,
     `exactDemoIdentity: ${data.exactDemoIdentity ?? false}`,
@@ -155,8 +158,8 @@ function renderReport(data: ReportData): string {
 
 function noToolsAgentObserver(
   value: AgyStartupDiagnostic,
-  state: { intent: boolean; repair: boolean },
-  failures: { intent: string; repair: string },
+  state: Record<AgyRole, boolean>,
+  failures: Record<AgyRole, string>,
 ): void {
   if (value.kind === "milestone" && value.milestone === "no_tools_agent_accepted") state[value.role] = true;
   if (value.kind === "failure") failures[value.role] = value.category;
@@ -384,9 +387,9 @@ describe("bounded live AGY cache prewarm for the local survey", () => {
     const startedAt = Date.now();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(new Error("bounded synthetic check time limit")), MAX_SECONDS * 1_000);
-    const counts = { total: 0, bootstrap: 0, prompt: 0, intent: 0, repair: 0 };
-    const noToolsAgentAccepted = { intent: false, repair: false };
-    const startupFailure = { intent: "none", repair: "none" };
+    const counts = { total: 0, bootstrap: 0, prompt: 0, intent: 0, repair: 0, content: 0 };
+    const noToolsAgentAccepted = { intent: false, repair: false, content: false };
+    const startupFailure = { intent: "none", repair: "none", content: "none" };
     let intentPromptDispatches = 0;
     let stage: Stage = "startup";
     let passed = false;
@@ -411,6 +414,10 @@ describe("bounded live AGY cache prewarm for the local survey", () => {
     let priorCacheMtimeMs: number | null = null;
 
     const admitDispatch = (role: AgyRole, kind: "bootstrap" | "prompt"): void => {
+      if (role === "content") {
+        controller.abort(new Error("content role is outside the Phase 5 live check"));
+        throw new Error("content role is outside the Phase 5 live check");
+      }
       if (controller.signal.aborted || counts.total >= MAX_DISPATCHES) {
         controller.abort(new Error("bounded synthetic check dispatch cap reached"));
         throw new Error("bounded synthetic check dispatch cap reached");

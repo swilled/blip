@@ -5,6 +5,7 @@ const BLIP_PORTS = new Set(["7777", "5173"]);
 
 export type TabRecord = { id?: number; url?: string; title?: string; lastAccessed?: number; active?: boolean };
 export type TargetTab = TabRecord & { id: number; url: string };
+export type BrowserTargetTab = TargetTab;
 
 type TabsApi = {
   onActivated?: { addListener(listener: (info: { tabId: number }) => void): void };
@@ -25,15 +26,21 @@ export function isSupportedTargetTab(tab: TabRecord): tab is TargetTab {
   if (tab.id === undefined || typeof tab.url !== "string") return false;
   try {
     const url = new URL(tab.url);
-    return (url.protocol === "http:" || url.protocol === "https:") && !isBlipUrl(url);
+    return (url.protocol === "http:" || url.protocol === "https:") &&
+      url.username.length === 0 && url.password.length === 0 && !isBlipUrl(url);
   } catch {
     return false;
   }
 }
 
+/** about:blank can be a navigation target, but it is never a supported content page. */
+export function isBrowserTargetTab(tab: TabRecord): tab is BrowserTargetTab {
+  return isSupportedTargetTab(tab) || (tab.id !== undefined && tab.url === "about:blank");
+}
+
 /** Update the retained page when focus moves to another browser window. */
 export function rememberTargetTab(tab: TabRecord): boolean {
-  if (!isSupportedTargetTab(tab)) return false;
+  if (!isBrowserTargetTab(tab)) return false;
   mostRecentlyActivatedTargetId = tab.id;
   return true;
 }
@@ -62,7 +69,7 @@ export function registerTargetTabTracking(): void {
   if (!tabs?.onActivated || !tabs.onRemoved) return;
   tabs.onActivated.addListener(({ tabId }) => {
     void tabs.get(tabId).then((tab) => {
-      if (isSupportedTargetTab(tab)) mostRecentlyActivatedTargetId = tabId;
+      if (isBrowserTargetTab(tab)) mostRecentlyActivatedTargetId = tabId;
     }).catch(() => undefined);
   });
   tabs.onRemoved.addListener((tabId) => {
@@ -71,13 +78,13 @@ export function registerTargetTabTracking(): void {
   });
 }
 
-export async function findTargetTab(requestedTabId?: number): Promise<TargetTab | undefined> {
+export async function findBrowserTargetTab(requestedTabId?: number): Promise<BrowserTargetTab | undefined> {
   const tabsApi = browserTabs();
   if (!tabsApi) return undefined;
   if (requestedTabId !== undefined) {
     try {
       const requested = await tabsApi.get(requestedTabId);
-      return isSupportedTargetTab(requested) ? requested : undefined;
+      return isBrowserTargetTab(requested) ? requested : undefined;
     } catch {
       return undefined;
     }
@@ -91,11 +98,17 @@ export async function findTargetTab(requestedTabId?: number): Promise<TargetTab 
   }
 
   if (mostRecentlyActivatedTargetId !== undefined) {
-    const remembered = tabs.find((tab) => tab.id === mostRecentlyActivatedTargetId && isSupportedTargetTab(tab));
-    if (remembered && isSupportedTargetTab(remembered)) return remembered;
+    const remembered = tabs.find((tab) => tab.id === mostRecentlyActivatedTargetId && isBrowserTargetTab(tab));
+    if (remembered && isBrowserTargetTab(remembered)) return remembered;
     mostRecentlyActivatedTargetId = undefined;
   }
   const selected = selectTargetTabFromTabs(tabs);
+  return selected && isSupportedTargetTab(selected) ? selected : undefined;
+}
+
+/** Content capture intentionally excludes blank and restricted browser pages. */
+export async function findTargetTab(requestedTabId?: number): Promise<TargetTab | undefined> {
+  const selected = await findBrowserTargetTab(requestedTabId);
   return selected && isSupportedTargetTab(selected) ? selected : undefined;
 }
 

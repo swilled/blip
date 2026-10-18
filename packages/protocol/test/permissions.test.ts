@@ -15,6 +15,8 @@ const EXPECTED: Record<string, { senders: Role[]; receivers: Role[] }> = {
   "snapshot.result": { senders: ["extension"], receivers: ["server"] },
   "act.request": { senders: ["server"], receivers: ["extension"] },
   "act.result": { senders: ["extension"], receivers: ["server"] },
+  "browser.request": { senders: ["server"], receivers: ["extension"] },
+  "browser.result": { senders: ["extension"], receivers: ["server"] },
   "page.changed": { senders: ["extension"], receivers: ["server"] },
   announce: { senders: ["server"], receivers: ["extension"] },
   highlight: { senders: ["server"], receivers: ["extension"] },
@@ -39,9 +41,9 @@ const EXPECTED: Record<string, { senders: Role[]; receivers: Role[] }> = {
 const ROLES: Role[] = ["extension", "voice", "server"];
 
 describe("permission matrix (D-04)", () => {
-  it("has exactly 25 registry types, the same as the hand-written table", () => {
+  it("has exactly 27 registry types, the same as the hand-written table", () => {
     expect(Object.keys(MESSAGES).sort()).toEqual(Object.keys(EXPECTED).sort());
-    expect(Object.keys(MESSAGES)).toHaveLength(25);
+    expect(Object.keys(MESSAGES)).toHaveLength(27);
   });
 
   for (const [type, want] of Object.entries(EXPECTED)) {

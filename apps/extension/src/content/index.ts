@@ -5,6 +5,7 @@ import { executeAct } from "./act.js";
 import { observeStructuralChanges } from "./observer.js";
 import { getHighlightOverlay } from "./overlay.js";
 import { captureFrameSnapshot } from "./snapshot.js";
+import { handleBrowserContentRequest } from "./browser-content.js";
 export { captureFrameSnapshot } from "./snapshot.js";
 export { resolveElementId, walkDocument } from "./walk.js";
 
@@ -39,6 +40,12 @@ function installContentShell(): void {
     }
 
     if (!("t" in message)) return;
+    if (message.t === "browser-content" && "operation" in message && "identity" in message) {
+      const request = message as Extract<BackgroundToContentMessage, { t: "browser-content" }>;
+      const response = handleBrowserContentRequest(document, request, sender.frameId ?? 0);
+      sendResponse(response);
+      return;
+    }
     if (message.t === "snapshot" && "topOrigin" in message && typeof message.topOrigin === "string") {
       const request = message as Extract<BackgroundToContentMessage, { t: "snapshot" }>;
       const response: ContentResponse = {

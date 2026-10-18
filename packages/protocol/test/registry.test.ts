@@ -3,6 +3,7 @@ import {
   MAX_UTTERANCE_CHARS,
   MESSAGES,
   Message,
+  Intent,
   buildFrame,
   buildRawFrame,
   canReceive,
@@ -136,6 +137,27 @@ describe("canSend / canReceive matrix", () => {
     expect(canReceive("extension", "speak")).toBe(false);
     expect(canReceive("server", "utterance")).toBe(true);
     expect(canReceive("voice", "utterance")).toBe(false);
+  });
+
+  it("allows browser requests server-to-extension and results extension-to-server only", () => {
+    expect(canSend("server", "browser.request")).toBe(true);
+    expect(canReceive("extension", "browser.request")).toBe(true);
+    expect(canSend("extension", "browser.request")).toBe(false);
+    expect(canSend("voice", "browser.request")).toBe(false);
+    expect(canReceive("server", "browser.request")).toBe(false);
+
+    expect(canSend("extension", "browser.result")).toBe(true);
+    expect(canReceive("server", "browser.result")).toBe(true);
+    expect(canSend("server", "browser.result")).toBe(false);
+    expect(canSend("voice", "browser.result")).toBe(false);
+    expect(canReceive("extension", "browser.result")).toBe(false);
+  });
+
+  it("keeps confirmation and approval out of Intent", () => {
+    const intentTypes = Intent.options.map((option) => option.shape.type.value);
+    expect(intentTypes).not.toContain("confirm");
+    expect(intentTypes).not.toContain("approve");
+    expect(intentTypes).not.toContain("submit_now");
   });
 });
 

@@ -19,7 +19,7 @@ export type GateRedemption = GateRefusal | { ok: true; handledByCore?: true };
 export interface GatePort {
   arm(request: ArmRequest): Promise<ArmResult>;
   clear(grantId: string, reason: ConfirmClearedPayload["reason"]): boolean | void | Promise<boolean | void>;
-  redeem(request: { grantId: string; speakId: string; utteranceId: string; phrase: string }): Promise<GateRedemption>;
+  redeem(request: { grantId: string; speakId: string; utteranceId: string; phrase: string; source: "voice" | "typed" }): Promise<GateRedemption>;
   invalidate?(reason: "cancelled" | "page-changed"): void | Promise<void>;
 }
 

@@ -267,6 +267,28 @@ describe("real voice dialogue runner", () => {
       "confirm.cleared after gate refusal",
     );
 
+    const duplicateStateStart = stateCount();
+    send(ws, "confirm.redeem", {
+      grantId: rearmed.payload.grantId,
+      speakId: rearmed.payload.speakId,
+      utteranceId: "u-duplicate-redeem",
+      phrase: rearmed.payload.phrase,
+      source: "typed",
+    });
+    await waitFor(() => stateCount() > duplicateStateStart ? stateCount() : undefined, "duplicate redeem handling");
+    const requests = requestSpy.mock.calls as unknown as Array<[string, string, unknown]>;
+    const coreClicks = requests.flatMap(([role, type, payload]) => {
+      if (role !== "extension" || type !== "act.request" || typeof payload !== "object" || payload === null) return [];
+      const request = payload as ActRequest;
+      return request.action.op === "click" ? [request] : [];
+    });
+    expect(coreClicks).toHaveLength(1);
+    expect(coreClicks[0]).toMatchObject({
+      expectedKind: "submit",
+      gate: { grantId: rearmed.payload.grantId, kind: "submit" },
+    });
+    await done(gateRefusal);
+
     expect(actRequests.every((request) => ["fill", "select", "focus"].includes(request.action.op))).toBe(true);
     expect(actRequests.some((request) => "gate" in request)).toBe(false);
     expect(actRequests.some((request) => (request.action as { op: string }).op === "click")).toBe(false);

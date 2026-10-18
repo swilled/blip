@@ -86,9 +86,10 @@ export function validateBounds(bounds: RunnerBounds): FailureCategory | null {
 export function createDispatchBudget(limit: number) {
   let attempted = 0;
   let admitted = 0;
-  const roles: Record<AgyRole, number> = { intent: 0, repair: 0 };
+  const roles: Record<AgyRole, number> = { intent: 0, repair: 0, content: 0 };
   return {
     beforeDispatch(role: AgyRole): void {
+      if (role === "content") throw new HostileCheckFailure("dispatch-cap-reached");
       attempted += 1;
       if (attempted > limit) throw new HostileCheckFailure("dispatch-cap-reached");
       admitted += 1;

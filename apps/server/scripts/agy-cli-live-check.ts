@@ -22,8 +22,8 @@ import {
 } from "../src/brain/agy/session";
 
 export const LIVE_CHECK_MAX_SECONDS = 900;
-export const LIVE_CHECK_PROMPT_LIMITS = { intent: 4, repair: 1, total: 5 } as const;
-export const LIVE_CHECK_BOOTSTRAP_LIMITS = { intent: 2, repair: 1, total: 3 } as const;
+export const LIVE_CHECK_PROMPT_LIMITS = { intent: 4, repair: 1, content: 0, total: 5 } as const;
+export const LIVE_CHECK_BOOTSTRAP_LIMITS = { intent: 2, repair: 1, content: 0, total: 3 } as const;
 export const LIVE_CHECK_TOTAL_DISPATCH_LIMIT = 8;
 export const LIVE_CHECK_APPROVAL_LINE = "phase04DiagnosticApproval: approve-04-18-repair-context";
 const LIVE_CHECK_APPROVAL_UNUSED_LINE = "approvalUsed: false";
@@ -104,9 +104,9 @@ export type LiveCheckStartupEvidence = Record<AgyRole, LiveCheckStartupRoleEvide
 export type LiveCheckResult = LiveCheckProbeEvidence & {
   status: "offline" | "completed" | "externally_blocked" | "timeout" | "failed";
   elapsedMs: number;
-  promptCounts: { intent: number; repair: number; total: number };
-  bootstrapCounts: { intent: number; repair: number; total: number };
-  dispatchCounts: { intent: number; repair: number; total: number };
+  promptCounts: { intent: number; repair: number; content: number; total: number };
+  bootstrapCounts: { intent: number; repair: number; content: number; total: number };
+  dispatchCounts: { intent: number; repair: number; content: number; total: number };
   rejectingRole: AgyRole | null;
   toolCallBlocked: boolean;
   startupDiagnostics: LiveCheckStartupEvidence;
@@ -532,15 +532,15 @@ function safeEvidence(evidence: LiveCheckProbeEvidence): LiveCheckProbeEvidence 
 }
 
 function emptyCounts(): LiveCheckResult["promptCounts"] {
-  return { intent: 0, repair: 0, total: 0 };
+  return { intent: 0, repair: 0, content: 0, total: 0 };
 }
 
 function emptyBootstrapCounts(): LiveCheckResult["bootstrapCounts"] {
-  return { intent: 0, repair: 0, total: 0 };
+  return { intent: 0, repair: 0, content: 0, total: 0 };
 }
 
 function emptyDispatchCounts(): LiveCheckResult["dispatchCounts"] {
-  return { intent: 0, repair: 0, total: 0 };
+  return { intent: 0, repair: 0, content: 0, total: 0 };
 }
 
 const CLI_EVENT_CATEGORIES: AgyCliEventCategory[] = ["init", "user", "assistant", "tool", "result", "other"];
@@ -563,12 +563,12 @@ function emptyStartupRoleEvidence(): LiveCheckStartupRoleEvidence {
 }
 
 function emptyStartupEvidence(): LiveCheckStartupEvidence {
-  return { intent: emptyStartupRoleEvidence(), repair: emptyStartupRoleEvidence() };
+  return { intent: emptyStartupRoleEvidence(), repair: emptyStartupRoleEvidence(), content: emptyStartupRoleEvidence() };
 }
 
 function recordStartupDiagnostic(evidence: LiveCheckStartupEvidence, diagnostic: AgyStartupDiagnostic): void {
   if (typeof diagnostic !== "object" || diagnostic === null ||
-    (diagnostic.role !== "intent" && diagnostic.role !== "repair")) return;
+    (diagnostic.role !== "intent" && diagnostic.role !== "repair" && diagnostic.role !== "content")) return;
   const role = evidence[diagnostic.role];
   if (diagnostic.kind === "cli_event" && CLI_EVENT_CATEGORIES.includes(diagnostic.event)) {
     role.firstEvent ??= diagnostic.event;
@@ -617,7 +617,7 @@ function safeStartupEvidence(evidence: LiveCheckStartupEvidence): LiveCheckStart
         : null,
     };
   };
-  return { intent: safeRole("intent"), repair: safeRole("repair") };
+  return { intent: safeRole("intent"), repair: safeRole("repair"), content: safeRole("content") };
 }
 
 /** Exclusive file creation makes an approval token single-use, including across concurrent processes. */
@@ -657,11 +657,11 @@ export async function runOfflineFirstLiveCheck(
     ...safeEvidence(evidence),
     status,
     elapsedMs: Math.max(0, Math.round(now() - startedAt)),
-    promptCounts: { intent: counts.intent, repair: counts.repair, total: counts.total },
-    bootstrapCounts: { intent: bootstraps.intent, repair: bootstraps.repair, total: bootstraps.total },
-    dispatchCounts: { intent: dispatches.intent, repair: dispatches.repair, total: dispatches.total },
+    promptCounts: { intent: counts.intent, repair: counts.repair, content: counts.content, total: counts.total },
+    bootstrapCounts: { intent: bootstraps.intent, repair: bootstraps.repair, content: bootstraps.content, total: bootstraps.total },
+    dispatchCounts: { intent: dispatches.intent, repair: dispatches.repair, content: dispatches.content, total: dispatches.total },
     startupDiagnostics: safeStartupEvidence(startupDiagnostics),
-    rejectingRole: role === "intent" || role === "repair" ? role : null,
+    rejectingRole: role === "intent" || role === "repair" || role === "content" ? role : null,
     toolCallBlocked: toolCallBlocked === true,
     subsequentPromptsAfterBlock: 0,
   });

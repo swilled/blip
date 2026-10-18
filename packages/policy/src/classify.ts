@@ -20,6 +20,8 @@ export type ActionClassification = {
   reasons: string[];
 };
 
+export type BrowserLinkNavigationSafety = "same-origin-safe-get" | "confirmation-required" | "unsupported";
+
 /** Live facts for a native or custom field discovered in the page. */
 export type FieldFacts = {
   tag?: string;
@@ -46,6 +48,7 @@ const DELETE_PATTERN = /\b(?:delete|remove)\b|\bcancel[\s_-]+account\b/;
 const SEND_PATTERN = /\b(?:send|post|publish|share)\b/;
 const NEVER_SAFE_PATTERN = /\b(?:next|continue|save|confirm|finish)\b/;
 const SAFE_TEXT_PATTERN = /^(?:close(?:\s+(?:dialog|window|modal|panel))?|dismiss|add another(?:\s+.+)?)$/;
+const BROWSER_LINK_ACTION_PATTERN = /\b(?:pay|buy|purchase|order|checkout|donate|delete|remove|cancel|unsubscribe|logout|log[\s_-]*out|sign[\s_-]*out|send|reply|post|publish|share|submit|save|confirm|finish|next|continue|approve|accept|decline|reject|join|leave|subscribe|follow|unfollow|like|update|create|add|invite|register|download|withdraw)\b/;
 const TEXT_LIMIT = 500;
 
 function normalize(value: string): string {
@@ -61,6 +64,44 @@ function classifyGatedText(haystack: string): ActionClassification | undefined {
   if (DELETE_PATTERN.test(haystack)) return result("delete", "text or link destination matches a deletion term");
   if (SEND_PATTERN.test(haystack)) return result("send", "text or link destination matches a send or publish term");
   return undefined;
+}
+
+/**
+ * Classify a user-selected browser link separately from form clicks. Ordinary same-origin
+ * HTTP(S) anchors can use the browser's GET navigation path; cross-origin and action-like
+ * destinations still require an exact spoken confirmation. This never changes button or
+ * form-action classification.
+ */
+export function classifyBrowserLink(facts: ActionFacts & { download?: boolean }): BrowserLinkNavigationSafety {
+  const tag = normalize(facts.tag ?? "");
+  const text = normalize(facts.text ?? "");
+  const href = facts.href ?? "";
+  const target = normalize(facts.target ?? "");
+  const rawHaystack = [text, href, target].filter(Boolean).join(" ");
+  if (tag !== "a" || facts.download === true ||
+      target !== "" && target !== "_self" || !href || !facts.origin || rawHaystack.length > TEXT_LIMIT) {
+    return "unsupported";
+  }
+  const linkOrigin = sameOriginLink(href, facts.origin);
+  if (linkOrigin === "malformed") return "unsupported";
+  if (linkOrigin === "same") {
+    try {
+      const page = new URL(facts.origin);
+      const destination = new URL(href, page);
+      if (destination.pathname === page.pathname && destination.search === page.search) {
+        // Same-document fragment navigation can run page handlers without issuing a GET.
+        return "confirmation-required";
+      }
+    } catch {
+      return "unsupported";
+    }
+  }
+
+  const haystack = normalize(rawHaystack).slice(0, TEXT_LIMIT);
+  if (classifyGatedText(haystack) !== undefined || NEVER_SAFE_PATTERN.test(haystack) || BROWSER_LINK_ACTION_PATTERN.test(haystack)) {
+    return "confirmation-required";
+  }
+  return linkOrigin === "same" ? "same-origin-safe-get" : "confirmation-required";
 }
 
 function sameOriginLink(href: string, origin: string): "same" | "cross" | "malformed" {

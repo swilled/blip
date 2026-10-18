@@ -1,5 +1,5 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import type { ActionKind, FormModel } from "@blip/protocol";
+import { BrowserPageIdentity, type ActionKind, type BrowserPageIdentity as BrowserPageIdentityValue, type FormModel } from "@blip/protocol";
 import { phraseForKind } from "@blip/policy/confirmation";
 
 const GRANT_TTL_MS = 30_000;
@@ -8,6 +8,22 @@ export type GrantBinding = {
   targetId: string;
   kind: ActionKind;
   model: Pick<FormModel, "url" | "snapshotVersion" | "fields">;
+  /** Extra task/draft authorization data. Never contains raw draft or recipient values. */
+  pageTask?: PageTaskSendBinding;
+};
+
+export type PageTaskSendBinding = {
+  taskId: string;
+  draftHash: string;
+  recipientFieldId: string;
+  recipientValueHash: string;
+  sourceItemId: string;
+  sourceIdentity: BrowserPageIdentityValue;
+  tabId: number;
+  operation: "send";
+  targetId: string;
+  targetKind: "send";
+  speakId: string;
 };
 
 export type ArmedGrant = {
@@ -43,7 +59,28 @@ type PendingGrant = {
   expiresAt: number;
 };
 
+const SHA256_HEX = /^[a-f0-9]{64}$/u;
+const SAFE_BINDING_ID = /^[^\u0000-\u001f\u007f]{1,200}$/u;
+
+function validPageTaskBinding(binding: GrantBinding): boolean {
+  const task = binding.pageTask;
+  if (task === undefined) return true;
+  const identity = BrowserPageIdentity.safeParse(task.sourceIdentity);
+  return binding.kind === "send" && binding.targetId === task.targetId && task.operation === "send" &&
+    task.targetKind === "send" &&
+    typeof task.taskId === "string" && task.taskId.length <= 64 && SAFE_BINDING_ID.test(task.taskId) &&
+    SHA256_HEX.test(task.draftHash) &&
+    typeof task.recipientFieldId === "string" && SAFE_BINDING_ID.test(task.recipientFieldId) &&
+    SHA256_HEX.test(task.recipientValueHash) &&
+    typeof task.sourceItemId === "string" && task.sourceItemId.length <= 200 && SAFE_BINDING_ID.test(task.sourceItemId) &&
+    identity.success && identity.data.tabId === task.tabId && identity.data.pageUrl === binding.model.url &&
+    Number.isSafeInteger(task.tabId) && task.tabId >= 0 &&
+    typeof task.targetId === "string" && task.targetId.length <= 200 && SAFE_BINDING_ID.test(task.targetId) &&
+    typeof task.speakId === "string" && task.speakId.length <= 64 && SAFE_BINDING_ID.test(task.speakId);
+}
+
 function fingerprint(binding: GrantBinding): Buffer {
+  if (!validPageTaskBinding(binding)) throw new TypeError("invalid page-task grant binding");
   const fields = binding.model.fields
     .map((field, inputOrder) => ({
       inputOrder,
@@ -65,8 +102,35 @@ function fingerprint(binding: GrantBinding): Buffer {
     binding.model.url,
     binding.model.snapshotVersion,
     fields,
+    binding.pageTask === undefined ? null : [
+      binding.pageTask.taskId,
+      binding.pageTask.draftHash,
+      binding.pageTask.recipientFieldId,
+      binding.pageTask.recipientValueHash,
+      binding.pageTask.sourceItemId,
+      [
+        binding.pageTask.sourceIdentity.captureId,
+        binding.pageTask.sourceIdentity.captureRevision,
+        binding.pageTask.sourceIdentity.tabId,
+        binding.pageTask.sourceIdentity.pageUrl,
+      ],
+      binding.pageTask.tabId,
+      binding.pageTask.operation,
+      binding.pageTask.targetId,
+      binding.pageTask.targetKind,
+      binding.pageTask.speakId,
+    ],
   ]);
   return createHash("sha256").update(canonical, "utf8").digest();
+}
+
+/** Compare complete privacy-preserving grant bindings without exposing their canonical form. */
+export function grantBindingsMatch(left: GrantBinding, right: GrantBinding): boolean {
+  try {
+    return timingSafeEqual(fingerprint(left), fingerprint(right));
+  } catch {
+    return false;
+  }
 }
 
 /** Create an in-memory, synchronous store for privacy-preserving one-use grants. */

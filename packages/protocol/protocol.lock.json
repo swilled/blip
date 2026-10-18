@@ -1,6 +1,6 @@
 {
   "protocolVersion": 1,
-  "frozenAt": "2026-10-17",
+  "frozenAt": "2026-10-18",
   "messages": {
     "act.request": {
       "senders": [
@@ -24,6 +24,22 @@
       ],
       "receivers": [
         "extension"
+      ]
+    },
+    "browser.request": {
+      "senders": [
+        "server"
+      ],
+      "receivers": [
+        "extension"
+      ]
+    },
+    "browser.result": {
+      "senders": [
+        "extension"
+      ],
+      "receivers": [
+        "server"
       ]
     },
     "confirm.armed": {

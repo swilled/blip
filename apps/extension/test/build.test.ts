@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { EXTENSION_ID, EXTENSION_PUBLIC_KEY } from "@blip/protocol";
 import { isAllowedSocketUrl } from "../src/background/socket.js";
 
 const manifestTemplate = JSON.parse(
-  readFileSync(path.join(process.cwd(), "apps", "extension", "manifest.template.json"), "utf8"),
+  readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "manifest.template.json"), "utf8"),
 ) as Record<string, unknown>;
 
 describe("MV3 extension build inputs", () => {
@@ -16,7 +16,7 @@ describe("MV3 extension build inputs", () => {
     expect(manifestTemplate["key"]).toBe("__EXTENSION_PUBLIC_KEY__");
     expect(EXTENSION_PUBLIC_KEY).toBeTruthy();
     expect(EXTENSION_ID).toBe("gipmmdbdhebfpfoabhdpkenijaljeclp");
-    expect(manifestTemplate["permissions"]).toEqual(["tabs", "scripting", "alarms", "storage", "webNavigation"]);
+    expect(manifestTemplate["permissions"]).toEqual(["tabs", "scripting", "alarms", "storage", "webNavigation", "search"]);
     expect(manifestTemplate["host_permissions"]).toEqual(["<all_urls>"]);
     expect(manifestTemplate).not.toHaveProperty("externally_connectable");
     expect(manifestTemplate).not.toHaveProperty("web_accessible_resources");

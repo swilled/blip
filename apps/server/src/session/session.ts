@@ -1,6 +1,9 @@
 import { newId, type ActionKind, type DialogueStateName, type FormModel, type PayloadOf, type Snapshot, type StatePayload } from "@blip/protocol";
 import { createGrantStore, type GrantBinding, type GrantStore } from "../act/grants";
 import { buildBaselineFormModel, summarizeFormModel } from "../baseline";
+import { createBrowserAuthorizationStore, type BrowserAuthorization, type BrowserAuthorizationStore } from "../browser/authorization";
+import type { BrowserCapture } from "../browser/commands";
+import { createPageTask, pageTaskMatchesCapture, type ActivePageTask, type NewPageTask } from "../browser/task-state";
 
 export const SERVER_VERSION = "0.1.0";
 
@@ -69,20 +72,11 @@ export class Session {
   lastSpeechDoneAt: number | null = null;
   speechRate = 1;
   voiceCapture: { epoch: number; eligible: boolean; ended: boolean; startedAt: number; speechRevision: number; snapshotRevision: number; grantId: string | null } | null = null;
-  get voiceConnected(): boolean { return this.#voiceConnected; }
-  set voiceConnected(value: boolean) {
-    if (value || value !== this.#voiceConnected) {
-      this.voiceEpoch++;
-      this.voiceCapture = null;
-      this.grants.clear();
-      this.pendingGatedAction = null;
-      this.#speech.clear();
-      this.activeSpeakId = null;
-      this.lastSpeechDoneAt = null;
-      this.speechRate = 1;
-    }
-    this.#voiceConnected = value;
-  }
+  /** Current bounded browser capture and one-use authorization are separate from form submit grants. */
+  #browserCapture: BrowserCapture | null = null;
+  /** One bounded, identity-bound page task; proposed text is never stored as observed draft state. */
+  activePageTask: ActivePageTask | null = null;
+  readonly browserAuthorizations: BrowserAuthorizationStore = createBrowserAuthorizationStore();
   #snapshotOrder: { tabId: number; version: number; capturedAt: number } | null = null;
   #snapshotRevision = 0;
 
@@ -145,6 +139,18 @@ export class Session {
     return this.#extensionConnected;
   }
 
+  get browserCapture(): BrowserCapture | null {
+    return this.#browserCapture;
+  }
+
+  /** Invalidate a task immediately whenever the accepted capture stops proving its source binding. */
+  set browserCapture(value: BrowserCapture | null) {
+    if (this.activePageTask !== null && !pageTaskMatchesCapture(this.activePageTask, value, this.tabId)) {
+      this.clearPageTask();
+    }
+    this.#browserCapture = value;
+  }
+
   /** Monotonic process-local generation for rejecting repair work from replaced accepted snapshots. */
   get snapshotRevision(): number {
     return this.#snapshotRevision;
@@ -161,6 +167,8 @@ export class Session {
    * until the next fetch, but `ensureSnapshot` refuses to speak about an unconnected page.
    */
   set extensionConnected(value: boolean) {
+    const browserAuthorization = this.browserAuthorizations.invalidate();
+    this.browserCapture = null;
     if (value) {
       this.clearPendingGatedAction();
       this.stale = true;
@@ -169,12 +177,110 @@ export class Session {
       this.clearPendingGatedAction();
     }
     this.#extensionConnected = value;
+    if (browserAuthorization !== null) this.dialogue = this.model !== null && value && !this.stale ? "ready" : "no-page";
+  }
+
+  get voiceConnected(): boolean {
+    return this.#voiceConnected;
+  }
+
+  set voiceConnected(value: boolean) {
+    if (value || value !== this.#voiceConnected) {
+      this.voiceEpoch++;
+      this.voiceCapture = null;
+      this.grants.clear();
+      this.pendingGatedAction = null;
+      this.#speech.clear();
+      this.activeSpeakId = null;
+      this.lastSpeechDoneAt = null;
+      this.speechRate = 1;
+    }
+    if (!value || this.#voiceConnected) {
+      this.clearBrowserAuthorization();
+      this.browserCapture = null;
+      this.clearPageTask();
+    }
+    this.#voiceConnected = value;
+  }
+
+  get pendingBrowserAuthorization(): BrowserAuthorization | null {
+    return this.browserAuthorizations.pending;
+  }
+
+  clearBrowserAuthorization(): BrowserAuthorization | null {
+    const pending = this.browserAuthorizations.invalidate();
+    if (pending !== null) this.dialogue = this.model !== null && this.extensionConnected && !this.stale ? "ready" : "no-page";
+    return pending;
+  }
+
+  applyBrowserCapture(capture: BrowserCapture): void {
+    const previous = this.browserCapture?.identity;
+    const next = capture.identity;
+    const sameIdentity = previous !== undefined && next !== undefined &&
+      previous.captureId === next.captureId && previous.captureRevision === next.captureRevision &&
+      previous.tabId === next.tabId && previous.pageUrl === next.pageUrl;
+    if (previous !== undefined && next !== undefined && !sameIdentity) {
+      this.clearBrowserAuthorization();
+      this.stale = true;
+    }
+    const matchesCapture = (record: { identity: NonNullable<BrowserCapture["identity"]> }) => next !== undefined &&
+      record.identity.captureId === next.captureId && record.identity.captureRevision === next.captureRevision &&
+      record.identity.tabId === next.tabId && record.identity.pageUrl === next.pageUrl;
+    this.browserCapture = {
+      ...capture,
+      blocks: next === undefined ? [] : capture.blocks.filter(matchesCapture),
+      links: next === undefined ? [] : capture.links.filter(matchesCapture),
+      ...(capture.items !== undefined ? { items: next === undefined ? [] : capture.items.filter(matchesCapture) } : {}),
+    };
+  }
+
+  /** Replace the sole active page task after revalidating it against the exact accepted capture. */
+  setActivePageTask(input: NewPageTask): boolean {
+    const task = createPageTask(input);
+    if (task === null || !pageTaskMatchesCapture(task, this.browserCapture, this.tabId)) return false;
+    this.clearPageTask();
+    this.activePageTask = task;
+    return true;
+  }
+
+  /** Bind a later one-use grant to the active task without retaining a model proposal. */
+  associatePageTaskGrant(grantId: string): boolean {
+    const current = this.activePageTask;
+    if (current === null) return false;
+    const updated = createPageTask({ ...current, associatedGrantId: grantId });
+    if (updated === null || !pageTaskMatchesCapture(updated, this.browserCapture, this.tabId)) return false;
+    this.activePageTask = updated;
+    return true;
+  }
+
+  /** Scrub retained text and draft bindings, and revoke a grant created for this task. */
+  clearPageTask(): ActivePageTask | null {
+    const task = this.activePageTask;
+    if (task === null) return null;
+    const grantId = task.associatedGrantId;
+    if (grantId !== null) {
+      this.grants.clear(grantId);
+      if (this.pendingGatedAction?.grantId === grantId) this.clearPendingGatedAction();
+    }
+    task.sourceExcerpt = "";
+    task.draftTargetId = null;
+    task.recipientBinding = null;
+    task.actionTargetBinding = null;
+    task.lastObservedDraftValue = null;
+    task.associatedGrantId = null;
+    this.activePageTask = null;
+    return task;
   }
 
   /** Drop any pending confirmation and its inaccessible one-use grant. */
   clearPendingGatedAction(): PendingGatedAction | null {
     const pending = this.pendingGatedAction;
     if (pending?.grantId !== undefined) this.grants.clear(pending.grantId);
+    const taskGrant = pending?.binding.pageTask;
+    if (pending !== null && taskGrant !== undefined && this.activePageTask?.taskId === taskGrant.taskId &&
+        this.activePageTask.associatedGrantId === pending.grantId) {
+      this.activePageTask.associatedGrantId = null;
+    }
     this.pendingGatedAction = null;
     return pending;
   }
@@ -192,6 +298,13 @@ export class Session {
     }
 
     const model = buildBaselineFormModel(snapshot);
+    this.clearBrowserAuthorization();
+    if (this.activePageTask !== null && (
+      this.activePageTask.identity.tabId !== snapshot.tabId || this.activePageTask.identity.pageUrl !== model.url
+    )) this.clearPageTask();
+    if (this.browserCapture?.identity !== undefined && (
+      this.browserCapture.identity.tabId !== snapshot.tabId || this.browserCapture.identity.pageUrl !== model.url
+    )) this.browserCapture = null;
     const pending = this.pendingGatedAction;
     if (pending !== null && (
       snapshot.tabId !== pending.tabId ||

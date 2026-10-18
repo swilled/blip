@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActionKind } from "@blip/protocol";
-import { matchesConfirmationPhrase, phraseForKind } from "@blip/policy/confirmation";
+import { matchesConfirmationPhrase, matchesExactConfirmationPhrase, phraseForKind } from "@blip/policy/confirmation";
 
 const phrases: ReadonlyArray<readonly [ActionKind, string]> = [
   ["submit", "submit survey"],
@@ -15,6 +15,24 @@ describe("confirmation phrases", () => {
     expect(phraseForKind(kind)).toBe(phrase);
     expect(matchesConfirmationPhrase(kind, phrase)).toBe(true);
   });
+
+  it("keeps existing action phrases and adds the exact email-message send phrase", () => {
+    expect(Object.fromEntries(phrases.map(([kind]) => [kind, phraseForKind(kind)]))).toEqual({
+      submit: "submit survey",
+      pay: "confirm payment",
+      delete: "confirm deletion",
+      send: "confirm sending",
+      "navigate-cross-domain": "leave this site",
+    });
+    expect(phraseForKind("email-message-send")).toBe("send this email");
+    expect(matchesExactConfirmationPhrase("send this email", " SEND   THIS email! ")).toBe(true);
+  });
+
+  it.each(["yes", "okay", "yeah", "sure", "confirm sending", "send the email", "send this email now"]) (
+    "does not treat %j as the exact email-message send phrase", (text) => {
+      expect(matchesExactConfirmationPhrase("send this email", text)).toBe(false);
+    },
+  );
 
   it.each(phrases)("normalizes case, whitespace, and terminal punctuation for %s", (kind, phrase) => {
     const irregular = `  ${phrase.toUpperCase().replace(/ /g, "\t\n   ")}...?!  `;

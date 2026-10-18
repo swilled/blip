@@ -66,8 +66,8 @@ const live = {
 };
 
 describe("protocol.lock.json (additive-only freeze)", () => {
-  it("lists all 25 message types and matches the live registry", () => {
-    expect(Object.keys(lock.messages)).toHaveLength(25);
+  it("lists all 27 message types and matches the live registry", () => {
+    expect(Object.keys(lock.messages)).toHaveLength(27);
     expect(lockViolations(lock, MESSAGES, live)).toEqual([]);
   });
 

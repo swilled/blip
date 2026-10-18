@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_PORT, EXTENSION_ID, LOOPBACK_HOST, WS_PATH, newId } from "@blip/protocol";
 import { log } from "./log";
-import { createHub, type Handlers, type Hub } from "./hub/hub";
+import { createHub, type HandlerContext, type Handlers, type Hub } from "./hub/hub";
 import { hostAllowed, parseAllowedOrigin } from "./hub/guard";
 import { createStaticHandler, type StaticRoot } from "./hub/static";
 import { Session, type Brain } from "./session/session";
@@ -13,7 +13,7 @@ import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
 import { createAgyProvider, type AgyProvider } from "./brain/agy/provider";
 import { RepairCoordinator, type RepairDiagnostic, type RepairProvider } from "./brain/agy/repair-coordinator";
 import type { AgyCliAdapter, AgySessionOptions } from "./brain/agy/session";
-import { handleDialogueFallback, handleUtterance, sayRepeat, sayStop } from "./turn";
+import { handleBrowserSpeakDone, handleDialogueFallback, handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
 import { createGatePort } from "./act/gate-port";
 import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
@@ -22,6 +22,8 @@ import { createCoreDialogueGatePort } from "./voice/core-gate-port";
 import type { SpeechOutput } from "./voice/speech-routing";
 import { createTranscriptionHttp } from "./voice/transcription-http";
 import type { TranscribeAudio } from "./voice/local-whisper";
+import { parsePageTaskCommand } from "./browser/tasks";
+import { matchGrammar } from "./brain/grammar";
 
 function clearPendingThroughVoiceGate(
   ctx: GatedContext,
@@ -246,6 +248,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     },
     "speak.done": ({ message, hub: h, session: s }) => {
       if (message.type !== "speak.done") return;
+      if (handleBrowserSpeakDone({ hub: h, session: s, clock, ...(schedule !== undefined ? { schedule } : {}) }, message.payload)) return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       handleGatedSpeakDone(gatedContext, message.payload);
     },
@@ -260,6 +263,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         ...(schedule !== undefined ? { schedule } : {}),
       };
       clearPendingThroughVoiceGate(gatedContext, "cancelled", "output-mode-changed");
+      s.clearBrowserAuthorization();
+      s.browserCapture = null;
       // An empty interrupt frame cancels current browser speech without adding a new spoken line.
       h.send("voice", "speak", { speakId: newId(), text: "", category: "answer", interrupt: true });
       h.setOutputMode(message.payload.outputMode);
@@ -268,16 +273,19 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       if (message.type !== "ptt" || message.payload.state !== "start") return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       clearPendingThroughVoiceGate(gatedContext, "cancelled", "push-to-talk-interrupted");
+      s.clearBrowserAuthorization();
     },
     control: ({ message, hub: h, session: s }) => {
       if (message.type !== "control") return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       if (message.payload.cmd === "stop") {
         clearPendingThroughVoiceGate(gatedContext, "cancelled", "stop-command");
+        s.clearBrowserAuthorization();
         return sayStop(h, s);
       }
       if (message.payload.cmd === "repeat") {
         clearPendingThroughVoiceGate(gatedContext, "cancelled", "repeat-command");
+        s.clearBrowserAuthorization();
         return sayRepeat(h, s);
       }
       // reconnect-browser has nothing to reconnect yet.
@@ -292,6 +300,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       clearPendingThroughVoiceGate(gatedContext, "page-changed", "page-changed");
       s.stale = true;
+      s.clearBrowserAuthorization();
+      s.browserCapture = null;
       void refresher.request("refresh").then((result) => {
         if (result.ok) repairCoordinator?.schedulePending();
       });
@@ -342,7 +352,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   };
 
   if (options.dialogueRunner) {
-    Object.assign(handlers, createDialogueHandlers({
+    const dialogueHandlers = createDialogueHandlers({
       gate: createCoreDialogueGatePort(gatedContext),
       refresher,
       now: clock,
@@ -362,7 +372,110 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
           dialogueManaged: true,
         });
       },
-    }));
+    });
+    Object.assign(handlers, dialogueHandlers);
+
+    const taskBoundGrant = (context: HandlerContext): boolean =>
+      context.session.pendingGatedAction?.binding.pageTask !== undefined;
+    const clearTaskState = (
+      context: HandlerContext,
+      reason: "cancelled" | "page-changed",
+      code: string,
+    ): void => {
+      if (context.session.pendingGatedAction?.binding.pageTask !== undefined) {
+        clearPendingThroughVoiceGate(gatedContext, reason, code);
+      }
+      context.session.clearPageTask();
+    };
+    const runRunnerHandler = (type: keyof Handlers, context: HandlerContext) => dialogueHandlers[type]?.(context);
+
+    // Keep ordinary form speech in the reducer, while explicit Phase 8 commands use the same
+    // deterministic turn, browser, task, and Executor path as non-runner server mode.
+    handlers.utterance = (context) => {
+      if (context.role !== "voice" || context.message.type !== "utterance") return runRunnerHandler("utterance", context);
+      const taskCommand = parsePageTaskCommand(context.message.payload.text);
+      const pending = context.session.pendingGatedAction;
+      if (taskCommand !== null && (pending === null || pending.binding.pageTask !== undefined)) {
+        if (taskCommand.type === "cancel") clearTaskState(context, "cancelled", "page-task-cancelled");
+        return defaultHandlers.utterance?.(context);
+      }
+
+      const localCommand = matchGrammar(context.message.payload.text);
+      if (pending?.binding.pageTask !== undefined && (localCommand?.type === "stop" || localCommand?.type === "repeat")) {
+        clearTaskState(context, "cancelled", `page-task-${localCommand.type}`);
+      }
+      return runRunnerHandler("utterance", context);
+    };
+
+    // Task grants are server-owned and have no reducer-private confirm entry. Forward their exact
+    // payload to the existing voice gate adapter; non-task confirmation stays reducer-owned.
+    handlers["confirm.redeem"] = (context) =>
+      taskBoundGrant(context) ? defaultHandlers["confirm.redeem"]?.(context) : runRunnerHandler("confirm.redeem", context);
+
+    handlers["speak.done"] = (context) => {
+      if (context.role !== "voice" || context.message.type !== "speak.done") return runRunnerHandler("speak.done", context);
+      const done = context.message.payload;
+      const pending = context.session.pendingGatedAction;
+      if (pending?.binding.pageTask !== undefined && pending.speakId === done.speakId) {
+        return defaultHandlers["speak.done"]?.(context);
+      }
+      if (pending?.binding.pageTask !== undefined && done.interrupted) {
+        clearTaskState(context, "cancelled", "page-task-speech-interrupted");
+      } else if (context.session.activePageTask !== null && done.interrupted) {
+        context.session.clearPageTask();
+      }
+      // A non-gated task answer's tracked completion also belongs to core; reducer lifecycle
+      // remains untouched because that task speech was never emitted by the reducer.
+      if (context.session.activePageTask !== null && context.session.activeSpeakId === done.speakId) {
+        return defaultHandlers["speak.done"]?.(context);
+      }
+      return runRunnerHandler("speak.done", context);
+    };
+
+    handlers.control = (context) => {
+      if (context.role === "voice" && context.message.type === "control" &&
+          (context.message.payload.cmd === "stop" || context.message.payload.cmd === "repeat")) {
+        if (context.session.activePageTask !== null || taskBoundGrant(context)) {
+          clearTaskState(context, "cancelled", `page-task-${context.message.payload.cmd}`);
+        }
+        context.session.clearBrowserAuthorization();
+      }
+      return runRunnerHandler("control", context);
+    };
+
+    handlers.ptt = (context) => {
+      if (context.role === "voice" && context.message.type === "ptt" && context.message.payload.state === "start") {
+        if (context.session.activePageTask !== null || taskBoundGrant(context)) {
+          clearTaskState(context, "cancelled", "page-task-push-to-talk-interrupted");
+        }
+        context.session.clearBrowserAuthorization();
+      }
+      return runRunnerHandler("ptt", context);
+    };
+
+    handlers.settings = (context) => {
+      if (context.role === "voice" && context.message.type === "settings" &&
+          context.session.outputMode !== context.message.payload.outputMode) {
+        if (context.session.activePageTask !== null || taskBoundGrant(context)) {
+          clearTaskState(context, "cancelled", "page-task-output-mode-changed");
+        }
+        context.session.clearBrowserAuthorization();
+        context.session.browserCapture = null;
+      }
+      return runRunnerHandler("settings", context);
+    };
+
+    handlers["page.changed"] = (context) => {
+      if (context.role === "extension" && context.message.type === "page.changed") {
+        if (context.session.activePageTask !== null || taskBoundGrant(context)) {
+          clearTaskState(context, "page-changed", "page-task-page-changed");
+        }
+        context.session.clearBrowserAuthorization();
+        context.session.browserCapture = null;
+        context.session.stale = true;
+      }
+      return runRunnerHandler("page.changed", context);
+    };
   }
 
   if (options.handlersFactory !== undefined) {

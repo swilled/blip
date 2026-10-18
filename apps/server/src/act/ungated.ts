@@ -4,6 +4,7 @@ import type { Hub } from "../hub/hub";
 import { fieldValueReply } from "../reply";
 import type { Refresher } from "../session/refresh";
 import type { Session } from "../session/session";
+import { containsSensitivePageText } from "../brain/agy/privacy";
 
 const ACT_TIMEOUT_MS = 5000;
 const MSG_NO_EXTENSION = "I can't see the page because the browser extension is not connected.";
@@ -13,6 +14,9 @@ const MSG_PRIVATE_FIELD = "That is a private field. You can type it now.";
 
 export type UngatedContext = { hub: Hub; session: Session; refresher: Refresher; freshnessMs: number };
 export type UngatedReply = { text: string; category: "answer" | "error" };
+export type ObservedTextWriteResult =
+  | { ok: true; observedValue: string }
+  | { ok: false; reason: "no-extension" | "stale-page" | "unsupported-target" | "write-failed" | "missing-observation" };
 
 function failure(text = MSG_ACT_FAILED): UngatedReply {
   return { text, category: "error" };
@@ -103,6 +107,48 @@ async function sendAct(
   if (result.payload.error === "sensitive-field") return { ok: false, error: "sensitive-field", privateField: true };
   if (!result.payload.ok) return { ok: false, error: result.payload.error ?? "exception" };
   return { ok: true, observedValue: result.payload.observedValue ?? null };
+}
+
+/**
+ * Fill one deterministic supported text field and return only the value both ActResult and the
+ * accepted post-write snapshot observed. This stays on the existing act.request boundary and has
+ * no click/send path.
+ */
+export async function executeObservedTextFieldWrite(
+  ctx: UngatedContext,
+  targetId: string,
+  value: string,
+  validateCurrent: () => boolean = () => true,
+): Promise<ObservedTextWriteResult> {
+  const { session } = ctx;
+  if (!session.extensionConnected) return { ok: false, reason: "no-extension" };
+  const refreshed = await ctx.refresher.request("refresh");
+  if (!refreshed.ok || session.model === null || session.stale || !validateCurrent()) {
+    return { ok: false, reason: "stale-page" };
+  }
+  const model = session.model;
+  const tabId = session.tabId;
+  const field = model.fields.find((candidate) => candidate.id === targetId);
+  if (tabId === null || field === undefined || field.disabled || field.sensitive !== "none" ||
+      (field.type !== "text" && field.type !== "textarea") || value.trim() === "" ||
+      Array.from(value).length > 1_000 || containsSensitivePageText(value)) {
+    return { ok: false, reason: "unsupported-target" };
+  }
+
+  const write = await sendAct(ctx, field, { op: "fill", targetId, value }, true);
+  if (!write.ok || write.observedValue === null) {
+    return { ok: false, reason: write.ok ? "missing-observation" : "write-failed" };
+  }
+  if (session.stale || session.model === null || session.tabId !== tabId ||
+      session.model.url !== model.url) return { ok: false, reason: "stale-page" };
+  const observedField = session.model.fields.find((candidate) => candidate.id === targetId);
+  if (observedField === undefined || observedField.disabled || observedField.sensitive !== "none" ||
+      observedField.type !== "text" && observedField.type !== "textarea" ||
+      observedField.value !== write.observedValue || Array.from(write.observedValue).length > 4_000 ||
+      containsSensitivePageText(write.observedValue)) {
+    return { ok: false, reason: "missing-observation" };
+  }
+  return { ok: true, observedValue: write.observedValue };
 }
 
 /** The Phase 2 action boundary: only field fills and focus requests can reach the extension. */
