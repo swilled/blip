@@ -1,5 +1,9 @@
 export type SpeechRateDirection = "faster" | "slower";
 
+export function parseSpeechRateCommand(_text: string): SpeechRateDirection | null {
+  return null;
+}
+
 export interface SpeechRateAdjustment {
   rate: number;
   limit: "fastest" | "slowest" | null;
