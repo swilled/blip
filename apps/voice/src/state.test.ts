@@ -47,7 +47,7 @@ describe("voice state", () => {
     const { s } = make();
     s.socketOpened();
     expect(s.holdStart()).toEqual({ cancelSpeech: false, started: true });
-    expect(s.get()).toBe("listening");
+    expect(s.get()).toBe("starting");
   });
   it("hold start while speaking -> listening and requests cancelSpeech", () => {
     const { s } = make();
@@ -55,14 +55,14 @@ describe("voice state", () => {
     s.messageSent();
     s.replyReceived();
     expect(s.holdStart()).toEqual({ cancelSpeech: true, started: true });
-    expect(s.get()).toBe("listening");
+    expect(s.get()).toBe("starting");
   });
   it("hold start while already listening is ignored", () => {
     const { s, seen } = make();
     s.socketOpened();
     s.holdStart();
     expect(s.holdStart()).toEqual({ cancelSpeech: false, started: false });
-    expect(seen).toEqual(["idle", "listening"]);
+    expect(seen).toEqual(["idle", "starting"]);
   });
   it("hold start while offline is ignored", () => {
     const { s } = make();

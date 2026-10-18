@@ -2,7 +2,7 @@
 // is injected. This module never matches a confirm phrase; that lives in server code (GATE-08).
 import { effectiveBargeInMode, SEND_HEARD_DURING_SPEECH, type BargeInMode } from "./config";
 import { heardDuringSpeech, isEchoOfSpeech, isStopPhrase } from "./echo-filter";
-import type { SttError, SttFinal } from "./stt";
+import type { SttError, SttFinal, CaptureStage } from "./stt";
 import type { VoiceState } from "./state";
 
 export const MSG_NOT_CONNECTED = "Not connected to the Blip server. Retrying. You can keep typing once it reconnects.";
@@ -11,9 +11,11 @@ export interface TalkStt {
   press(): void;
   release(): void;
   isActive(): boolean;
+  cancel?(reason?: string): void;
 }
 
 export interface SttHandlers {
+  onStage?: (stage: CaptureStage) => void;
   onInterim: (text: string) => void;
   onFinal: (final: SttFinal) => void;
   onError: (error: SttError) => void;
@@ -55,7 +57,8 @@ export interface TalkDeps {
 
 export interface TalkController {
   activate(): void;
-  onHold(state: "start" | "end"): void;
+  onHold(state: "start" | "end", reason?: string): void;
+  cancelCapture(): void;
   onSpeechStart(): void;
   onSpeechEnd(): void;
   onStopTyped(): void;
@@ -103,10 +106,16 @@ export function createTalkController(deps: TalkDeps): TalkController {
   }
 
   const stt = deps.makeStt({
+    onStage: (stage) => {
+      if (source !== "hold" || stage === "idle") return;
+      deps.state.captureStage(stage);
+      if (stage === "listening") deps.earcons.play("listening");
+    },
     onInterim: (text) => {
       if (source === "hold") deps.caption.render(text, false);
     },
     onFinal: (final) => {
+      if (source === null) return;
       if (source === "barge") {
         if (isStopPhrase(final.text)) {
           deps.tts.cancel();
@@ -136,7 +145,7 @@ export function createTalkController(deps: TalkDeps): TalkController {
     onError: (error) => {
       const was = source;
       source = null;
-      if (was === "barge") return; // armed silently; nothing to tell the user
+      if (was === "barge" || was === null) return;
       deps.caption.clear();
       deps.state.noTranscript();
       deps.log.showMessage(error.message);
@@ -147,16 +156,17 @@ export function createTalkController(deps: TalkDeps): TalkController {
     activate() {
       activated = true;
     },
-    onHold(hold) {
+    onHold(hold, reason) {
       if (!activated) return;
       if (hold === "end") {
         if (!holding) return;
         holding = false;
         deps.socket.sendPtt("end");
-        stt.release();
+        if (reason && stt.cancel) stt.cancel(reason);
+        else stt.release();
         return;
       }
-      if (holding) return;
+      if (holding || stt.isActive()) return;
       const wasSpeaking = deps.tts.isSpeaking();
       const r = deps.state.holdStart();
       if (!r.started) return;
@@ -167,9 +177,15 @@ export function createTalkController(deps: TalkDeps): TalkController {
         deps.log.markInterrupted();
       }
       deps.socket.sendPtt("start");
-      deps.earcons.play("listening");
       source = "hold";
       stt.press();
+    },
+    cancelCapture() {
+      source = null;
+      if (holding) deps.socket.sendPtt("end");
+      holding = false;
+      stt.cancel?.();
+      deps.state.noTranscript();
     },
     onSpeechStart() {
       if (!activated || holding || mode() !== "voice") return;

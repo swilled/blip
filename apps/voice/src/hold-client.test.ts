@@ -40,4 +40,13 @@ describe("hold client", () => {
     f.timers[0]!.fn();
     expect(f.socks).toHaveLength(2);
   });
+  it("ends active holds on disconnect and ignores callbacks from the replaced socket", () => {
+    const f = fake();
+    f.socks[0]!.onmessage!({ data: '{"hold":"start"}' });
+    f.socks[0]!.onclose!();
+    expect(f.holds).toEqual(["start", "end"]);
+    f.timers[0]!.fn();
+    f.socks[0]!.onmessage!({ data: '{"hold":"start"}' });
+    expect(f.holds).toEqual(["start", "end"]);
+  });
 });

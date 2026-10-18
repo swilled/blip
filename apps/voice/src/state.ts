@@ -1,5 +1,5 @@
 // Voice window status machine. Pure: no DOM access.
-export type VoiceStatus = "idle" | "listening" | "thinking" | "speaking" | "offline";
+export type VoiceStatus = "idle" | "starting" | "listening" | "recovering" | "finalizing" | "thinking" | "speaking" | "offline";
 
 export interface HoldStartResult {
   /** True when speech was playing and must be cut (barge-in by key, D-03). */
@@ -16,6 +16,7 @@ export interface VoiceState {
   socketClosed(): void;
   socketOpened(): void;
   holdStart(): HoldStartResult;
+  captureStage(stage: "starting" | "listening" | "recovering" | "finalizing"): void;
   /** A final transcript arrived for the current hold: listening -> thinking. */
   transcriptDelivered(): void;
   /** The hold ended with nothing recognized: listening -> idle. */
@@ -30,6 +31,7 @@ export function createVoiceState(onChange: (s: VoiceStatus) => void): VoiceState
     onChange(current);
   };
   return {
+    captureStage: stage => { if (current !== "offline") set(stage); },
     get: () => current,
     messageSent: () => {
       if (current !== "offline") set("thinking");
@@ -43,18 +45,18 @@ export function createVoiceState(onChange: (s: VoiceStatus) => void): VoiceState
     socketClosed: () => set("offline"),
     socketOpened: () => set("idle"),
     holdStart: () => {
-      if (current === "offline" || current === "listening") {
+      if (current === "offline" || ["starting", "listening", "recovering", "finalizing"].includes(current)) {
         return { cancelSpeech: false, started: false };
       }
       const cancelSpeech = current === "speaking";
-      set("listening");
+      set("starting");
       return { cancelSpeech, started: true };
     },
     transcriptDelivered: () => {
-      if (current === "listening") set("thinking");
+      if (["starting", "listening", "recovering", "finalizing"].includes(current)) set("thinking");
     },
     noTranscript: () => {
-      if (current === "listening") set("idle");
+      if (["starting", "listening", "recovering", "finalizing"].includes(current)) set("idle");
     },
   };
 }

@@ -17,7 +17,7 @@ export async function startPttWire(port: number): Promise<() => Promise<void>> {
     const listeningPort = await sidecar.listening;
     if (listeningPort < 0) throw new Error("PTT sidecar could not bind its loopback port");
     sidecarReady = true;
-    hook.startPttHook((state) => sidecar?.broadcast(state));
+    hook.startPttHook((state, reason) => sidecar?.broadcast(state, reason));
     console.log("blip: global push-to-talk ready (Right Ctrl + Space)");
     return async () => {
       stopPttHook?.();

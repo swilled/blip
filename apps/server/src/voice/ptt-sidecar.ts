@@ -7,7 +7,7 @@ export const SIDECAR_PORT = 7778;
 export const SIDECAR_ALLOWED_ORIGIN = "http://127.0.0.1:7777";
 
 export interface PttSidecar {
-  broadcast(state: "start" | "end"): void;
+  broadcast(state: "start" | "end", reason?: "expired" | "reset"): void;
   /** Resolves to the bound port (useful when port 0 was requested). */
   listening: Promise<number>;
   close(): Promise<void>;
@@ -43,8 +43,8 @@ export function startPttSidecar(opts: PttSidecarOptions = {}): PttSidecar {
   });
   return {
     listening,
-    broadcast(state) {
-      const data = JSON.stringify({ hold: state });
+    broadcast(state, reason) {
+      const data = JSON.stringify({ hold: state, ...(reason ? { reason } : {}) });
       for (const c of wss.clients) if (c.readyState === c.OPEN) c.send(data);
     },
     close() {

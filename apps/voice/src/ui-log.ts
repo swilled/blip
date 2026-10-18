@@ -1,11 +1,14 @@
 // DOM rendering for the Blip voice window (caption, conversation log, status).
 // Replies derive from untrusted page text: only textContent is ever used here.
 
-export type UiStatus = "idle" | "listening" | "thinking" | "speaking" | "offline";
+export type UiStatus = import("./state").VoiceStatus;
 
 const MAX_EXCHANGES = 50;
 
 const STATUS_LABEL: Record<UiStatus, string> = {
+  starting: "Starting microphone",
+  recovering: "Reconnecting speech recognition",
+  finalizing: "Finishing your command",
   idle: "Ready",
   listening: "Listening",
   thinking: "Thinking",
@@ -14,6 +17,9 @@ const STATUS_LABEL: Record<UiStatus, string> = {
 };
 
 const STATUS_HINT: Record<UiStatus, string> = {
+  starting: "Wait for the listening cue, then speak",
+  recovering: "Keep holding. Speech recognition is reconnecting.",
+  finalizing: "Waiting for the final words",
   idle: "Hold Right Ctrl + Space to talk",
   listening: "Release when you are done",
   thinking: "",

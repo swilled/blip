@@ -4,6 +4,7 @@ import { STT_ENABLED_WHEN_UNFOCUSED } from "./config";
 import { applyArmed, applyCleared, applyClose, applyState, createBannerModel, renderBanner } from "./banner";
 import { createEarcons } from "./earcons";
 import { createHoldClient } from "./hold-client";
+import { createHoldOwner } from "./hold-owner";
 import {
   createOutputModeController,
   shouldSpeakLocalAcknowledgement,
@@ -110,6 +111,7 @@ function renderBannerSlot(): void {
 const state = createVoiceState((s) => {
   setStatus(s);
   refreshConnection();
+  renderHoldButton();
 });
 
 function refreshConnection(): void {
@@ -182,10 +184,12 @@ socket = createSocket({
       renderBannerSlot();
       // Anything outstanding can never be acknowledged on this connection.
       tts.cancel();
+      talk?.cancelCapture();
     }
   },
   onReplaced: () => {
     replaced = true;
+    talk?.cancelCapture();
     state.socketClosed();
     bannerModel = applyClose(bannerModel);
     renderBannerSlot();
@@ -304,12 +308,12 @@ talk = createTalkController({
         const remove = observeRecognition(recognition as unknown as EventTarget, ++nativeRecognitionId, recordSpeechEvent);
         (recognition as unknown as EventTarget).addEventListener("end", remove, { once: true });
         recordSpeechEvent({ event: "capture-request", generation: nativeRecognitionId, focused: document.hasFocus(), visible: document.visibilityState === "visible" });
-        el("status-hint").textContent = "Starting microphone…";
         return recognition;
       },
       onInterim: h.onInterim,
       onFinal: h.onFinal,
       onError: h.onError,
+      onStage: h.onStage,
       canListen: () => STT_ENABLED_WHEN_UNFOCUSED || document.hasFocus(),
     }),
   tts,
@@ -333,40 +337,35 @@ talk = createTalkController({
   spokenText: () => replyParts.join(" "),
 });
 
-let manualHoldActive = false;
-let globalHoldActive = false;
+const holdOwner = createHoldOwner((s, reason) => talk.onHold(s, reason));
 const holdButton = el<HTMLButtonElement>("hold-to-talk");
 function renderHoldButton(): void {
-  const active = manualHoldActive || globalHoldActive;
+  const owner = holdOwner.get();
+  const active = owner !== null;
   holdButton.setAttribute("aria-pressed", String(active));
-  holdButton.textContent = manualHoldActive
-    ? "Listening — release to send"
-    : globalHoldActive
-      ? "Listening — release both keys to send"
-      : "Hold to talk";
+  const phase = state.get();
+  holdButton.textContent = !active ? "Hold to talk" : phase === "starting" ? "Starting microphone…"
+    : phase === "recovering" ? "Reconnecting — keep holding"
+    : phase === "listening" ? owner === "global" ? "Listening — release both keys to send" : "Listening — release to send"
+    : "Release, then try again";
 }
 
-function setManualHold(active: boolean): void {
-  if (manualHoldActive === active) return;
-  manualHoldActive = active;
-  if (active) globalHoldActive = false;
+function setManualHold(active: boolean, reason?: string): void {
+  holdOwner.update("manual", active, reason);
   renderHoldButton();
-  talk.onHold(active ? "start" : "end");
 }
 
 // Global hold (PTT_DELIVERY B): loopback sidecar next to the hub connection.
-createHoldClient({
+const holdWire = createHoldClient({
   makeWebSocket: (url) => new WebSocket(url) as never,
   onConnection: connected => {
     el("hold-to-talk-help").textContent = connected
       ? "Hold the button or Right Ctrl + Space. Speak after the cue, then release both keys."
       : "The global shortcut is unavailable. Use Hold to talk, or type a command.";
   },
-  onHold: (h) => {
-    if (manualHoldActive) return;
-    globalHoldActive = h === "start";
+  onHold: (h, reason) => {
+    holdOwner.update("global", h === "start", reason);
     renderHoldButton();
-    talk.onHold(h);
   },
   setTimer: (fn, ms) => setTimeout(fn, ms),
 });
@@ -378,8 +377,8 @@ holdButton.addEventListener("pointerdown", (ev) => {
   setManualHold(true);
 });
 holdButton.addEventListener("pointerup", () => setManualHold(false));
-holdButton.addEventListener("pointercancel", () => setManualHold(false));
-holdButton.addEventListener("lostpointercapture", () => setManualHold(false));
+holdButton.addEventListener("pointercancel", () => setManualHold(false, "Recording cancelled. Nothing was sent."));
+holdButton.addEventListener("lostpointercapture", () => setManualHold(false, "Recording cancelled. Nothing was sent."));
 holdButton.addEventListener("keydown", (ev) => {
   if ((ev.key === " " || ev.key === "Enter") && !ev.repeat) {
     ev.preventDefault();
@@ -392,7 +391,8 @@ holdButton.addEventListener("keyup", (ev) => {
     setManualHold(false);
   }
 });
-window.addEventListener("blur", () => setManualHold(false));
+window.addEventListener("blur", () => setManualHold(false, "The Blip window lost focus. Nothing was sent."));
+window.addEventListener("pagehide", () => { holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); });
 
 // Typed input.
 const input = el<HTMLInputElement>("typed-input");

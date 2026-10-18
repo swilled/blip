@@ -22,6 +22,13 @@ function setup() {
 }
 
 describe("ptt-state", () => {
+  it("identifies expiry separately from an intentional release", () => {
+    const seen: unknown[] = [];
+    let expire = () => {};
+    const ptt = createPttState({ onChange: (...args) => seen.push(args), setTimer: fn => { expire = fn; return 1; }, clearTimer() {} });
+    ptt.handle("down", RCTRL); ptt.handle("down", SPACE); expire();
+    expect(seen).toEqual([["start"], ["end", "expired"]]);
+  });
   it("stays active until both Right Ctrl and Space are released", () => {
     const { ptt, events } = setup();
     ptt.handle("down", RCTRL);

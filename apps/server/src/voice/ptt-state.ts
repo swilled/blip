@@ -5,7 +5,7 @@ export const RIGHT_CTRL = 3613;
 export const SPACE = 57;
 
 export interface PttStateOptions {
-  onChange: (state: "start" | "end") => void;
+  onChange: (state: "start" | "end", reason?: "expired" | "reset") => void;
   watchdogMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
@@ -34,11 +34,11 @@ export function createPttState(opts: PttStateOptions): PttState {
     }
   }
 
-  function end(): void {
+  function end(reason?: "expired" | "reset"): void {
     if (!active) return;
     active = false;
     cancelTimer();
-    opts.onChange("end");
+    opts.onChange("end", reason);
   }
 
   function evaluate(): void {
@@ -53,7 +53,7 @@ export function createPttState(opts: PttStateOptions): PttState {
         timer = null;
         if (active) {
           latched = true;
-          end();
+          end("expired");
         }
       }, watchdogMs);
     } else if (bothReleased && active) {
@@ -74,7 +74,7 @@ export function createPttState(opts: PttStateOptions): PttState {
       ctrlDown = false;
       spaceDown = false;
       latched = false;
-      end();
+      end("reset");
     },
   };
 }

@@ -71,7 +71,10 @@ describe("talk controller", () => {
     const t = setup();
     t.c.activate();
     t.c.onHold("start");
-    expect(t.calls).toEqual(["ptt.start", "earcon.listening", "stt.press"]);
+    expect(t.calls).toEqual(["ptt.start", "stt.press"]);
+    expect(t.state.get()).toBe("starting");
+    t.h().onStage?.("listening");
+    expect(t.calls.at(-1)).toBe("earcon.listening");
     expect(t.state.get()).toBe("listening");
   });
 
@@ -81,7 +84,7 @@ describe("talk controller", () => {
     t.c.onHold("start");
     expect(t.calls.slice(0, 2)).toEqual(["tts.cancel", "interrupted"]);
     expect(t.calls).toContain("stt.press");
-    expect(t.state.get()).toBe("listening");
+    expect(t.state.get()).toBe("starting");
   });
 
   it("4: hold end sends ptt end and releases stt", () => {

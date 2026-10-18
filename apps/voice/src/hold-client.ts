@@ -13,7 +13,7 @@ export interface HoldSocketLike {
 
 export interface HoldClientDeps {
   makeWebSocket: (url: string) => HoldSocketLike;
-  onHold: (state: "start" | "end") => void;
+  onHold: (state: "start" | "end", reason?: string) => void;
   onConnection?: (connected: boolean) => void;
   setTimer: (fn: () => void, ms: number) => unknown;
   url?: string;
@@ -29,7 +29,8 @@ export function parseHold(data: unknown): "start" | "end" | null {
   }
   if (typeof v !== "object" || v === null || Array.isArray(v)) return null;
   const keys = Object.keys(v);
-  if (keys.length !== 1 || keys[0] !== "hold") return null;
+  if (!keys.includes("hold") || keys.some(k => k !== "hold" && k !== "reason")) return null;
+  if ("reason" in v && (v as { reason: unknown }).reason !== "expired" && (v as { reason: unknown }).reason !== "reset") return null;
   const h = (v as { hold: unknown }).hold;
   return h === "start" || h === "end" ? h : null;
 }
@@ -37,16 +38,25 @@ export function parseHold(data: unknown): "start" | "end" | null {
 export function createHoldClient(deps: HoldClientDeps): { close(): void } {
   let stopped = false;
   let sock: HoldSocketLike | null = null;
+  let holding = false;
   function connect(): void {
     const s = deps.makeWebSocket(deps.url ?? HOLD_URL);
     sock = s;
     s.onopen = () => deps.onConnection?.(true);
     s.onmessage = (ev) => {
+      if (stopped || sock !== s) return;
       const h = parseHold(ev.data);
-      if (h) deps.onHold(h);
+      if (h) {
+        holding = h === "start";
+        const reason = JSON.parse(ev.data as string).reason;
+        deps.onHold(h, reason === "expired" ? "The 10-second hold limit was reached. Nothing was sent." : reason === "reset" ? "The shortcut was stopped. Nothing was sent." : undefined);
+      }
     };
     s.onerror = () => {};
     s.onclose = () => {
+      if (sock !== s) return;
+      if (holding) deps.onHold("end", "Shortcut connection lost. Nothing was sent. Try Hold to talk.");
+      holding = false;
       deps.onConnection?.(false);
       sock = null;
       if (!stopped) deps.setTimer(connect, RECONNECT_MS);
@@ -56,6 +66,8 @@ export function createHoldClient(deps: HoldClientDeps): { close(): void } {
   return {
     close() {
       stopped = true;
+      if (holding) deps.onHold("end", "Shortcut closed. Nothing was sent.");
+      holding = false;
       sock?.close();
     },
   };
