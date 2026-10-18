@@ -47,6 +47,14 @@
 
       <section id="banner-slot" aria-label="Notices"></section>
 
+      <fieldset id="output-mode" aria-describedby="output-mode-help">
+        <legend>Speech output</legend>
+        <label><input type="radio" name="output-mode" value="agent-voice" checked /> Blip voice</label>
+        <label><input type="radio" name="output-mode" value="screen-reader" /> Screen reader (NVDA)</label>
+        <p id="output-mode-help" class="label muted">Only one speech output is used. This choice lasts for this window session.</p>
+        <p id="output-mode-status" role="status" aria-live="polite" class="label muted">Using Blip voice.</p>
+      </fieldset>
+
       <section id="caption" aria-label="Live caption">
         <p id="caption-text" aria-live="off" class="empty">Your words appear here.</p>
       </section>

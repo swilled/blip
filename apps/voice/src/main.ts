@@ -4,6 +4,7 @@ import { STT_ENABLED_WHEN_UNFOCUSED } from "./config";
 import { applyArmed, applyCleared, applyClose, applyState, createBannerModel, renderBanner } from "./banner";
 import { createEarcons } from "./earcons";
 import { createHoldClient } from "./hold-client";
+import { createOutputModeController, type VoiceOutputMode } from "./output-mode";
 import { createSocket, type VoiceSocket } from "./socket";
 import { createSpeakBridge } from "./speak-bridge";
 import { createVoiceState } from "./state";
@@ -52,6 +53,15 @@ let replyParts: string[] = [];
 let replyInterrupted = false;
 let pendingSource: "speech" | "typed" = "typed";
 let captionTimer: ReturnType<typeof setTimeout> | null = null;
+
+function renderOutputMode(mode: VoiceOutputMode): void {
+  const radio = document.querySelector<HTMLInputElement>(`input[name="output-mode"][value="${mode}"]`);
+  if (radio) radio.checked = true;
+  const status = document.getElementById("output-mode-status");
+  if (status && status.textContent !== "NVDA speech completion is unavailable. Using agent voice.") {
+    status.textContent = mode === "agent-voice" ? "Using Blip voice." : "Using NVDA screen reader.";
+  }
+}
 
 function renderBannerSlot(): void {
   const slot = document.getElementById("banner-slot");
@@ -171,6 +181,10 @@ socket = createSocket({
       case "error": {
         if (m.payload.code === "nvda-completion-unavailable") {
           el("status-hint").textContent = m.payload.message;
+          outputMode.fallBackToAgentVoice();
+          el("output-mode-status").textContent = m.payload.message;
+          const screenReader = document.querySelector<HTMLInputElement>('input[name="output-mode"][value="screen-reader"]');
+          if (screenReader) screenReader.disabled = true;
         }
         break;
       }
@@ -179,6 +193,19 @@ socket = createSocket({
         break;
     }
   },
+});
+
+const outputMode = createOutputModeController({
+  cancelCurrentSpeech: () => tts.cancel(),
+  sendSettings: (mode) => socket?.sendSettings(mode),
+  onModeChange: renderOutputMode,
+});
+
+document.querySelectorAll<HTMLInputElement>('input[name="output-mode"]').forEach((radio) => {
+  radio.addEventListener("change", () => {
+    if (!radio.checked) return;
+    outputMode.select(radio.value as VoiceOutputMode);
+  });
 });
 
 type RecognitionCtor = new () => RecognitionLike;
