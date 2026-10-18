@@ -26,6 +26,10 @@ function addText(tag: string, text: string, parent: Element = document.body): HT
   return element;
 }
 
+function captureWithFixedClock(pageIdentity: BrowserPageIdentity = identity) {
+  return captureVisibleContent(document, pageIdentity, { now: () => 0 });
+}
+
 function contentResponse(response: BrowserContentResponse): Extract<BrowserContentResponse, { t: "browser-content.result" }> {
   if (response.t !== "browser-content.result") throw new Error(response.message);
   return response;
@@ -99,7 +103,7 @@ describe("bounded visible browser content", () => {
     style.textContent = "body { --hidden-style-text: 'Style text'; }";
     document.head.append(style);
 
-    const result = captureVisibleContent(document, identity);
+    const result = captureWithFixedClock();
     expect(result.blocks.map((block) => block.text)).toEqual(["Visible title", "Visible paragraph", "Outer paragraph"]);
     expect(JSON.stringify(result)).not.toContain("SECRET-");
     expect(JSON.stringify(result)).not.toContain("Nested duplicate");
@@ -109,7 +113,7 @@ describe("bounded visible browser content", () => {
 
   it("bounds blocks, each block, total Unicode code points, and reports content truncation", () => {
     for (let index = 0; index < 21; index += 1) addText("p", "😀".repeat(450));
-    const result = captureVisibleContent(document, identity);
+    const result = captureWithFixedClock();
     expect(result.status).toBe("supported");
     expect(result.blocks.length).toBeLessThanOrEqual(20);
     expect(result.blocks.every((block) => Array.from(block.text).length <= 400)).toBe(true);
@@ -119,8 +123,8 @@ describe("bounded visible browser content", () => {
   });
 
   it("returns distinct empty, restricted, and elapsed-budget outcomes", () => {
-    expect(captureVisibleContent(document, identity).status).toBe("empty");
-    expect(captureVisibleContent(document, { ...identity, pageUrl: "chrome://settings/" }).status).toBe("restricted");
+    expect(captureWithFixedClock().status).toBe("empty");
+    expect(captureWithFixedClock({ ...identity, pageUrl: "chrome://settings/" }).status).toBe("restricted");
     addText("p", "slow page");
     let tick = 0;
     expect(captureVisibleContent(document, identity, { timeBudgetMs: 0, now: () => ++tick }).status).toBe("timeout");
@@ -158,7 +162,7 @@ describe("bounded visible browser content", () => {
     anchor.href = "https://example.test/dismiss";
     anchor.textContent = "Dismiss";
     document.body.append(anchor);
-    const capture = captureVisibleContent(document, identity);
+    const capture = captureWithFixedClock();
     const list = contentResponse(handleBrowserContentRequest(document, {
       t: "browser-content", operation: "list-links", identity: { ...identity, captureId: "capture-open", captureRevision: 2 },
     }, 0));
@@ -179,7 +183,7 @@ describe("bounded visible browser content", () => {
     anchor.href = "https://example.test/dismiss";
     anchor.textContent = "Dismiss";
     document.body.append(anchor);
-    const capture = captureVisibleContent(document, { ...identity, captureId: "capture-refuse", captureRevision: 3 });
+    const capture = captureWithFixedClock({ ...identity, captureId: "capture-refuse", captureRevision: 3 });
 
     const requestFor = (link: HTMLAnchorElement, index: number, suffix: string) => {
       const nextIdentity = { ...identity, captureId: `capture-${suffix}`, captureRevision: index + 10 };
@@ -223,7 +227,7 @@ describe("bounded visible browser content", () => {
 
   it("rejects child-frame requests and stale content IDs", () => {
     addText("p", "Current paragraph");
-    const capture = captureVisibleContent(document, identity);
+    const capture = captureWithFixedClock();
     const contentId = capture.blocks[0]!.contentId;
     const request: BrowserContentRequest = {
       t: "browser-content", operation: "read-content", identity, contentId, kind: "paragraph",
@@ -241,7 +245,7 @@ describe("bounded visible browser content", () => {
     first.textContent = "Dismiss";
     const second = first.cloneNode(true) as HTMLAnchorElement;
     document.body.append(first, second);
-    const capture = captureVisibleContent(document, identity);
+    const capture = captureWithFixedClock();
     expect(capture.blocks).toHaveLength(0);
     const result = parseBrowserCommand("open link dismiss", {
       identity,

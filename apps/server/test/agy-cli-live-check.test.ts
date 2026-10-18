@@ -581,7 +581,7 @@ describe("AGY CLI approved-mode synthetic verifier", () => {
     expect(provider.abortRole).not.toHaveBeenCalled();
     expect(provider.recreateRole).not.toHaveBeenCalled();
     expect(provider.parseIntent).toHaveBeenCalledTimes(2);
-    expect(result.promptCounts).toEqual({ intent: 2, repair: 1, total: 3 });
+    expect(result.promptCounts).toEqual({ intent: 2, repair: 1, content: 0, total: 3 });
   });
 
   it("rejects invalid or stale repair patches without writing cache entries", async () => {
@@ -688,8 +688,8 @@ describe("AGY CLI approved-mode synthetic verifier", () => {
   });
 
   it("keeps duration and role-specific prompt ceilings bounded", () => {
-    expect(LIVE_CHECK_PROMPT_LIMITS).toEqual({ intent: 4, repair: 1, total: 5 });
-    expect(LIVE_CHECK_BOOTSTRAP_LIMITS).toEqual({ intent: 2, repair: 1, total: 3 });
+    expect(LIVE_CHECK_PROMPT_LIMITS).toEqual({ intent: 4, repair: 1, content: 0, total: 5 });
+    expect(LIVE_CHECK_BOOTSTRAP_LIMITS).toEqual({ intent: 2, repair: 1, content: 0, total: 3 });
     expect(LIVE_CHECK_TOTAL_DISPATCH_LIMIT).toBe(8);
     expect(parseLiveCheckArguments(["--offline"])).toEqual({ live: false, maxSeconds: LIVE_CHECK_MAX_SECONDS });
     expect(() => parseLiveCheckArguments(["--offline", "--live"])).toThrow(/cannot be combined/);
