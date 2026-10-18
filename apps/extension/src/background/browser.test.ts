@@ -71,6 +71,97 @@ describe("extension browser request dispatcher", () => {
     expect(state.search.query).not.toHaveBeenCalled();
   });
 
+  it("routes read-item through the current content frame and validates the exact response identity", async () => {
+    const state = browserApi();
+    const identity = {
+      captureId: "capture-read-item",
+      captureRevision: 1,
+      tabId: PAGE.id,
+      pageUrl: PAGE.url,
+    };
+    const result = {
+      itemId: "capture-read-item.i0",
+      text: "Synthetic visible item.",
+      visibleDate: null,
+      identity,
+      frameId: 0,
+    };
+    const sendContentMessage = vi.fn(async (_tabId: number, contentRequest: unknown) => {
+      expect(contentRequest).toEqual({
+        t: "browser-content", operation: "read-item", identity, itemId: result.itemId,
+      });
+      return { t: "browser-content.result", operation: "read-item", result };
+    });
+    const dispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => PAGE,
+      sendContentMessage,
+    });
+
+    const accepted = await dispatch(request({
+      op: "read-item", itemId: result.itemId, identity,
+    }));
+
+    expect(accepted).toMatchObject({ ok: true, operation: "read-item", result });
+    expect(sendContentMessage).toHaveBeenCalledTimes(1);
+
+    const wrongIdentityDispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => PAGE,
+      sendContentMessage: async () => ({
+        t: "browser-content.result", operation: "read-item",
+        result: { ...result, identity: { ...identity, captureRevision: 2 } },
+      }),
+    });
+    expect(await wrongIdentityDispatch(request({ op: "read-item", itemId: result.itemId, identity })))
+      .toMatchObject({ ok: false, operation: "read-item", error: { code: "stale-capture" } });
+  });
+
+  it("checks the live page both before and after read-item content dispatch", async () => {
+    const state = browserApi();
+    const identity = {
+      captureId: "capture-read-item-page-check",
+      captureRevision: 1,
+      tabId: PAGE.id,
+      pageUrl: PAGE.url,
+    };
+    const itemResult = {
+      itemId: "capture-read-item-page-check.i0",
+      text: "Synthetic visible item.",
+      visibleDate: null,
+      identity,
+      frameId: 0,
+    };
+    const contentRequest = request({ op: "read-item", itemId: itemResult.itemId, identity });
+    const beforeDispatchSend = vi.fn(async () => ({
+      t: "browser-content.result", operation: "read-item", result: itemResult,
+    }));
+    const changedBeforeDispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => ({ ...PAGE, url: "https://forms.example/changed" }),
+      sendContentMessage: beforeDispatchSend,
+    });
+    expect(await changedBeforeDispatch(contentRequest)).toMatchObject({
+      ok: false, operation: "read-item", error: { code: "stale-page" },
+    });
+    expect(beforeDispatchSend).not.toHaveBeenCalled();
+
+    let current = PAGE;
+    const afterDispatchSend = vi.fn(async () => {
+      current = { ...PAGE, url: "https://forms.example/changed" };
+      return { t: "browser-content.result", operation: "read-item", result: itemResult };
+    });
+    const changedAfterDispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => current,
+      sendContentMessage: afterDispatchSend,
+    });
+    expect(await changedAfterDispatch(contentRequest)).toMatchObject({
+      ok: false, operation: "read-item", error: { code: "stale-page" },
+    });
+    expect(afterDispatchSend).toHaveBeenCalledTimes(1);
+  });
+
   it("accepts only explicit canonical HTTP(S) navigation after one-use core authorization", async () => {
     const state = browserApi();
     const dispatch = dispatcher(state);

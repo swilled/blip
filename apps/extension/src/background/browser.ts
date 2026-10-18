@@ -324,13 +324,15 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       return success(requestId, operation.op, typed.result);
     }
 
-    if (operation.op === "read-content" || operation.op === "scroll" || operation.op === "find") {
+    if (operation.op === "read-content" || operation.op === "read-item" || operation.op === "scroll" || operation.op === "find") {
       const identity = operation.identity;
       const current = await liveCurrentTab(api, dependencies, identity.tabId, identity.pageUrl);
       if (!current) return failure(requestId, operation.op, "stale-page", "The current browser page no longer matches this content request.");
       let request: BrowserContentRequest;
       if (operation.op === "read-content") {
         request = { t: "browser-content", operation: operation.op, identity, contentId: operation.contentId, kind: operation.kind };
+      } else if (operation.op === "read-item") {
+        request = { t: "browser-content", operation: operation.op, identity, itemId: operation.itemId };
       } else if (operation.op === "find") {
         request = { t: "browser-content", operation: operation.op, identity, query: operation.query };
       } else if (operation.contentId !== undefined && operation.kind !== undefined) {
@@ -350,8 +352,14 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       if (typed.t !== "browser-content.result" || typed.operation !== operation.op) {
         return failure(requestId, operation.op, "stale-capture", "The content request returned a stale page result.");
       }
-      const returnedIdentity = typed.operation === "read-content" ? typed.result : typed.result.identity;
-      if (!sameIdentity(identity, returnedIdentity)) {
+      const returnedIdentity = typed.operation === "read-content"
+        ? typed.result
+        : typed.operation === "read-item" || typed.operation === "scroll" || typed.operation === "find"
+          ? typed.result.identity
+          : undefined;
+      if (returnedIdentity === undefined || !sameIdentity(identity, returnedIdentity) ||
+          (typed.operation === "read-item" && operation.op === "read-item" &&
+            (typed.result.itemId !== operation.itemId || typed.result.frameId !== 0))) {
         return failure(requestId, operation.op, "stale-capture", "The content request returned a stale page result.");
       }
       const rechecked = await liveCurrentTab(api, dependencies, identity.tabId, identity.pageUrl);

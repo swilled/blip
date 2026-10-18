@@ -445,4 +445,60 @@ describe("accepted semantic item captures", () => {
     expect(result).toEqual({ ok: false, reason: "invalid-result" });
     expect(session.browserCapture).toBeNull();
   });
+
+  it("accepts a live item only for the current tab, capture, item, and matching observed value", async () => {
+    const session = new Session("fake");
+    session.extensionConnected = true;
+    session.tabId = identity.tabId;
+    const item = contentItem("item-live");
+    let resultValue: unknown = { ...identity, status: "supported", blocks: [], items: [item], truncated: false };
+    let wrongRequestId = false;
+    let duringRequest: (() => void) | undefined;
+    const hub = {
+      request: async (_role: string, _type: string, request: { requestId: string; operation: BrowserOperation }) => {
+        duringRequest?.();
+        return {
+          payload: {
+            ok: true,
+            requestId: wrongRequestId ? "different-request" : request.requestId,
+            operation: request.operation.op,
+            result: resultValue,
+          },
+        };
+      },
+    } as unknown as Hub;
+    const executor = createBrowserExecutor({ hub, session });
+    expect(await executor.execute({ op: "capture" })).toMatchObject({ ok: true, payload: { ok: true, operation: "capture" } });
+    expect(session.browserCapture?.items).toEqual([item]);
+
+    const operation = { op: "read-item" as const, itemId: item.itemId, identity };
+    resultValue = item;
+    const accepted = await executor.execute(operation);
+    expect(accepted).toMatchObject({ ok: true, payload: { ok: true, operation: "read-item", result: item } });
+    expect(session.browserCapture?.items).toEqual([item]);
+
+    resultValue = { ...item, text: "Different live value" };
+    expect(await executor.execute(operation)).toEqual({ ok: false, reason: "invalid-result" });
+    expect(session.browserCapture?.items).toEqual([item]);
+
+    resultValue = { ...item, itemId: "other-item" };
+    expect(await executor.execute(operation)).toEqual({ ok: false, reason: "invalid-result" });
+
+    resultValue = { ...item, identity: { ...identity, captureRevision: 2 } };
+    expect(await executor.execute(operation)).toEqual({ ok: false, reason: "invalid-result" });
+
+    resultValue = item;
+    wrongRequestId = true;
+    expect(await executor.execute(operation)).toEqual({ ok: false, reason: "invalid-result" });
+    wrongRequestId = false;
+
+    duringRequest = () => { session.tabId = identity.tabId + 1; };
+    expect(await executor.execute(operation)).toEqual({ ok: false, reason: "invalid-result" });
+    duringRequest = undefined;
+    session.tabId = identity.tabId;
+
+    session.tabId = identity.tabId + 1;
+    expect(await executor.execute(operation)).toEqual({ ok: false, reason: "invalid-request" });
+    session.tabId = identity.tabId;
+  });
 });

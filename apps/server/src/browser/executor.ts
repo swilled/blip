@@ -66,6 +66,20 @@ function updateCurrentCapture(session: Session, payload: BrowserResult): void {
       });
       return;
     }
+    case "read-item": {
+      const previous = session.browserCapture;
+      if (!previous || !sameIdentity(previous.identity, payload.result.identity)) return;
+      const items = previous.items ?? [];
+      if (!items.some((item) => item.itemId === payload.result.itemId)) return;
+      session.applyBrowserCapture({
+        identity: payload.result.identity,
+        blocks: previous.blocks,
+        items: items.map((item) => item.itemId === payload.result.itemId ? payload.result : item),
+        links: previous.links,
+        ...(previous.tabs !== undefined ? { tabs: previous.tabs } : {}),
+      });
+      return;
+    }
     case "tabs": {
       const changedTab = session.tabId !== payload.result.activeTabId;
       if (changedTab) {
@@ -107,6 +121,13 @@ export function createBrowserExecutor(options: { hub: Hub; session: Session }): 
       const tabOperation = operation.op === "tabs";
       const createsOrSelectsTab = tabOperation && (operation.action === "open-blank" || operation.action === "switch");
       if (session.tabId === null && !tabOperation) return { ok: false, reason: "no-current-tab" };
+      if (operation.op === "read-item") {
+        const capture = session.browserCapture;
+        if (session.tabId !== operation.identity.tabId || !capture || !sameIdentity(capture.identity, operation.identity) ||
+            !(capture.items ?? []).some((item) => item.itemId === operation.itemId)) {
+          return { ok: false, reason: "invalid-request" };
+        }
+      }
 
       const changesPage = operation.op === "navigate" || operation.op === "history" || operation.op === "reload" ||
         operation.op === "search" || operation.op === "open-link" || createsOrSelectsTab;
@@ -141,6 +162,18 @@ export function createBrowserExecutor(options: { hub: Hub; session: Session }): 
       const checkedResult = BrowserResultPayload.safeParse(response.payload);
       if (!checkedResult.success || checkedResult.data.requestId !== requestId || checkedResult.data.operation !== operation.op) {
         return { ok: false, reason: "invalid-result" };
+      }
+      if (operation.op === "read-item" && checkedResult.data.ok) {
+        if (checkedResult.data.operation !== "read-item") return { ok: false, reason: "invalid-result" };
+        const capture = session.browserCapture;
+        const itemResult = checkedResult.data.result;
+        const capturedItem = capture?.items?.find((item) => item.itemId === operation.itemId);
+        if (session.tabId !== operation.identity.tabId || !sameIdentity(operation.identity, itemResult.identity) ||
+            itemResult.itemId !== operation.itemId || itemResult.frameId !== 0 || !capture ||
+            !sameIdentity(capture.identity, operation.identity) ||
+            !capturedItem || itemResult.text !== capturedItem.text || itemResult.visibleDate !== capturedItem.visibleDate) {
+          return { ok: false, reason: "invalid-result" };
+        }
       }
       updateCurrentCapture(session, checkedResult.data);
       return { ok: true, payload: checkedResult.data };
