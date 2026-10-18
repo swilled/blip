@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 07-04-PLAN.md
-last_updated: "2026-10-18T06:14:11.967Z"
+stopped_at: Completed 07-05-PLAN.md
+last_updated: "2026-10-18T06:23:09.696Z"
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 84
-  completed_plans: 67
+  completed_plans: 68
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 07 (implement-generic-user-directed-browser-control-and-content-reading) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 
 ## Performance Metrics
 
@@ -88,6 +88,7 @@ Plan: 5 of 6
 | Phase 07 P02 | 14min | 2 tasks | 15 files |
 | Phase 07-implement-generic-user-directed-browser-control-and-content-reading P07-03 | 9 min | 2 tasks | 12 files |
 | Phase 07-implement-generic-user-directed-browser-control-and-content-reading P07-04 | 15min | 2 tasks | 15 files |
+| Phase 07 P05 | 9 min | 1 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -155,6 +156,9 @@ Recent decisions affecting current work:
 - [Phase 07-implement-generic-user-directed-browser-control-and-content-reading]: Direct reads and targeted scrolling use current extension content IDs; selected text is screened before speech.
 - [Phase 07-implement-generic-user-directed-browser-control-and-content-reading]: Content capture stays top-frame-only and link navigation remains core-authorized and live-validated.
 - [Phase 07-implement-generic-user-directed-browser-control-and-content-reading]: Shared protocol changes stay local pending written voice-owner review.
+- [Phase 07]: Keep the page-content AGY role lazy and tool-less so direct reads and unrelated commands never initialize or call it.
+- [Phase 07]: Bind prose answers to capture identity locally while omitting capture identifiers and URL from the model prompt.
+- [Phase 07]: Keep content-role bootstrap and dispatch caps at zero in bounded live checks; use synthetic injected tests.
 
 ### Pending Todos
 
@@ -187,6 +191,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T06:14:11.963Z
-Stopped at: Completed 07-04-PLAN.md
+Last session: 2026-10-18T06:23:09.691Z
+Stopped at: Completed 07-05-PLAN.md
 Resume file: None

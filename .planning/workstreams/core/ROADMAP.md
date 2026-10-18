@@ -240,7 +240,7 @@ Plans:
 - [x] 07-02-PLAN.md
 - [x] 07-03-PLAN.md
 - [x] 07-04-PLAN.md
-- [ ] 07-05-PLAN.md
+- [x] 07-05-PLAN.md
 - [ ] 07-06-PLAN.md
 
 ### Phase 8: Multi-step web reading and drafting
