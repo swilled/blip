@@ -17,6 +17,7 @@ export type BrainInputDecision =
 
 const PASSWORD_VALUE_PATTERNS = [
   /\bmy\s+password\s+is\s+(.+)$/iu,
+  /\bpassword\s+is\s+(.+)$/iu,
   /\bpassword\s*[:=]\s*(.+)$/iu,
 ] as const;
 

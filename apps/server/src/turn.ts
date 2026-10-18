@@ -7,6 +7,7 @@ import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
 import { containsSensitiveUtterance, decideUtteranceForBrain } from "./brain/agy/privacy";
+import { classifySensitiveShape } from "@blip/policy/sensitive-shapes";
 import { routeIntent, type IntentRoutePage } from "./brain/agy/intent-router";
 import type { AgyProvider } from "./brain/agy/provider";
 import type { Snapshot } from "@blip/protocol";
@@ -103,6 +104,7 @@ const MSG_BROWSER_AUTH_EXPIRED = "That browser confirmation expired. Nothing was
 const MSG_BROWSER_AUTH_PAGE_CHANGED = "The browser page changed. Nothing was done; please ask again.";
 const MSG_SITE_SEARCH_FIELD = "I couldn't uniquely identify a visible search field and submit action on this page, so nothing was submitted.";
 const MSG_SITE_SEARCH_VALUE = "I couldn't verify the search query in the field, so nothing was submitted.";
+const MSG_PRIVATE_PAGE_CONTENT = "I found page content that may contain private information, so I didn't read it aloud.";
 
 function browserFailureText(result: BrowserExecutorResult): string {
   if (!result.ok) {
@@ -120,6 +122,7 @@ function browserFailureText(result: BrowserExecutorResult): string {
       case "unsupported-page": return "This page does not support that browser operation.";
       case "stale-page":
       case "stale-capture": return MSG_BROWSER_AUTH_PAGE_CHANGED;
+      case "unsupported-frame": return "This browser frame does not support safe page reading.";
       case "not-found": return "I couldn't find that target on the current page.";
       case "ambiguous": return "More than one target matches. Please say a more specific target.";
       case "unauthorized": return MSG_BROWSER_AUTH_REFUSED;
@@ -162,19 +165,26 @@ function speakLinks(ctx: TurnContext, result: Extract<BrowserResultPayload, { ok
 }
 
 function speakContent(ctx: TurnContext, blocks: BrowserContentBlock[], mode: "read" | "summary" | "question", query?: string): void {
-  if (blocks.length === 0) return speak(ctx.hub, ctx.session, "I couldn't find readable page content.", "answer");
+  const privateBlocks = blocks.filter((block) =>
+    containsSensitiveUtterance(block.text) || classifySensitiveShape(block.text) !== null,
+  );
+  const safeBlocks = blocks.filter((block) => !privateBlocks.includes(block));
+  const safeQuery = query !== undefined && containsSensitiveUtterance(query) ? "that text" : query;
+  if (safeBlocks.length === 0) {
+    return speak(ctx.hub, ctx.session, privateBlocks.length > 0 ? MSG_PRIVATE_PAGE_CONTENT : "I couldn't find readable page content.", "answer");
+  }
   if (mode === "question") {
-    const matches = blocks.filter((block) => block.kind === "paragraph" && block.text.toLocaleLowerCase().includes(query!.toLocaleLowerCase()));
-    if (matches.length === 0) return speak(ctx.hub, ctx.session, `I couldn't find page text about ${query}.`, "answer");
-    return speak(ctx.hub, ctx.session, `I found this page text about ${query}: ${matches.slice(0, 2).map((block) => block.text).join(" ")}`, "answer");
+    const matches = safeBlocks.filter((block) => block.kind === "paragraph" && block.text.toLocaleLowerCase().includes(query!.toLocaleLowerCase()));
+    if (matches.length === 0) return speak(ctx.hub, ctx.session, "I couldn't find page text about " + safeQuery + ".", "answer");
+    return speak(ctx.hub, ctx.session, "I found this page text about " + safeQuery + ": " + matches.slice(0, 2).map((block) => block.text).join(" ") + (privateBlocks.length > 0 ? " " + MSG_PRIVATE_PAGE_CONTENT : ""), "answer");
   }
   if (mode === "summary") {
-    const heading = blocks.find((block) => block.kind === "heading")?.text;
-    const paragraphs = blocks.filter((block) => block.kind === "paragraph").slice(0, 2).map((block) => block.text);
+    const heading = safeBlocks.find((block) => block.kind === "heading")?.text;
+    const paragraphs = safeBlocks.filter((block) => block.kind === "paragraph").slice(0, 2).map((block) => block.text);
     const parts = [heading, ...paragraphs].filter((part): part is string => part !== undefined && part !== "");
-    return speak(ctx.hub, ctx.session, parts.length === 0 ? "I couldn't find a readable page summary." : `Page summary. ${parts.join(" ")}`, "answer");
+    return speak(ctx.hub, ctx.session, parts.length === 0 ? "I couldn't find a readable page summary." : "Page summary. " + parts.join(" ") + (privateBlocks.length > 0 ? " " + MSG_PRIVATE_PAGE_CONTENT : ""), "answer");
   }
-  speak(ctx.hub, ctx.session, blocks.map((block) => block.text).join(" "), "answer");
+  speak(ctx.hub, ctx.session, safeBlocks.map((block) => block.text).join(" ") + (privateBlocks.length > 0 ? " " + MSG_PRIVATE_PAGE_CONTENT : ""), "answer");
 }
 
 function authorizedPhrase(target: BrowserAuthorizationTarget, command?: BrowserCommand): string {
@@ -371,6 +381,10 @@ function speakBrowserResult(ctx: TurnContext, payload: BrowserResultPayload, com
         : `You are on ${payload.result.title || url.host}.`, "answer");
     }
     case "capture":
+      if (payload.result.status === "restricted") return speak(ctx.hub, ctx.session, "This page is restricted and does not expose readable content.", "answer");
+      if (payload.result.status === "empty") return speak(ctx.hub, ctx.session, "I couldn't find readable page content.", "answer");
+      if (payload.result.status === "timeout") return speak(ctx.hub, ctx.session, "Page content took too long to read.", "error");
+      if (payload.result.status === "capture-failed") return speak(ctx.hub, ctx.session, MSG_BROWSER_READ_FAILED, "error");
       return speakContent(ctx, payload.result.blocks, command.type === "summary" ? "summary" : command.type === "question" ? "question" : "read", command.type === "question" ? command.query : undefined);
     case "list-links": return speakLinks(ctx, payload);
     case "tabs": {
@@ -380,13 +394,18 @@ function speakBrowserResult(ctx: TurnContext, payload: BrowserResultPayload, com
       return speak(ctx.hub, ctx.session, `I found ${payload.result.tabs.length} browser tabs. ${tabs.join(" ")} Say the tab number to switch.`, "answer");
     }
     case "scroll": return speak(ctx.hub, ctx.session, payload.result.moved ? "Scrolled the page." : "The page could not scroll further in that direction.", "answer");
-    case "find": return speak(ctx.hub, ctx.session, payload.result.found ? `I found ${payload.result.matchCount} matches for ${command.type === "find" ? command.query : "that text"}.` : "I couldn't find that text on the page.", "answer");
+    case "find": return speak(ctx.hub, ctx.session, payload.result.found ? `I found ${payload.result.matchCount} matches for that text.` : "I couldn't find that text on the page.", "answer");
     case "navigate": return speak(ctx.hub, ctx.session, "Opened the requested website.", "answer");
     case "search": return speak(ctx.hub, ctx.session, "Browser-default search was submitted.", "answer");
     case "open-link": return speak(ctx.hub, ctx.session, "Opened the selected visible link.", "answer");
     case "history": return speak(ctx.hub, ctx.session, "Moved through browser history.", "answer");
     case "reload": return speak(ctx.hub, ctx.session, "Reloaded the current page.", "answer");
-    case "read-content": return speakContent(ctx, payload.result.blocks, "read");
+    case "read-content":
+      if (payload.result.status === "restricted") return speak(ctx.hub, ctx.session, "This page is restricted and does not expose readable content.", "answer");
+      if (payload.result.status === "empty") return speak(ctx.hub, ctx.session, "I couldn't find readable page content.", "answer");
+      if (payload.result.status === "timeout") return speak(ctx.hub, ctx.session, "The selected page text took too long to read.", "error");
+      if (payload.result.status === "capture-failed") return speak(ctx.hub, ctx.session, MSG_BROWSER_READ_FAILED, "error");
+      return speakContent(ctx, payload.result.blocks, "read");
   }
 }
 
@@ -464,11 +483,27 @@ async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, sour
     if (command.type === "read-page" && command.kind !== undefined && command.target !== undefined) {
       const capture = await executor.execute({ op: "capture" });
       if (!capture.ok || !capture.payload.ok || capture.payload.operation !== "capture") return speakBrowserFailure(ctx, capture);
-      return speakContent(ctx, capture.payload.result.blocks.filter((block) => block.kind === command.kind && block.text.toLocaleLowerCase().includes(command.target!.toLocaleLowerCase())), "read");
+      const selected = capture.payload.result.blocks.filter((block) =>
+        block.kind === command.kind && block.text.toLocaleLowerCase().includes(command.target!.toLocaleLowerCase()),
+      );
+      if (selected.length === 0) return speak(ctx.hub, ctx.session, "I couldn't find that visible page text.", "answer");
+      if (selected.length > 1) return speak(ctx.hub, ctx.session, "More than one page text block matches. Please be more specific.", "answer");
+      const read = await executor.execute({
+        op: "read-content",
+        kind: selected[0]!.kind,
+        contentId: selected[0]!.contentId,
+        identity: capture.payload.result,
+      });
+      if (!read.ok || !read.payload.ok) return speakBrowserFailure(ctx, read);
+      if (read.payload.operation !== "read-content") return speak(ctx.hub, ctx.session, MSG_BROWSER_READ_FAILED, "error");
+      return speakBrowserResult(ctx, read.payload, command);
     }
     const capture = await executor.execute({ op: "capture" });
     if (!capture.ok || !capture.payload.ok || capture.payload.operation !== "capture") return speakBrowserFailure(ctx, capture);
     if (capture.payload.result.status === "restricted") return speak(ctx.hub, ctx.session, "This page is restricted and does not expose readable content.", "answer");
+    if (capture.payload.result.status === "timeout") return speak(ctx.hub, ctx.session, "Page content took too long to read.", "error");
+    if (capture.payload.result.status === "capture-failed") return speak(ctx.hub, ctx.session, MSG_BROWSER_READ_FAILED, "error");
+    if (capture.payload.result.status === "empty") return speak(ctx.hub, ctx.session, "I couldn't find readable page content.", "answer");
     return speakContent(ctx, capture.payload.result.blocks, command.type === "summary" ? "summary" : command.type === "question" ? "question" : "read", command.type === "question" ? command.query : undefined);
   }
 
@@ -476,6 +511,17 @@ async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, sour
     const result = await executor.execute({ op: "tabs", action: "switch", targetTabId: command.targetTabId });
     if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
     return speak(ctx.hub, ctx.session, "Switched to the selected browser tab.", "answer");
+  }
+  if (command.type === "scroll" || command.type === "find") {
+    const capture = await executor.execute({ op: "capture" });
+    if (!capture.ok || !capture.payload.ok || capture.payload.operation !== "capture") return speakBrowserFailure(ctx, capture);
+    const identity = capture.payload.result;
+    const operation: BrowserOperation = command.type === "scroll"
+      ? { op: "scroll", identity, direction: command.direction, pixels: command.pixels }
+      : { op: "find", identity, query: command.query };
+    const result = await executor.execute(operation);
+    if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
+    return speakBrowserResult(ctx, result.payload, command);
   }
   let operation: BrowserOperation;
   switch (command.type) {
@@ -485,8 +531,6 @@ async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, sour
     case "open-blank": operation = { op: "tabs", action: "open-blank" }; break;
     case "history": operation = { op: "history", direction: command.direction }; break;
     case "reload": operation = { op: "reload" }; break;
-    case "scroll": operation = { op: "scroll", direction: command.direction, pixels: command.pixels }; break;
-    case "find": operation = { op: "find", query: command.query }; break;
     default: return speak(ctx.hub, ctx.session, "I couldn't safely carry out that browser request.", "error");
   }
   const result = await executor.execute(operation);

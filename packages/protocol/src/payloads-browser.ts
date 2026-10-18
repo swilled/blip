@@ -79,8 +79,11 @@ export const BrowserPageIdentity = z.object({
 export type BrowserPageIdentity = z.infer<typeof BrowserPageIdentity>;
 
 export const BrowserContentBlock = z.object({
+  contentId: BrowserId,
   kind: z.enum(["heading", "paragraph"]),
   text: boundedText(400).min(1),
+  identity: BrowserPageIdentity,
+  frameId: z.number().int().min(0).max(100_000),
 });
 export type BrowserContentBlock = z.infer<typeof BrowserContentBlock>;
 
@@ -92,12 +95,20 @@ const BrowserContentBlocks = z.array(BrowserContentBlock).max(20).superRefine((b
 });
 
 export const BrowserContentResult = BrowserPageIdentity.extend({
-  status: z.enum(["supported", "restricted"]),
+  status: z.enum(["supported", "restricted", "empty", "timeout", "capture-failed"]),
   blocks: BrowserContentBlocks,
   /** This marks only the bounded content excerpt; it is independent of Snapshot.truncated. */
   truncated: z.boolean(),
-}).refine((value) => value.status === "supported" || (value.blocks.length === 0 && !value.truncated), {
-  message: "restricted pages cannot return content blocks",
+}).superRefine((value, ctx) => {
+  if (value.status !== "supported" && (value.blocks.length !== 0 || value.truncated)) {
+    ctx.addIssue({ code: "custom", message: "non-supported content results cannot return blocks" });
+  }
+  for (const block of value.blocks) {
+    if (block.identity.captureId !== value.captureId || block.identity.captureRevision !== value.captureRevision ||
+        block.identity.tabId !== value.tabId || block.identity.pageUrl !== value.pageUrl) {
+      ctx.addIssue({ code: "custom", message: "content blocks must match their capture identity" });
+    }
+  }
 });
 export type BrowserContentResult = z.infer<typeof BrowserContentResult>;
 
@@ -107,15 +118,25 @@ export const BrowserLinkRecord = z.object({
     message: "must not be empty",
   }),
   hostHint: HostHint.nullable(),
+  identity: BrowserPageIdentity,
+  frameId: z.number().int().min(0).max(100_000),
 });
 export type BrowserLinkRecord = z.infer<typeof BrowserLinkRecord>;
 
 export const BrowserLinkListResult = BrowserPageIdentity.extend({
-  status: z.enum(["supported", "restricted"]),
+  status: z.enum(["supported", "restricted", "empty"]),
   links: z.array(BrowserLinkRecord).max(100),
   truncated: z.boolean(),
-}).refine((value) => value.status === "supported" || (value.links.length === 0 && !value.truncated), {
-  message: "restricted pages cannot return links",
+}).superRefine((value, ctx) => {
+  if (value.status !== "supported" && (value.links.length !== 0 || value.truncated)) {
+    ctx.addIssue({ code: "custom", message: "non-supported link results cannot return links" });
+  }
+  for (const link of value.links) {
+    if (link.identity.captureId !== value.captureId || link.identity.captureRevision !== value.captureRevision ||
+        link.identity.tabId !== value.tabId || link.identity.pageUrl !== value.pageUrl) {
+      ctx.addIssue({ code: "custom", message: "links must match their capture identity" });
+    }
+  }
 });
 export type BrowserLinkListResult = z.infer<typeof BrowserLinkListResult>;
 
@@ -142,7 +163,7 @@ export const BrowserOperation = z.discriminatedUnion("op", [
   z.object({
     op: z.literal("read-content"),
     kind: z.enum(["heading", "paragraph"]),
-    target: NonEmptyQuery,
+    contentId: BrowserId,
     identity: BrowserPageIdentity,
   }),
   z.object({
@@ -155,8 +176,9 @@ export const BrowserOperation = z.discriminatedUnion("op", [
     op: z.literal("scroll"),
     direction: z.enum(["up", "down"]),
     pixels: z.number().int().min(1).max(2000),
+    identity: BrowserPageIdentity,
   }),
-  z.object({ op: z.literal("find"), query: NonEmptyQuery }),
+  z.object({ op: z.literal("find"), query: NonEmptyQuery, identity: BrowserPageIdentity }),
 ]);
 export type BrowserOperation = z.infer<typeof BrowserOperation>;
 
@@ -219,7 +241,7 @@ const BrowserError = z.object({
   code: z.enum([
     "unsupported-page", "restricted-page", "stale-page", "stale-capture", "not-found",
     "ambiguous", "unauthorized", "invalid-target", "unsupported-destination-check", "invalid-request",
-    "timeout", "unavailable", "exception",
+    "unsupported-frame", "timeout", "unavailable", "exception",
   ]),
   message: boundedText(300),
 });

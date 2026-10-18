@@ -15,6 +15,23 @@ const identity = {
   pageUrl: "https://example.test/article/",
 };
 
+const contentBlock = (kind: "heading" | "paragraph", text: string, contentId = "content-1") => ({
+  contentId,
+  kind,
+  text,
+  identity,
+  frameId: 0,
+});
+
+const linkRecord = (linkId: string, label: string, hostHint: string | null, extra: Record<string, unknown> = {}) => ({
+  linkId,
+  label,
+  hostHint,
+  identity,
+  frameId: 0,
+  ...extra,
+});
+
 const validOperations: BrowserOperationType[] = [
   { op: "location" },
   { op: "capture" },
@@ -26,22 +43,22 @@ const validOperations: BrowserOperationType[] = [
   { op: "tabs", action: "switch", targetTabId: 8 },
   { op: "tabs", action: "open-blank" },
   { op: "list-links" },
-  { op: "read-content", kind: "heading", target: "Latest stories", identity },
+  { op: "read-content", kind: "heading", contentId: "content-1", identity },
   { op: "open-link", linkId: "link-1", identity, authorizationId: "auth-3" },
-  { op: "scroll", direction: "down", pixels: 500 },
-  { op: "find", query: "newsletter" },
+  { op: "scroll", direction: "down", pixels: 500, identity },
+  { op: "find", query: "newsletter", identity },
 ];
 
 const validSuccessResults = [
   { ok: true, requestId: "request-1", operation: "location", result: { tabId: 7, pageUrl: identity.pageUrl, title: "Article", status: "supported" } },
-  { ok: true, requestId: "request-1", operation: "capture", result: { ...identity, status: "supported", blocks: [{ kind: "heading", text: "Latest stories" }], truncated: false } },
+  { ok: true, requestId: "request-1", operation: "capture", result: { ...identity, status: "supported", blocks: [contentBlock("heading", "Latest stories")], truncated: false } },
   { ok: true, requestId: "request-1", operation: "navigate", result: { tabId: 7, status: "dispatched" } },
   { ok: true, requestId: "request-1", operation: "history", result: { tabId: 7, status: "completed" } },
   { ok: true, requestId: "request-1", operation: "reload", result: { tabId: 7, status: "dispatched" } },
   { ok: true, requestId: "request-1", operation: "search", result: { tabId: 7, status: "dispatched" } },
   { ok: true, requestId: "request-1", operation: "tabs", result: { activeTabId: 7, tabs: [{ tabId: 7, title: "Article", hostHint: "example.test" }], truncated: false } },
-  { ok: true, requestId: "request-1", operation: "list-links", result: { ...identity, status: "supported", links: [{ linkId: "link-1", label: "More", hostHint: "example.test" }], truncated: false } },
-  { ok: true, requestId: "request-1", operation: "read-content", result: { ...identity, status: "supported", blocks: [{ kind: "paragraph", text: "A bounded excerpt." }], truncated: false } },
+  { ok: true, requestId: "request-1", operation: "list-links", result: { ...identity, status: "supported", links: [linkRecord("link-1", "More", "example.test")], truncated: false } },
+  { ok: true, requestId: "request-1", operation: "read-content", result: { ...identity, status: "supported", blocks: [contentBlock("paragraph", "A bounded excerpt.")], truncated: false } },
   { ok: true, requestId: "request-1", operation: "open-link", result: { tabId: 7, status: "dispatched" } },
   { ok: true, requestId: "request-1", operation: "scroll", result: { identity, moved: true } },
   { ok: true, requestId: "request-1", operation: "find", result: { identity, found: true, matchCount: 1, truncated: false } },
@@ -86,7 +103,7 @@ describe("BrowserOperation", () => {
     expect(BrowserRequestPayload.safeParse({
       requestId: "request-1",
       tabId: 8,
-      operation: { op: "read-content", kind: "heading", target: "Title", identity },
+      operation: { op: "read-content", kind: "heading", contentId: "content-1", identity },
     }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "scroll", direction: "down", pixels: 0 }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "tabs", action: "switch" }).success).toBe(false);
@@ -97,20 +114,20 @@ describe("BrowserOperation", () => {
 describe("browser content and link bounds", () => {
   it("counts Unicode code points per block and in aggregate", () => {
     const emojiBlock = "😀".repeat(400);
-    const capture = { ...identity, status: "supported", blocks: [{ kind: "paragraph", text: emojiBlock }], truncated: false };
+    const capture = { ...identity, status: "supported", blocks: [contentBlock("paragraph", emojiBlock)], truncated: false };
     expect(BrowserContentResult.safeParse(capture).success).toBe(true);
     expect(BrowserContentResult.safeParse({
       ...capture,
-      blocks: Array.from({ length: 20 }, () => ({ kind: "paragraph", text: "x".repeat(200) })),
+      blocks: Array.from({ length: 20 }, (_, index) => contentBlock("paragraph", "x".repeat(200), `content-${index}`)),
     }).success).toBe(true);
-    expect(BrowserContentResult.safeParse({ ...capture, blocks: [{ kind: "paragraph", text: emojiBlock + "😀" }] }).success).toBe(false);
+    expect(BrowserContentResult.safeParse({ ...capture, blocks: [contentBlock("paragraph", emojiBlock + "😀")] }).success).toBe(false);
     expect(BrowserContentResult.safeParse({
       ...capture,
-      blocks: Array.from({ length: 11 }, () => ({ kind: "paragraph", text: "x".repeat(400) })),
+      blocks: Array.from({ length: 11 }, (_, index) => contentBlock("paragraph", "x".repeat(400), `content-${index}`)),
     }).success).toBe(false);
     expect(BrowserContentResult.safeParse({
       ...capture,
-      blocks: Array.from({ length: 21 }, () => ({ kind: "paragraph", text: "x" })),
+      blocks: Array.from({ length: 21 }, (_, index) => contentBlock("paragraph", "x", `content-${index}`)),
     }).success).toBe(false);
   });
 
@@ -119,7 +136,7 @@ describe("browser content and link bounds", () => {
     expect(BrowserLinkListResult.safeParse({
       ...identity,
       status: "supported",
-      links: [{ linkId: "link-1", label: "x".repeat(201), hostHint: "example.test" }],
+      links: [linkRecord("link-1", "x".repeat(201), "example.test")],
       truncated: false,
     }).success).toBe(false);
   });
@@ -128,14 +145,14 @@ describe("browser content and link bounds", () => {
     const parsed = BrowserLinkListResult.parse({
       ...identity,
       status: "supported",
-      links: [{ linkId: "link-1", label: "Read more", hostHint: "example.test", href: "https://example.test/secret" }],
+      links: [linkRecord("link-1", "Read more", "example.test", { href: "https://example.test/secret" })],
       truncated: false,
     });
-    expect(parsed.links[0]).toEqual({ linkId: "link-1", label: "Read more", hostHint: "example.test" });
+    expect(parsed.links[0]).toEqual(linkRecord("link-1", "Read more", "example.test"));
     expect(BrowserLinkListResult.safeParse({
       ...identity,
       status: "supported",
-      links: [{ linkId: "link-1", label: "Read more", hostHint: "https://example.test/path" }],
+      links: [linkRecord("link-1", "Read more", "https://example.test/path")],
       truncated: false,
     }).success).toBe(false);
   });
@@ -143,7 +160,7 @@ describe("browser content and link bounds", () => {
   it("distinguishes restricted pages from a successful empty capture", () => {
     expect(BrowserContentResult.safeParse({ ...identity, status: "supported", blocks: [], truncated: false }).success).toBe(true);
     expect(BrowserContentResult.safeParse({ ...identity, pageUrl: "chrome://settings/", status: "restricted", blocks: [], truncated: false }).success).toBe(true);
-    expect(BrowserContentResult.safeParse({ ...identity, status: "restricted", blocks: [{ kind: "paragraph", text: "not allowed" }], truncated: false }).success).toBe(false);
+    expect(BrowserContentResult.safeParse({ ...identity, status: "restricted", blocks: [contentBlock("paragraph", "not allowed")], truncated: false }).success).toBe(false);
   });
 });
 
