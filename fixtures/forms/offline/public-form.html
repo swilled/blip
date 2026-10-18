@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Offline copy — Team leave request</title>
+    <style>
+      :root { color-scheme: light; font: 1rem/1.5 system-ui, sans-serif; color: #18212b; background: #f5f7f9; }
+      body { max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
+      main { padding: 1.5rem; border: 1px solid #7a8794; border-radius: .4rem; background: #fff; }
+      .offline { padding: .75rem 1rem; border-left: .35rem solid #945900; background: #fff2d7; font-weight: 700; }
+      label { display: block; margin: 1rem 0; }
+      input, select, button { box-sizing: border-box; min-height: 2.75rem; max-width: 100%; padding: .5rem; font: inherit; }
+      #result { min-height: 1.5em; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="offline" role="status">OFFLINE DEMO COPY — this local practice page does not send a response.</p>
+      <h1>Team leave request</h1>
+      <p>This page mirrors the team-owned demo form fields for offline practice. Use fictional test values only.</p>
+      <fieldset>
+        <legend>Request details</legend>
+        <label for="name">Name</label>
+        <input id="name" name="name" autocomplete="off">
+
+        <label for="employment-type">Employment type <span>(required)</span></label>
+        <select id="employment-type" name="employment-type" required>
+          <option value="">Choose an option</option>
+          <option>Full time</option>
+          <option>Part time</option>
+          <option>Contract</option>
+        </select>
+
+        <label for="department">Department <span>(required)</span></label>
+        <input id="department" name="department" required autocomplete="off">
+
+        <label for="title">Title</label>
+        <input id="title" name="title" autocomplete="off">
+
+        <label for="leave-type">Leave type <span>(required)</span></label>
+        <select id="leave-type" name="leave-type" required>
+          <option value="">Choose an option</option>
+          <option>Annual leave</option>
+          <option>Personal leave</option>
+          <option>Study leave</option>
+        </select>
+
+        <label for="leave-date">Leave date <span>(required)</span></label>
+        <input id="leave-date" name="leave-date" type="date" required>
+
+        <label for="return-date">Return date <span>(required)</span></label>
+        <input id="return-date" name="return-date" type="date" required>
+      </fieldset>
+
+      <button id="check-local" type="button">Check this local practice page</button>
+      <p id="result" role="status" aria-live="polite"></p>
+    </main>
+    <script>
+      const requiredFields = [...document.querySelectorAll("[required]")];
+      const result = document.getElementById("result");
+      document.getElementById("check-local").addEventListener("click", () => {
+        const missing = requiredFields
+          .filter((field) => !field.value.trim())
+          .map((field) => field.labels[0].textContent.replace(" (required)", ""));
+        result.textContent = missing.length
+          ? `Offline practice only. Still required: ${missing.join(", ")}. No response was sent.`
+          : "Offline practice only. Local fields are complete. No response was sent.";
+      });
+    </script>
+  </body>
+</html>

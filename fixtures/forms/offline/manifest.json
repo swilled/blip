@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "notice": "Offline routes are local practice copies. They do not replace live-site evidence.",
+  "sites": [
+    {
+      "id": "team-leave-request",
+      "purpose": "Phase 3 team-owned Microsoft Form",
+      "liveUrl": "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=DQSIkWdsW0yxEjajBLZtrQAAAAAAAAAAAANAARkYjixUQ1JLWkRTT1lMVVYyTUxSOFRaQ1EySzhNSi4u",
+      "offlineRoute": "/fixtures/forms/offline/public-form.html",
+      "offlineFile": "fixtures/forms/offline/public-form.html",
+      "reset": "Live: open a fresh response page or clear the page. Offline: reload the local route; it stores and sends no response.",
+      "humanEvidence": "pending"
+    },
+    {
+      "id": "broken-survey",
+      "purpose": "Existing synthetic local survey",
+      "offlineRoute": "/fixtures/forms/broken.html",
+      "offlineFile": "fixtures/forms/broken.html",
+      "reset": "npm.cmd run reset -w @blip/mock-server",
+      "humanEvidence": "existing-local-fixture"
+    },
+    {
+      "id": "injection-defense",
+      "purpose": "Existing core-owned synthetic injection fixture",
+      "offlineRoute": "/injection.html",
+      "offlineFile": "tools/test-pages/public/injection.html",
+      "server": "Core-owned tools/test-pages host (default loopback port 7790)",
+      "reset": "Open a fresh local fixture page; no live target or personal data is used.",
+      "humanEvidence": "existing-local-fixture"
+    }
+  ]
+}

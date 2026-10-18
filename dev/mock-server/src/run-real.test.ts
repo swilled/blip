@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { buildFrame, FormModel, parseFrame, type Message } from "@blip/protocol";
+import { startTestPages } from "../../../tools/test-pages/serve";
 import { initialState, reduce } from "@blip/dialogue";
 import fixtureJson from "../../../fixtures/forms/broken-form.model.json" with { type: "json" };
 import { buildManagedRunnerArgs, DEMO_EXTENSION_ID, installManagedShutdownHandlers, startReal } from "./run-real";
@@ -102,5 +103,38 @@ describe("run-real", () => {
     const formPage = await fetch(`http://127.0.0.1:${port}/fixtures/forms/broken.html`);
     expect(formPage.status).toBe(200);
     expect(await formPage.text()).toContain("Customer survey");
+
+    const offlinePage = await fetch(`http://127.0.0.1:${port}/fixtures/forms/offline/public-form.html`);
+    expect(offlinePage.status).toBe(200);
+    const offlineHtml = await offlinePage.text();
+    expect(offlineHtml).toContain("OFFLINE DEMO COPY");
+    expect(offlineHtml).toContain("Employment type");
+    expect(offlineHtml).toContain("Department");
+    expect(offlineHtml).toContain("Leave type");
+    expect(offlineHtml).toContain("Leave date");
+    expect(offlineHtml).toContain("Return date");
+    expect(offlineHtml).toContain('type="button"');
+    expect(offlineHtml).not.toMatch(/<form\b/i);
+    expect(offlineHtml).not.toMatch(/<script\b[^>]*\bsrc=/i);
+    expect(offlineHtml).not.toMatch(/<link\b[^>]*\bhref=/i);
+    expect(offlineHtml).not.toContain("forms.cloud.microsoft");
+
+    const manifestResponse = await fetch(`http://127.0.0.1:${port}/fixtures/forms/offline/manifest.json`);
+    expect(manifestResponse.status).toBe(200);
+    const manifest = await manifestResponse.json() as { sites: Array<{ id: string; offlineRoute: string }> };
+    expect(manifest.sites.map((site) => site.id)).toEqual([
+      "team-leave-request",
+      "broken-survey",
+      "injection-defense",
+    ]);
+    for (const route of manifest.sites.map((site) => site.offlineRoute).filter((route) => route.startsWith("/fixtures/forms/"))) {
+      expect((await fetch(`http://127.0.0.1:${port}${route}`)).status).toBe(200);
+    }
+
+    const corePages = await startTestPages({ port: 0, build: false });
+    closers.push(() => corePages.close());
+    const injectionPage = await fetch(`${corePages.origins.primary}/injection.html`);
+    expect(injectionPage.status).toBe(200);
+    expect(await injectionPage.text()).toContain("Blip");
   });
 });
