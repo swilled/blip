@@ -192,7 +192,7 @@ Plans:
 - [x] 04-03-PLAN.md — Live-form rehearsal, offline fallbacks, and freeze evidence
 - [x] 04-04-PLAN.md — Current Chrome build, reopen flow, microphone readiness, and diagnostics
 - [x] 04-05-PLAN.md — Reliable held capture and complete speech transcription
-- [ ] 04-06-PLAN.md — Audible Windows rate levels and speech-output recovery
+- [x] 04-06-PLAN.md — Audible Windows rate levels and speech-output recovery
 - [ ] 04-07-PLAN.md — Tracked acknowledgement speech and real PTT confirmation integration
 - [ ] 04-08-PLAN.md — Regression proof, short device checklist, and remaining milestone evidence
 
