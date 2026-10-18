@@ -50,10 +50,9 @@ blocked: 0
 
 ## Observations
 
-- Test 1 is still pending. The visible page had the legacy `Talk to Blip` interface, and the served `/voice/` HTML came from `apps/voice/public`; that page has no Phase 4 speech-rate or output-mode controls. The demo launcher now builds the Phase 4 Vite client and serves `apps/voice/dist`. The already-running server still needs a restart before retesting. The voice window also had to be opened by URL, so automatic window visibility remains unverified.
-- User confirmed the “Press Space to start Blip” screen disappeared after activation. The later Faster-control attempt was inconclusive because the active page was the legacy interface.
+- Test 1 is still pending. The first visible page was the legacy `Talk to Blip` interface from `apps/voice/public`; the updated launcher now builds and serves the Phase 4 client from `apps/voice/dist`. After restarting, the user confirmed both Phase 4 control groups were visible. Clicking Faster and then Slower produced audible confirmations, with Slower clearly slower. The “Press Space to start Blip” screen disappeared after activation. The initial voice-command attempt was inconclusive because the legacy page was active; retest the voice shortcut and record whether the launcher opens a visible window automatically.
 
 ## Gaps
 
-- Restart the demo with the updated launcher, confirm the Phase 4 controls appear, and repeat the rate-control check. Record whether the launcher itself opens a visible voice window.
+- Test the Faster/Slower voice shortcut on the Phase 4 page and record whether the launcher itself opens a visible voice window.
 
