@@ -212,7 +212,7 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
 | 6. Browser Control Contract and Policy Proposal | 2/2 | Proposal complete; follow-on phases authorized, review pending before merge | 2026-10-18 |
 | 7. Generic Browser Control and Content Reading | 2/6 | In Progress - 07-01 and 07-02 complete; four plans remain | - |
-| 8. Multi-Step Web Reading and Drafting | 0/0 | Planned after Phase 7 | - |
+| 8. Multi-Step Web Reading and Drafting | 1/6 | In Progress - 08-01 complete; five plans remain | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 
@@ -251,7 +251,7 @@ Plans:
 **Plans:** 6 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Capture generic visible items with bounded recency evidence
+- [x] 08-01-PLAN.md — Capture generic visible items with bounded recency evidence
 - [ ] 08-02-PLAN.md — Route item reads through the full extension path with live DOM revalidation
 - [ ] 08-03-PLAN.md — Add per-session task state and deterministic item resolution
 - [ ] 08-04-PLAN.md — Compose and revise drafts with observed field read-back

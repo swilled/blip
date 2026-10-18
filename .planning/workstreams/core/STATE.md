@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase complete — ready for verification
-stopped_at: Completed 07-06-PLAN.md
-last_updated: "2026-10-18T06:34:40.767Z"
+status: Ready to execute
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-10-18T07:10:47.727Z"
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 84
-  completed_plans: 69
+  total_plans: 90
+  completed_plans: 70
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 07 — implement-generic-user-directed-browser-control-and-content-reading
+**Current focus:** Phase 8 — Multi-step web reading and drafting
 
 ## Current Position
 
-Phase: 07 (implement-generic-user-directed-browser-control-and-content-reading) — EXECUTING
-Plan: 6 of 6
+Phase: 8 (Multi-step web reading and drafting) — EXECUTING
+Plan: 2 of 6
 
 ## Performance Metrics
 
@@ -90,6 +90,7 @@ Plan: 6 of 6
 | Phase 07-implement-generic-user-directed-browser-control-and-content-reading P07-04 | 15min | 2 tasks | 15 files |
 | Phase 07 P05 | 9 min | 1 tasks | 9 files |
 | Phase 07 P07-06 | 14m | 2 tasks | 3 files |
+| Phase 08 P08-01 | 6 min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,9 @@ Recent decisions affecting current work:
 - [Phase 07]: Keep the page-content AGY role lazy and tool-less so direct reads and unrelated commands never initialize or call it.
 - [Phase 07]: Bind prose answers to capture identity locally while omitting capture identifiers and URL from the model prompt.
 - [Phase 07]: Keep content-role bootstrap and dispatch caps at zero in bounded live checks; use synthetic injected tests.
+- [Phase 08-01]: Keep the item list optional so legacy browser captures remain valid.
+- [Phase 08-01]: Treat missing, malformed, or inconsistent visible time evidence as unknown recency.
+- [Phase 08-01]: Keep the protocol delta local and pending written voice-owner review before merge or push.
 
 ### Pending Todos
 
@@ -192,6 +196,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T06:34:40.762Z
-Stopped at: Completed 07-06-PLAN.md
+Last session: 2026-10-18T07:10:47.723Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
