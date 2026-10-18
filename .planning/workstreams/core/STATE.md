@@ -206,6 +206,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | Voice window Design D: dock snapping and smooth motion | 2026-10-18 | 6cedfd8 | [261018-99x-voice-window-design-d-dock-snapping-and-](./quick/261018-99x-voice-window-design-d-dock-snapping-and-/) |
+| 2 | Create app-focused GitHub README with demo video and screenshots | 2026-10-22 | pending approval | [261022-01r-create-app-focused-github-readme-with-de](./quick/261022-01r-create-app-focused-github-readme-with-de/) |
 
 ### Roadmap Evolution
 
