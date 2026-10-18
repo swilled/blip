@@ -177,16 +177,12 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
     return true;
   }
 
-  function authorizationWasUsed(id: string): boolean {
-    const currentTime = now();
-    for (const [usedId, expiresAt] of usedAuthorizations) {
-      if (expiresAt <= currentTime) usedAuthorizations.delete(usedId);
-    }
-    return usedAuthorizations.has(id);
-  }
-
   async function dispatchValid(request: Extract<ReturnType<typeof BrowserRequestPayload.parse>, object>): Promise<BrowserResult> {
     const { requestId, tabId, operation } = request;
+    const operationAuthorizationId = authorizationId(operation);
+    if (operationAuthorizationId !== undefined && !consumeAuthorization(operationAuthorizationId)) {
+      return failure(requestId, operation.op, "unauthorized", "This browser authorization was already used or expired.");
+    }
     const api = apiFor(dependencies);
     if (!api) return failure(requestId, operation.op, "unavailable", "Browser APIs are unavailable.");
 
@@ -253,14 +249,12 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       const parsedDestination = BrowserDestinationUrl.safeParse(operation.url);
       if (!parsedDestination.success) return failure(requestId, "navigate", "invalid-target", "Navigation requires a canonical HTTP(S) destination.");
       if (authorizationId(operation) === undefined) return failure(requestId, "navigate", "unauthorized", "Navigation requires core authorization.");
-      if (authorizationWasUsed(operation.authorizationId)) return failure(requestId, "navigate", "unauthorized", "This browser authorization was already used or expired.");
       if (!api.tabs?.update) return failure(requestId, "navigate", "unavailable", "Browser navigation is unavailable.");
       const current = await liveCurrentTab(api, dependencies, tabId);
       if (!current) return failure(requestId, "navigate", "stale-page", "The authorized source tab changed before navigation.");
       const beforeUrl = current.url;
       const rechecked = await liveCurrentTab(api, dependencies, current.id, beforeUrl);
       if (!rechecked) return failure(requestId, "navigate", "stale-page", "The authorized source page changed before navigation.");
-      if (!consumeAuthorization(operation.authorizationId)) return failure(requestId, "navigate", "unauthorized", "This browser authorization was already used or expired.");
       try {
         const updated = await api.tabs.update(current.id, { url: parsedDestination.data });
         if (updated.id !== current.id) return failure(requestId, "navigate", "stale-page", "The target tab changed during navigation.");
@@ -289,7 +283,6 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
 
     if (operation.op === "search") {
       if (authorizationId(operation) === undefined) return failure(requestId, "search", "unauthorized", "Search requires core authorization.");
-      if (authorizationWasUsed(operation.authorizationId)) return failure(requestId, "search", "unauthorized", "This browser authorization was already used or expired.");
       if (operation.route !== "browser-default") {
         return failure(requestId, "search", "unavailable", "Site search is handled by the core form workflow.");
       }
@@ -307,7 +300,17 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       }
       const rechecked = await liveCurrentTab(api, dependencies, current.id, sourceUrl);
       if (!rechecked) return failure(requestId, "search", "stale-page", "The authorized search source page changed before dispatch.");
-      if (!consumeAuthorization(operation.authorizationId)) return failure(requestId, "search", "unauthorized", "This browser authorization was already used or expired.");
+      if (!api.tabs?.query) return failure(requestId, "search", "unavailable", "The active browser tab could not be verified.");
+      let activeTab: TabRecord | undefined;
+      try {
+        const activeTabs = await api.tabs.query({ active: true, lastFocusedWindow: true });
+        activeTab = activeTabs[0];
+      } catch {
+        return failure(requestId, "search", "unavailable", "The active browser tab could not be verified.");
+      }
+      if (!activeTab || activeTab.id !== current.id || activeTab.url !== sourceUrl) {
+        return failure(requestId, "search", "stale-page", "The authorized search source is not the active browser tab.");
+      }
       try {
         await api.search.query({ text: operation.query, disposition: "CURRENT_TAB" });
         snapshotVersions.forget(current.id);
@@ -319,12 +322,10 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
 
     if (operation.op === "open-link") {
       if (authorizationId(operation) === undefined) return failure(requestId, "open-link", "unauthorized", "Opening a link requires core authorization.");
-      if (authorizationWasUsed(operation.authorizationId)) return failure(requestId, "open-link", "unauthorized", "This browser authorization was already used or expired.");
       const current = await liveCurrentTab(api, dependencies, tabId);
       if (!current || current.id !== operation.identity.tabId || current.url !== operation.identity.pageUrl) {
         return failure(requestId, "open-link", "stale-page", "The selected link no longer belongs to the current page.");
       }
-      if (!consumeAuthorization(operation.authorizationId)) return failure(requestId, "open-link", "unauthorized", "This browser authorization was already used or expired.");
       return failure(requestId, "open-link", "unavailable", "The extension has no current visible-link capture to open.");
     }
 

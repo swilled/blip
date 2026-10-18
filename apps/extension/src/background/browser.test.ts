@@ -9,7 +9,7 @@ const PAGE: BrowserTargetTab = { id: 7, url: "https://forms.example/contact", ti
 function browserApi(overrides: Record<string, unknown> = {}) {
   const tabs = {
     get: vi.fn(async (tabId: number): Promise<TabRecord> => tabId === PAGE.id ? { ...PAGE } : { id: tabId, url: "about:blank" }),
-    query: vi.fn(async () => [{ ...PAGE }]),
+    query: vi.fn(async (_queryInfo?: Record<string, unknown>) => [{ ...PAGE }]),
     create: vi.fn(async (): Promise<TabRecord> => ({ id: 9, url: "about:blank", title: "New tab", active: true })),
     update: vi.fn(async (tabId: number, properties: { active?: boolean; url?: string }): Promise<TabRecord> => ({
       ...(tabId === PAGE.id ? PAGE : { id: tabId, url: "about:blank" }),
@@ -153,6 +153,8 @@ describe("extension browser request dispatcher", () => {
 
   it("uses only the exact browser-default query with CURRENT_TAB and no result-link authority", async () => {
     const state = browserApi();
+    state.tabs.query.mockImplementation(async (queryInfo: Record<string, unknown> = {}) =>
+      queryInfo["active"] === true ? [{ ...PAGE }] : [{ ...PAGE }]);
     const dispatch = dispatcher(state);
     const searchRequest = request({
       op: "search", route: "browser-default", query: "Gainesville bus schedule", authorizationId: "auth-search-1",
@@ -164,6 +166,11 @@ describe("extension browser request dispatcher", () => {
       requestId: "request-2",
       operation: { ...searchRequest.operation, query: "a different search" },
     });
+    const changedPage = await dispatch({
+      ...searchRequest,
+      requestId: "request-3",
+      tabId: 8,
+    });
     const resultLink = await dispatch(request({
       op: "open-link",
       linkId: "link-1",
@@ -174,6 +181,7 @@ describe("extension browser request dispatcher", () => {
     expect(searched).toMatchObject({ ok: true, operation: "search", result: { tabId: 7, status: "dispatched" } });
     expect(state.search.query).toHaveBeenCalledExactlyOnceWith({ text: "Gainesville bus schedule", disposition: "CURRENT_TAB" });
     expect(changedQuery).toMatchObject({ ok: false, error: { code: "unauthorized" } });
+    expect(changedPage).toMatchObject({ ok: false, error: { code: "unauthorized" } });
     expect(resultLink).toMatchObject({ ok: false, operation: "open-link", error: { code: "unauthorized" } });
     expect(state.tabs.update).not.toHaveBeenCalled();
   });
@@ -196,6 +204,18 @@ describe("extension browser request dispatcher", () => {
     expect(missingApi.tabs.update).not.toHaveBeenCalled();
   });
 
+  it("does not fall back when browser-default search rejects the exact request", async () => {
+    const state = browserApi();
+    state.search.query.mockRejectedValue(new Error("search unavailable"));
+    const result = await dispatcher(state)(request({
+      op: "search", route: "browser-default", query: "exact phrase", authorizationId: "auth-rejected",
+    }));
+
+    expect(result).toMatchObject({ ok: false, operation: "search", error: { code: "unavailable" } });
+    expect(state.search.query).toHaveBeenCalledExactlyOnceWith({ text: "exact phrase", disposition: "CURRENT_TAB" });
+    expect(state.tabs.update).not.toHaveBeenCalled();
+  });
+
   it("rechecks that the selected page still matches the authorized search source", async () => {
     const state = browserApi();
     const dispatch = createBrowserRequestDispatcher({
@@ -207,6 +227,19 @@ describe("extension browser request dispatcher", () => {
 
     const result = await dispatch(request({
       op: "search", route: "browser-default", query: "exact phrase", authorizationId: "auth-stale-search",
+    }));
+
+    expect(result).toMatchObject({ ok: false, error: { code: "stale-page" } });
+    expect(state.search.query).not.toHaveBeenCalled();
+  });
+
+  it("refuses browser-default search when Chrome would direct CURRENT_TAB elsewhere", async () => {
+    const state = browserApi();
+    state.tabs.query.mockImplementation(async (queryInfo: Record<string, unknown> = {}) =>
+      queryInfo["active"] === true ? [{ id: 8, url: "https://other.example/" }] : [{ ...PAGE }]);
+
+    const result = await dispatcher(state)(request({
+      op: "search", route: "browser-default", query: "exact phrase", authorizationId: "auth-other-active",
     }));
 
     expect(result).toMatchObject({ ok: false, error: { code: "stale-page" } });
