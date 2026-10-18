@@ -1,7 +1,12 @@
 import { Intent } from "@blip/protocol";
 import { z } from "zod";
 import type { IntentBrain } from "../fake-brain";
-import { serializePageContentProjectionForPrompt, type PageContentProjection } from "./content-projection";
+import {
+  containsPageActionInstruction,
+  serializePageContentProjectionForPrompt,
+  type PageContentProjection,
+} from "./content-projection";
+import { containsSensitivePageText } from "./privacy";
 import {
   AgyRoleSessionManager,
   UnexpectedAgyToolCallError,
@@ -20,6 +25,7 @@ const RepairPatchSchema = z.object({
 }).strict();
 
 const PageAnswerSchema = z.object({ prose: z.string().min(1).max(1000) }).strict();
+const PageDraftSchema = z.object({ prose: z.string().min(1).max(1000) }).strict();
 
 export type RepairPatch = z.infer<typeof RepairPatchSchema>;
 
@@ -28,7 +34,8 @@ export type AgyOutputFailureCategory =
   | "intent_schema_rejected"
   | "intent_shape_rejected"
   | "repair_schema_rejected"
-  | "content_schema_rejected";
+  | "content_schema_rejected"
+  | "content_prose_rejected";
 
 export class InvalidAgyOutputError extends Error {
   readonly role: AgyRole;
@@ -51,6 +58,8 @@ export type AgyProvider = IntentBrain & {
   repairFormModel(prompt: string, signal?: AbortSignal): Promise<RepairPatch>;
   /** Returns bounded prose only; page content cannot become a browser command or authorization. */
   answerPageQuestion(projection: PageContentProjection, signal?: AbortSignal): Promise<string>;
+  /** Returns bounded proposed prose only for an explicit draft or revision request. */
+  draftPageText(projection: PageContentProjection, signal?: AbortSignal): Promise<string>;
   abortRole(role: AgyRole): Promise<void>;
   recreateRole(role: AgyRole): Promise<void>;
   close(): Promise<void>;
@@ -129,6 +138,19 @@ export async function createAgyProvider(options: AgyProviderOptions = {}): Promi
       const parsed = PageAnswerSchema.safeParse(parseJson("content", raw));
       if (!parsed.success) throw new InvalidAgyOutputError("content", "content_schema_rejected");
       return parsed.data.prose;
+    },
+    async draftPageText(projection, signal) {
+      if (projection.type !== "draft" && projection.type !== "revision") {
+        throw new InvalidAgyOutputError("content", "content_schema_rejected");
+      }
+      const raw = await sessions.call("content", serializePageContentProjectionForPrompt(projection), signal);
+      const parsed = PageDraftSchema.safeParse(parseJson("content", raw));
+      if (!parsed.success) throw new InvalidAgyOutputError("content", "content_schema_rejected");
+      const prose = parsed.data.prose;
+      if (Array.from(prose).length > 1000 || containsSensitivePageText(prose) || containsPageActionInstruction(prose)) {
+        throw new InvalidAgyOutputError("content", "content_prose_rejected");
+      }
+      return prose;
     },
     abortRole: (role) => sessions.abortRole(role),
     recreateRole: (role) => sessions.recreateRole(role),
