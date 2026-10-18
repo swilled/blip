@@ -58,6 +58,15 @@ describe("page task commands", () => {
       type: "read-item", selection: { type: "text", value: "park opening" },
     });
     expect(parsePageTaskCommand("summarize latest")).toEqual({ type: "summarize-item", selection: { type: "latest" } });
+    expect(parsePageTaskCommand("Could you summarize that email again?")).toEqual({ type: "summarize-item", selection: { type: "current" } });
+    expect(parsePageTaskCommand("Could you summarize it again?")).toEqual({ type: "summarize-item", selection: { type: "current" } });
+    expect(parsePageTaskCommand("Read it again")).toEqual({ type: "read-item", selection: { type: "current" } });
+    expect(parsePageTaskCommand("Read my latest email to me")).toEqual({ type: "read-item", selection: { type: "latest" } });
+    expect(parsePageTaskCommand("What's the latest email I have?")).toEqual({ type: "read-item", selection: { type: "latest" } });
+    expect(parsePageTaskCommand("What is my latest email?")).toEqual({ type: "read-item", selection: { type: "latest" } });
+    expect(parsePageTaskCommand("What are my 3 latest emails?")).toEqual({ type: "read-items", count: 3 });
+    expect(parsePageTaskCommand("List 3 newest messages")).toEqual({ type: "read-items", count: 3 });
+    expect(parsePageTaskCommand("Draft a response")).toMatchObject({ type: "draft", selection: { type: "current" } });
     expect(parsePageTaskCommand("ask latest: what is the request?")).toEqual({
       type: "question-item", selection: { type: "latest" }, question: "what is the request?",
     });
@@ -69,7 +78,9 @@ describe("page task commands", () => {
       targetWords: "Reply message",
     });
     expect(parsePageTaskCommand("send this email")).toEqual({ type: "send-draft" });
+    expect(parsePageTaskCommand("yes, that's good")).toEqual({ type: "send-draft" });
     expect(parsePageTaskCommand("revise draft make it shorter")).toEqual({ type: "revise", instruction: "make it shorter" });
+    expect(parsePageTaskCommand("Can you make it more concise?")).toEqual({ type: "revise", instruction: "more concise" });
     expect(parsePageTaskCommand("cancel this task")).toEqual({ type: "cancel" });
     expect(parsePageTaskCommand("yes")).toBeNull();
     expect(parsePageTaskCommand("read the page")).toBeNull();
@@ -87,22 +98,43 @@ describe("page task commands", () => {
     expect(session.activePageTask).toMatchObject({ itemId: "item-latest", taskKind: "read-item" });
   });
 
-  it.each([
-    ["tied maximum dates", [
+  it("breaks tied dates by visible list order and refuses mixed missing date evidence", async () => {
+    const tied = [
       item("a", "First visible item.", "2026-10-18T08:00:00Z"),
       item("b", "Second visible item.", "2026-10-18T04:00:00-04:00"),
-    ]],
-    ["missing date evidence", [
+    ];
+    const tiedExecutor = executorReturning(tied[0]!);
+    expect(await runPageTaskCommand(makeSession(tied), "read latest", { executor: tiedExecutor })).toMatchObject({
+      type: "read", itemId: "a",
+    });
+    const undated = [
       item("a", "Dated visible item.", "2026-10-18T08:00:00Z"),
       item("b", "Undated visible item.", null),
-    ]],
-  ] as const)("clarifies when latest has %s", async (_reason, currentItems) => {
-    const session = makeSession([...currentItems]);
-    const executor = executorReturning(currentItems[0]!);
+    ];
+    const session = makeSession(undated);
+    const executor = executorReturning(undated[0]!);
     const result = await runPageTaskCommand(session, "read latest", { executor });
     expect(result.type).toBe("clarify");
     expect(executor.execute).not.toHaveBeenCalled();
     expect(session.activePageTask).toBeNull();
+  });
+
+  it("uses visible list order when all items lack a date and reads the requested latest items", async () => {
+    const visibleItems = [item("top", "First visible message.", null), item("next", "Second visible message.", null)];
+    const session = makeSession(visibleItems);
+    const executor = {
+      execute: vi.fn(async (operation): Promise<BrowserExecutorResult> => {
+        if (operation.op !== "read-item") throw new Error("Expected live read-item operation.");
+        const live = visibleItems.find((candidate) => candidate.itemId === operation.itemId)!;
+        return { ok: true, payload: { ok: true, requestId: "live", operation: "read-item", result: live } };
+      }),
+    };
+    const result = await runPageTaskCommand(session, "What are my 2 latest emails?", { executor });
+    expect(result).toEqual({ type: "read-many", text: "Item 1: First visible message. Item 2: Second visible message." });
+    expect(executor.execute).toHaveBeenCalledTimes(2);
+    expect(await runPageTaskCommand(makeSession(visibleItems), "read latest", {
+      executor: executorReturning(visibleItems[0]!),
+    })).toMatchObject({ type: "read", itemId: "top" });
   });
 
   it("clarifies malformed recency evidence instead of sorting it", async () => {
@@ -189,6 +221,29 @@ describe("page task commands", () => {
       kind: "paragraph", text: "Message about Saturday plans.",
     }]);
     expect(requestContent.mock.calls[0]![0]).not.toHaveProperty("pageUrl");
+  });
+
+  it("uses the item already being discussed for pronouns and a follow-up draft", async () => {
+    const session = makeSession();
+    const executor = executorReturning(items[0]!);
+    const requestContent = vi.fn(async (_projection: PageContentProjection) => "The park message summary.");
+
+    expect(await runPageTaskCommand(session, "read first item", { executor })).toMatchObject({
+      type: "read", itemId: "item-first", text: "Message about the park opening.",
+    });
+    expect(await runPageTaskCommand(session, "Could you summarize it again?", { executor, requestContent })).toMatchObject({
+      type: "answer", text: "The park message summary.",
+    });
+    expect(requestContent.mock.calls[0]![0].blocks).toEqual([{
+      kind: "paragraph", text: "Message about the park opening.",
+    }]);
+
+    const draft = await runPageTaskCommand(session, "Draft a response", { executor });
+    expect(draft).toMatchObject({
+      type: "model-request",
+      request: { type: "draft", sourceExcerpt: "Message about the park opening." },
+    });
+    expect(executor.execute).toHaveBeenLastCalledWith({ op: "read-item", itemId: "item-first", identity });
   });
 
   it("does not let page text or AGY prose become a command or target", async () => {

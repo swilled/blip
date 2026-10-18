@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createAgyProvider,
+  createDeferredAgyProvider,
   InvalidAgyOutputError,
   type RepairPatch,
 } from "../src/brain/agy/provider";
@@ -13,6 +14,7 @@ import type {
   AgyCliAdapter,
 } from "../src/brain/agy/session";
 import { classifyAgyCliEvent, UnexpectedAgyToolCallError } from "../src/brain/agy/session";
+import type { PageTaskInferenceContext } from "../src/browser/task-intent";
 
 type Deferred<T> = { promise: Promise<T>; resolve(value: T): void };
 function deferred<T>(): Deferred<T> {
@@ -77,6 +79,24 @@ describe("Agy role provider", () => {
   afterEach(async () => {
     await provider?.close();
     provider = undefined;
+  });
+
+  it("allows a model request to be cancelled while deferred startup is still warming", async () => {
+    const f = scriptedAdapter({ bootstrapAnswer: async () => new Promise<string>(() => {}) });
+    provider = createDeferredAgyProvider({ adapter: f.adapter });
+    const controller = new AbortController();
+    const request = provider.classifyBrowserRequest("Open Wikipedia", controller.signal);
+    controller.abort(new Error("Test cancelled during warmup"));
+    await expect(request).rejects.toThrow("Test cancelled during warmup");
+    await provider.close();
+  });
+
+  it("accepts a JSON-only Markdown fence while retaining browser intent schema validation", async () => {
+    const f = scriptedAdapter({ answer: async () => '```json\n{"intent":"navigate","target":"Wikipedia","destinationUrl":"https://www.wikipedia.org/"}\n```' });
+    provider = await createAgyProvider({ adapter: f.adapter });
+    expect(await provider.classifyBrowserRequest("Open Wikipedia")).toEqual({
+      intent: "navigate", target: "Wikipedia", destinationUrl: "https://www.wikipedia.org/",
+    });
   });
 
   it("starts both roles with isolated no-tools agents, subscription auth environment, and Gemini models", async () => {
@@ -166,6 +186,76 @@ describe("Agy role provider", () => {
       .toBe("assistant");
     expect(classifyAgyCliEvent({ event: secret })).toBe("other");
     expect(JSON.stringify(diagnostics)).not.toContain(secret);
+  });
+
+  it("classifies natural browser tasks from counts and active-task state without sending page text", async () => {
+    const f = scriptedAdapter({
+      answer: async (config, prompt) => config.role === "intent" && prompt.includes("Classify the user's current browser request")
+        ? '{"intent":"read-latest-item"}'
+        : config.role === "intent" ? '{"type":"describe"}' : '{"fields":[]}',
+    });
+    provider = await createAgyProvider({ adapter: f.adapter });
+    const context: PageTaskInferenceContext = {
+      visibleBlockCount: 4,
+      visibleItemCount: 3,
+      datedItemCount: 3,
+      hasActiveItem: true,
+      hasObservedDraft: false,
+    };
+
+    await expect(provider.classifyPageTask("What's the newest message?", context)).resolves.toBe("read-latest-item");
+    const prompt = f.calls.at(-1)!.prompt;
+    expect(prompt).toContain('"visibleItemCount":3');
+    expect(prompt).toContain('"hasActiveItem":true');
+    expect(prompt).not.toContain("message body private sentinel");
+    expect(prompt).not.toContain("https://mail.example/");
+  });
+
+  it("classifies a paraphrased browser request into a closed intent with user-quoted arguments", async () => {
+    const f = scriptedAdapter({
+      answer: async (config, prompt) => config.role === "intent" && prompt.includes("Classify the user's browser request")
+        ? '{"intent":"navigate","target":"Gmail","destinationUrl":"https://gmail.com/"}'
+        : config.role === "intent" ? '{"type":"describe"}' : '{"fields":[]}',
+    });
+    provider = await createAgyProvider({ adapter: f.adapter });
+
+    await expect(provider.classifyBrowserRequest("Would you mind taking me to Gmail?")).resolves.toEqual({
+      intent: "navigate", target: "Gmail", destinationUrl: "https://gmail.com/",
+    });
+    const prompt = f.calls.at(-1)!.prompt;
+    expect(prompt).toContain("Allowed intent values:");
+    expect(prompt).toContain("official HTTPS home page");
+    expect(prompt).toContain('User request as JSON string: "Would you mind taking me to Gmail?"');
+    expect(prompt).not.toContain("private message body");
+    expect(prompt).not.toContain("https://mail.example/");
+  });
+
+  it("rejects arbitrary operation fields from the browser-request classifier", async () => {
+    const f = scriptedAdapter({
+      answer: async (config, prompt) => config.role === "intent" && prompt.includes("Classify the user's browser request")
+        ? '{"intent":"navigate","target":"Gmail","action":"navigate"}'
+        : config.role === "intent" ? '{"type":"describe"}' : '{"fields":[]}',
+    });
+    provider = await createAgyProvider({ adapter: f.adapter });
+    await expect(provider.classifyBrowserRequest("Open Gmail")).rejects.toMatchObject({
+      category: "browser_request_schema_rejected",
+    });
+  });
+
+  it("rejects extra fields from the browser-task classifier", async () => {
+    const f = scriptedAdapter({
+      answer: async (config, prompt) => config.role === "intent" && prompt.includes("Classify the user's current browser request")
+        ? '{"intent":"send-current-draft","actionId":"invented"}'
+        : config.role === "intent" ? '{"type":"describe"}' : '{"fields":[]}',
+    });
+    provider = await createAgyProvider({ adapter: f.adapter });
+    await expect(provider.classifyPageTask("send the reply", {
+      visibleBlockCount: 1,
+      visibleItemCount: 1,
+      datedItemCount: 1,
+      hasActiveItem: true,
+      hasObservedDraft: true,
+    })).rejects.toMatchObject({ category: "browser_task_schema_rejected" });
   });
 
   it("keeps startup diagnostic callback failures observational", async () => {

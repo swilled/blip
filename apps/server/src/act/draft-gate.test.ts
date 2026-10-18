@@ -185,7 +185,7 @@ function voiceConfirmation(armed: any, prompt: any, text = "send this email") {
 }
 
 describe("task-bound email send gate", () => {
-  it("reads the current draft, recipient, and core-selected send target before asking the exact phrase", async () => {
+  it("reads the current draft and recipient, then asks a direct yes/no send question", async () => {
     const rig = makeRig();
     await executeGatedAction(rig.ctx, { type: "draft-send" });
 
@@ -193,7 +193,7 @@ describe("task-bound email send gate", () => {
     expect(prompt?.payload.text).toContain(`Recipient: Email address, ${RECIPIENT}.`);
     expect(prompt?.payload.text).toContain(`Current message draft: ${OBSERVED_DRAFT}`);
     expect(prompt?.payload.text).toContain("Requested action: Send message.");
-    expect(prompt?.payload.text).toContain("Can you say 'send this email'?");
+    expect(prompt?.payload.text).toContain("Would you like me to send it? Say yes to send, or no to keep it as a draft.");
     expect(rig.session.pendingGatedAction?.binding.pageTask).toMatchObject({
       taskId: "send-task-1",
       sourceItemId: "message-item-1",
@@ -229,6 +229,27 @@ describe("task-bound email send gate", () => {
     expect(pending.binding.pageTask?.draftHash).toBe(createHash("sha256").update(OBSERVED_DRAFT, "utf8").digest("hex"));
   });
 
+  it("accepts a voice yes only after the task-bound send question, read-back, and guard", async () => {
+    const rig = makeRig();
+    const { prompt, armed } = await prepareAndArm(rig);
+
+    await executeGatedAction(rig.ctx, voiceConfirmation(armed, prompt, "Yes!"));
+
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(1);
+    expect(rig.outgoing.some((message) => message.type === "speak" && message.payload.text === "The page confirms the action.")).toBe(true);
+  });
+
+  it("leaves the draft unsent when the user says no", async () => {
+    const rig = makeRig();
+    const { prompt, armed } = await prepareAndArm(rig);
+
+    await executeGatedAction(rig.ctx, voiceConfirmation(armed, prompt, "No, thanks."));
+
+    expect(rig.requests.filter((request) => request.type === "act.request")).toHaveLength(0);
+    expect(rig.session.pendingGatedAction).toBeNull();
+    expect(rig.outgoing.some((message) => message.type === "speak" && message.payload.text === "Okay, I left it as a draft.")).toBe(true);
+  });
+
   it("does not arm after interrupted read-back or accept the exact phrase before the guard", async () => {
     const interrupted = makeRig();
     await executeGatedAction(interrupted.ctx, { type: "draft-send" });
@@ -259,10 +280,8 @@ describe("task-bound email send gate", () => {
   it.each([
     ["absent source", undefined, "send this email"],
     ["typed source", "typed", "send this email"],
-    ["affirmative", "voice", "yes"],
-    ["okay", "voice", "okay"],
-    ["yeah", "voice", "yeah"],
-    ["sure", "voice", "sure"],
+    ["typed affirmation", "typed", "yes"],
+    ["typed okay", "typed", "okay"],
     ["old send phrase", "voice", "confirm sending"],
     ["wrong phrase", "voice", "send the email"],
   ] as const)("does not dispatch for %s", async (_name, source, text) => {

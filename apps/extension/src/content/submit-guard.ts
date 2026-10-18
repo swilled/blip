@@ -3,7 +3,7 @@ const SUBMIT_GUARD_REGISTRY_KEY = "__blipPersistentSubmitGuardRegistry";
 type SubmitAllowance = {
   token: object;
   form: HTMLFormElement;
-  submitter: HTMLElement;
+  submitter: HTMLElement | null;
 };
 
 type GuardState = {
@@ -72,11 +72,12 @@ export function isPersistentSubmitGuardInstalled(document: Document = globalThis
 }
 
 /** Allow one event for exactly this form and submitter, then clear any unused allowance. */
-export function beginOneSubmitAllowance(form: HTMLFormElement, submitter: HTMLElement): () => void {
+export function beginOneSubmitAllowance(form: HTMLFormElement, submitter: HTMLElement | null): () => void {
   const state = registry(false)?.documents.get(form.ownerDocument);
-  const hasFormAssociation = (submitter.localName === "button" || submitter.localName === "input") && "form" in submitter;
-  if (!state?.installed || !hasFormAssociation ||
-      (submitter as HTMLButtonElement | HTMLInputElement).form !== form) {
+  const hasFormAssociation = submitter === null ||
+    ((submitter.localName === "button" || submitter.localName === "input") && "form" in submitter &&
+      (submitter as HTMLButtonElement | HTMLInputElement).form === form);
+  if (!state?.installed || !hasFormAssociation) {
     throw new Error("persistent submit guard is unavailable");
   }
   if (state.allowance) throw new Error("a submit allowance is already pending");

@@ -304,7 +304,7 @@ describe("direct page content speech privacy", () => {
     expect(JSON.stringify(hostileAnswer.sent)).not.toContain("browser.request");
   });
 
-  it("discards a late content answer after the active capture identity changes", async () => {
+  it("revalidates the same source text after the active capture handle changes", async () => {
     const result = await readCurrentPage("Public article text is safe to read.", "summarize this page", (session) => ({
       answerPageQuestion: vi.fn(async () => {
         session.applyBrowserCapture({
@@ -312,12 +312,13 @@ describe("direct page content speech privacy", () => {
           blocks: [],
           links: [],
         });
-        return "A stale summary that must not be spoken.";
+        return "A summary of the revalidated article.";
       }),
     } as unknown as AgyProvider));
     expect(result.agyProvider?.answerPageQuestion).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(result.sent)).not.toContain("A stale summary");
-    expect(JSON.stringify(result.sent)).toContain("The browser page changed. Nothing was done; please ask again.");
+    expect(result.requests).toHaveLength(2);
+    expect(JSON.stringify(result.sent)).toContain("A summary of the revalidated article.");
+    expect(JSON.stringify(result.sent)).not.toContain("The browser page changed");
   });
 
   it("reads a selected block by its current content ID and screens it before speech", async () => {

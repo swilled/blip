@@ -5,6 +5,7 @@
 //
 //   npm start                 AGY brain (the signed-in Antigravity CLI)
 //   npm start -- --brain=fake offline fake brain
+//   npm start -- --no-window  restart the service while reusing an existing Blip tab
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -40,7 +41,9 @@ async function ensureExtensionBuild(): Promise<void> {
 }
 
 async function main(): Promise<number> {
-  const brain = parseBrain(process.argv.slice(2));
+  const args = process.argv.slice(2);
+  const brain = parseBrain(args);
+  const openVoiceWindow = !args.includes("--no-window");
   try {
     const running = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/healthz`, { signal: AbortSignal.timeout(500) });
     if (running.ok) {
@@ -68,6 +71,7 @@ async function main(): Promise<number> {
       port: DEFAULT_PORT,
       dev: true,
       brain,
+      deferAgyStartup: true,
       dialogueRunner: true,
       repairCacheDirectory: demoRepairCachePath(),
       staticRoots: [demoVoiceStaticRoot()],
@@ -77,13 +81,15 @@ async function main(): Promise<number> {
     stopPtt = await startPttWire(server.port);
 
     const voiceUrl = `http://127.0.0.1:${server.port}/voice/`;
-    const browser = resolveBrowser();
-    // No --user-data-dir: the app window opens in the user's normal, last-used profile.
-    const voice = spawn(browser, ["--window-size=420,760", `--app=${voiceUrl}`], { stdio: "ignore", detached: true, windowsHide: true });
-    voice.unref();
+    if (openVoiceWindow) {
+      const browser = resolveBrowser();
+      // No --user-data-dir: the app window opens in the user's normal, last-used profile.
+      const voice = spawn(browser, ["--window-size=420,760", `--app=${voiceUrl}`], { stdio: "ignore", detached: true, windowsHide: true });
+      voice.unref();
+    }
 
     process.stdout.write(`Blip is running (brain=${brain}).\n`);
-    process.stdout.write(`Voice window: ${voiceUrl}\n`);
+    process.stdout.write(`${openVoiceWindow ? "Voice window" : "Voice page (reuse an existing Blip tab)"}: ${voiceUrl}\n`);
     process.stdout.write("Talk: hold Right Ctrl + Space anywhere, or use Hold to talk in the Blip window.\n");
 
     let extensionAnnounced = false;

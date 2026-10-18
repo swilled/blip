@@ -92,7 +92,8 @@ function bindingFor(field: Field): PageTaskValueBinding | null {
 
 function resolveRecipientBinding(model: FormModel, recipientWords: string, excludedFieldId: string): PageTaskValueBinding[] {
   return model.fields
-    .filter((field) => field.id !== excludedFieldId && safeRecipientField(field) && containsTokenSequence(field.value!, recipientWords))
+    .filter((field) => field.id !== excludedFieldId && safeRecipientField(field) &&
+      (containsTokenSequence(field.value!, recipientWords) || containsTokenSequence(field.label, recipientWords)))
     .map(bindingFor)
     .filter((binding): binding is PageTaskValueBinding => binding !== null);
 }

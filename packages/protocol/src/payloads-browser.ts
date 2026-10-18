@@ -185,13 +185,19 @@ export const BrowserOperation = z.discriminatedUnion("op", [
     authorizationId: BrowserId,
   }),
   z.object({
+    op: z.literal("site-search"),
+    query: NonEmptyQuery,
+    identity: BrowserPageIdentity,
+    authorizationId: BrowserId,
+  }),
+  z.object({
     op: z.literal("tabs"),
     action: z.enum(["list", "switch", "open-blank"]),
     targetTabId: TabId.optional(),
   }).refine((value) => (value.action === "switch") === (value.targetTabId !== undefined), {
     message: "targetTabId is required only when switching tabs",
   }),
-  z.object({ op: z.literal("list-links") }),
+  z.object({ op: z.literal("list-links"), identity: BrowserPageIdentity.optional() }),
   z.object({
     op: z.literal("read-content"),
     kind: z.enum(["heading", "paragraph"]),
@@ -242,15 +248,15 @@ export const BrowserRequestPayload = z.object({
   operation: BrowserOperation,
 }).superRefine((request, ctx) => {
   const operation = request.operation;
-  if ((operation.op === "read-content" || operation.op === "read-item" || operation.op === "open-link" || operation.op === "scroll" || operation.op === "find") &&
-      request.tabId !== undefined && request.tabId !== operation.identity.tabId) {
+  const identity = "identity" in operation ? operation.identity : undefined;
+  if (identity !== undefined && request.tabId !== undefined && request.tabId !== identity.tabId) {
     ctx.addIssue({ code: "custom", path: ["tabId"], message: "must match the captured page identity" });
   }
 });
 export type BrowserRequestPayload = z.infer<typeof BrowserRequestPayload>;
 
 export const BrowserOperationName = z.enum([
-  "location", "capture", "navigate", "history", "reload", "search", "tabs",
+  "location", "capture", "navigate", "history", "reload", "search", "site-search", "tabs",
   "list-links", "read-content", "read-item", "open-link", "scroll", "find", "unknown",
 ]);
 
@@ -290,6 +296,8 @@ const BrowserFindResult = z.object({
   truncated: z.boolean(),
 });
 
+const BrowserSiteSearchResult = BrowserPageIdentity.extend({ status: z.literal("submitted") });
+
 const BrowserError = z.object({
   code: z.enum([
     "unsupported-page", "restricted-page", "stale-page", "stale-capture", "not-found",
@@ -306,6 +314,7 @@ const BrowserSuccess = z.discriminatedUnion("operation", [
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("history"), result: BrowserCommandResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("reload"), result: BrowserCommandResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("search"), result: BrowserCommandResult }),
+  z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("site-search"), result: BrowserSiteSearchResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("tabs"), result: BrowserTabsResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("list-links"), result: BrowserLinkListResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("read-content"), result: BrowserContentResult }),

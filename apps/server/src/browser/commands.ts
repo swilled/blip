@@ -29,8 +29,8 @@ export type BrowserCommand =
       hostHint: string | null;
       navigationSafety: "same-origin-safe-get" | "confirmation-required" | "unsupported";
     }
-  | { type: "navigate"; url: string; host: string }
-  | { type: "search"; query: string; route: "site" | "browser-default" | "auto" }
+  | { type: "navigate"; url: string; host: string; newTab?: true; postNavigationPrompt?: string }
+  | { type: "search"; query: string; route: "site" | "browser-default" | "auto"; newTab?: true }
   | { type: "list-tabs" }
   | { type: "switch-tab"; targetTabId: number }
   | { type: "open-blank" }
@@ -41,6 +41,8 @@ export type BrowserCommand =
   | { type: "find"; query: string }
   | { type: "summary"; identity?: BrowserPageIdentity }
   | { type: "question"; query: string; identity?: BrowserPageIdentity }
+  | { type: "section"; target: string; question?: string }
+  | { type: "greeting"; target: string; text: string }
   | { type: "clarify"; question: string };
 
 const MAX_COMMAND_LENGTH = 600;
@@ -68,6 +70,7 @@ function parseDestination(raw: string): Destination {
   if (value === "" || value.length > 2048 || INVALID_TEXT.test(value)) {
     return { error: "Say a complete web address or site name." };
   }
+  const key = value.toLocaleLowerCase();
 
   if (/^[a-z][a-z\d+.-]*:/iu.test(value)) {
     let parsed: URL;
@@ -85,8 +88,8 @@ function parseDestination(raw: string): Destination {
     return { url: parsed.href, host: parsed.host.toLocaleLowerCase() };
   }
 
-  // A bare address must be an unmistakable DNS name or IPv4 address. Single words such as
-  // "gmail" remain user-named sites and go through browser-default search, without a site map.
+  // A bare address must be an unmistakable DNS name. A single site/service name stays unresolved
+  // here so the semantic browser route can identify its official destination without a site map.
   if (!/\s/u.test(value) && value.includes(".")) {
     let parsed: URL;
     try {
@@ -115,6 +118,22 @@ function parseDestination(raw: string): Destination {
   return query === null
     ? { error: "Say a site name with no control characters and no more than 500 characters." }
     : { kind: "name", query };
+}
+
+/** True when an explicit open request names a site without also providing a resolvable URL. */
+export function isNamedSiteNavigationRequest(utterance: string): boolean {
+  let input = relaxBrowserUtterance(utterance);
+  const compound = /^(?:(?:open|go to|navigate to|take me to|bring up|pull up)\s+)?(.+?)\s+and\s+(?:play|watch)\s+(?:a|the|some)\s+(?:video|movie|song|track)(?:\s+.*)?$/iu.exec(input);
+  if (compound !== null) {
+    const destination = compound[1]!.trim();
+    input = /^(?:open|go to|navigate to|take me to|bring up|pull up)\b/iu.test(input)
+      ? input.slice(0, input.toLocaleLowerCase().lastIndexOf(" and ")).trim()
+      : `open ${destination}`;
+  }
+  const match = /^(?:open|go to|navigate to|take me to|bring up|pull up)\s+(?:the\s+)?(.+?)(?:\s+in\s+(?:a\s+)?new\s+(?:browser\s+)?tab)?$/iu.exec(input);
+  if (match === null) return false;
+  const destination = parseDestination(match[1]!);
+  return "kind" in destination;
 }
 
 function resolveLink(selector: string, capture: BrowserCapture | null): BrowserCommand {
@@ -154,7 +173,8 @@ function selectedTab(selector: string, capture: BrowserCapture | null): BrowserC
   return { type: "switch-tab", targetTabId: matches[0]!.tabId };
 }
 
-const COURTESY_PREFIX = /^(?:(?:hey|ok|okay)[,\s]+)?(?:blip[,\s]+)?(?:(?:can|could|would|will) you(?: please)?|please|i want to|i'd like to|i would like to|let's|lets)[,\s]+/iu;
+const COURTESY_PREFIX = /^(?:(?:hey|ok|okay)[,\s]+)?(?:blip[,\s]+)?(?:(?:can|could|would|will) you(?: please)?|and(?: (?:can )?you)?|please|i want to|i'd like to|i would like to|let's|lets)[,\s]+/iu;
+const BARE_YOU_COMMAND_PREFIX = /^you[,\s]+/iu;
 const QUERY_COMMAND = /^(?:search|browser search|web search|site-search|find|look for|what does (?:this|the) page say about|what does it say about)\b/iu;
 const QUERY_SUFFIX = /[\s,]+(?:please|for me)[.!?]*$/iu;
 const COMMAND_SUFFIX = /[\s,]+(?:please|for me|thanks|thank you|now|in (?:microsoft )?edge|in chrome|in (?:the|my|this) browser)$/iu;
@@ -171,6 +191,7 @@ export function relaxBrowserUtterance(input: string): string {
   for (let previous = ""; previous !== text;) {
     previous = text;
     text = text.replace(COURTESY_PREFIX, "").trim();
+    text = text.replace(BARE_YOU_COMMAND_PREFIX, "").trim();
   }
   if (QUERY_COMMAND.test(text)) return text.replace(QUERY_SUFFIX, "").trim();
   for (let previous = ""; previous !== text;) {
@@ -192,6 +213,8 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
   const input = relaxBrowserUtterance(utterance);
   const lower = input.toLocaleLowerCase();
   if (input === "") return clarify("Say what you want me to do in the browser.");
+  const greeting = /^say\s+(hi|hello|hey)\s+to\s+(.+)$/iu.exec(input);
+  if (greeting !== null) return { type: "greeting", target: greeting[2]!, text: greeting[1]! };
 
   if (["where am i", "what page am i on", "what site is this", "current page"].includes(lower)) {
     return { type: "location" };
@@ -227,6 +250,22 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
     const query = exactTail(input, input.length - explicitDefault[1]!.length);
     return query === null ? clarify("Say a search query up to 500 characters.") : { type: "search", query, route: "browser-default" };
   }
+  const defaultSuffix = /^search(?:\s+for)?\s+([\s\S]+?)\s+(?:with|using)\s+(?:the\s+)?(?:browser default|default browser)\s+search[.!?,]*$/iu.exec(input);
+  if (defaultSuffix !== null) {
+    const query = exactTail(defaultSuffix[1]!, 0);
+    return query === null ? clarify("Say a search query up to 500 characters.") : { type: "search", query, route: "browser-default" };
+  }
+  const scopedSearch = /^(?:search(?:\s+for)?|look\s+for)\s+([\s\S]+?)\s+in\s+(?:my\s+)?(?:email|emails|inbox|messages?)[.!?,]*$/iu.exec(input);
+  if (scopedSearch !== null) {
+    const query = exactTail(scopedSearch[1]!, 0);
+    return query === null ? clarify("Say a search query up to 500 characters.") : { type: "search", query, route: "site" };
+  }
+  const currentSiteSearch = /^(?:search|look)\s+(?:on\s+)?(?:this|the|current)\s+(?:site|website)\s+for\s+([\s\S]+)$/iu.exec(input)
+    ?? /^(?:search(?:\s+for)?|look\s+for)\s+([\s\S]+?)\s+(?:on|in)\s+(?:this|the|current)\s+(?:site|website)[.!?,]*$/iu.exec(input);
+  if (currentSiteSearch !== null) {
+    const query = exactTail(currentSiteSearch[1]!, 0);
+    return query === null ? clarify("Say a search query up to 500 characters.") : { type: "search", query, route: "site" };
+  }
   const search = /^search(?:\s+for)?\s+([\s\S]+)$/iu.exec(input);
   if (search !== null) {
     const query = exactTail(input, input.length - search[1]!.length);
@@ -235,6 +274,23 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
 
   const openLink = /^(?:open|click)\s+(?:the\s+)?link\s+(?:named\s+)?([\s\S]+)$/iu.exec(input);
   if (openLink !== null) return resolveLink(openLink[1]!.trim(), currentCapture);
+  const openNewTab = /^(?:open|go to|navigate to|take me to|bring up|pull up)\s+(.+?)\s+in\s+(?:a\s+)?new\s+(?:browser\s+)?tab$/iu.exec(input);
+  if (openNewTab !== null) {
+    const destination = parseDestination(openNewTab[1]!);
+    if ("error" in destination) return clarify(destination.error);
+    return "kind" in destination
+      ? { type: "search", query: destination.query, route: "browser-default", newTab: true }
+      : { type: "navigate", url: destination.url, host: destination.host, newTab: true };
+  }
+  const section = /^(?:open|go to|navigate to|take me to)\s+(?:the\s+)?(.+?)\s+(?:section|page|tab)(?:\s+on\s+(?:this|the)\s+page)?(?:\s+and\s+(?:let me know|tell me|read|show me)\s+(.+))?$/iu.exec(input);
+  if (section !== null) return {
+    type: "section", target: section[1]!, ...(section[2] === undefined ? {} : { question: section[2] }),
+  };
+  // An explicitly named visible link takes precedence over a web search for a site name.
+  const localOpen = /^(?:open|go to|navigate to|take me to)\s+(?:the\s+)?(.+)$/iu.exec(input);
+  if (localOpen !== null && currentCapture?.links.some((link) => normalizeSelector(link.label) === normalizeSelector(localOpen[1]!))) {
+    return resolveLink(localOpen[1]!, currentCapture);
+  }
   const open = /^(?:open|go to|navigate to|take me to|bring up|pull up)\s+([\s\S]+)$/iu.exec(input);
   if (open !== null) {
     const destination = parseDestination(open[1]!);
@@ -270,6 +326,9 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
     return query === null
       ? clarify("Say what you want to ask about the page.")
       : { type: "question", query, ...(currentCapture?.identity !== undefined ? { identity: currentCapture.identity } : {}) };
+  }
+  if (/^(?:how much|how many|what(?:'s| is| are))\b.*\b(?:usage|credits?|quota|allowance)\b/iu.test(input)) {
+    return { type: "question", query: input, ...(currentCapture?.identity === undefined ? {} : { identity: currentCapture.identity }) };
   }
   const readTarget = /^read\s+(?:the\s+)?(heading|paragraph)\s+(?:about|named|containing)\s+([\s\S]+)$/iu.exec(input);
   if (readTarget !== null) {

@@ -10,7 +10,9 @@ function browserApi(overrides: Record<string, unknown> = {}) {
   const tabs = {
     get: vi.fn(async (tabId: number): Promise<TabRecord> => tabId === PAGE.id ? { ...PAGE } : { id: tabId, url: "about:blank" }),
     query: vi.fn(async (_queryInfo?: Record<string, unknown>) => [{ ...PAGE }]),
-    create: vi.fn(async (): Promise<TabRecord> => ({ id: 9, url: "about:blank", title: "New tab", active: true })),
+    create: vi.fn(async (properties: { active?: boolean; url?: string } = {}): Promise<TabRecord> => ({
+      id: 9, url: properties.url ?? "about:blank", title: "New tab", active: properties.active ?? true,
+    })),
     update: vi.fn(async (tabId: number, properties: { active?: boolean; url?: string }): Promise<TabRecord> => ({
       ...(tabId === PAGE.id ? PAGE : { id: tabId, url: "about:blank" }),
       ...properties,
@@ -29,10 +31,10 @@ function browserApi(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function request(operation: Record<string, unknown>, tabId: number | undefined = PAGE.id) {
+function request(operation: Record<string, unknown>, tabId: number | null = PAGE.id) {
   return {
     requestId: "request-1",
-    ...(tabId !== undefined ? { tabId } : {}),
+    ...(tabId !== null ? { tabId } : {}),
     operation,
   };
 }
@@ -180,6 +182,40 @@ describe("extension browser request dispatcher", () => {
     expect(unsupported).toMatchObject({ ok: false, error: { code: "invalid-request" } });
   });
 
+  it("opens an authorized destination in a new tab when Blip has no current web page", async () => {
+    const state = browserApi();
+    const remember = vi.fn(() => true);
+    const dispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => undefined,
+      rememberTargetTab: remember,
+    });
+
+    const result = await dispatch(request({
+      op: "navigate", url: "https://gmail.com/", authorizationId: "auth-first-navigation",
+    }, null));
+
+    expect(result).toMatchObject({ ok: true, operation: "navigate", result: { tabId: 9, status: "dispatched" } });
+    expect(state.tabs.create).toHaveBeenCalledWith({ active: true, url: "https://gmail.com/" });
+    expect(state.tabs.update).not.toHaveBeenCalled();
+    expect(remember).toHaveBeenCalledWith(expect.objectContaining({ id: 9, url: "https://gmail.com/" }));
+  });
+
+  it("does not create a tab when a navigation was bound to a missing source tab", async () => {
+    const state = browserApi();
+    const dispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => undefined,
+    });
+
+    const result = await dispatch(request({
+      op: "navigate", url: "https://gmail.com/", authorizationId: "auth-stale-source",
+    }, PAGE.id));
+
+    expect(result).toMatchObject({ ok: false, error: { code: "stale-page" } });
+    expect(state.tabs.create).not.toHaveBeenCalled();
+  });
+
   it("creates and tracks a blank tab while keeping it restricted for content reading", async () => {
     const state = browserApi();
     let selected: BrowserTargetTab | undefined = PAGE;
@@ -205,6 +241,16 @@ describe("extension browser request dispatcher", () => {
     expect(location).toMatchObject({ ok: true, operation: "location", result: {
       tabId: 9, pageUrl: "about:blank", status: "restricted",
     } });
+  });
+
+  it("waits for a newly created tab whose URL is initially empty", async () => {
+    const state = browserApi();
+    state.tabs.create.mockResolvedValue({ id: 9, url: "", active: true });
+    state.tabs.query.mockResolvedValue([{ ...PAGE }, { id: 9, url: "about:blank", active: true }]);
+    const result = await dispatcher(state)(request({ op: "tabs", action: "open-blank" }, undefined));
+    expect(result).toMatchObject({ ok: true, operation: "tabs", result: { activeTabId: 9 } });
+    expect(state.tabs.get).toHaveBeenCalledWith(9);
+    expect(state.tabs.create).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a stale source tab before navigating", async () => {
@@ -274,11 +320,63 @@ describe("extension browser request dispatcher", () => {
     }));
 
     expect(searched).toMatchObject({ ok: true, operation: "search", result: { tabId: 7, status: "dispatched" } });
-    expect(state.search.query).toHaveBeenCalledExactlyOnceWith({ text: "Gainesville bus schedule", disposition: "CURRENT_TAB" });
+    expect(state.search.query).toHaveBeenCalledExactlyOnceWith({ text: "Gainesville bus schedule", tabId: PAGE.id });
     expect(changedQuery).toMatchObject({ ok: false, error: { code: "unauthorized" } });
     expect(changedPage).toMatchObject({ ok: false, error: { code: "unauthorized" } });
     expect(resultLink).toMatchObject({ ok: false, operation: "open-link", error: { code: "unauthorized" } });
     expect(state.tabs.update).not.toHaveBeenCalled();
+  });
+
+  it("opens browser-default search in a new tab when no web page is available", async () => {
+    const state = browserApi();
+    const dispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => undefined,
+    });
+
+    const result = await dispatch(request({
+      op: "search", route: "browser-default", query: "Gmail", authorizationId: "auth-search-no-page",
+    }, null));
+
+    expect(result).toMatchObject({ ok: true, operation: "search", result: { status: "dispatched" } });
+    expect(state.search.query).toHaveBeenCalledExactlyOnceWith({ text: "Gmail", disposition: "NEW_TAB" });
+  });
+
+  it("routes page-scoped search through the captured page identity", async () => {
+    const state = browserApi();
+    const identity = { captureId: "capture-search", captureRevision: 1, tabId: PAGE.id, pageUrl: PAGE.url };
+    const sendContentMessage = vi.fn(async () => ({
+      t: "browser-content.result", operation: "site-search", result: { ...identity, status: "submitted" },
+    }));
+    const dispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => PAGE,
+      sendContentMessage,
+    });
+
+    const result = await dispatch(request({
+      op: "site-search", query: "YouTube", identity, authorizationId: "auth-site-search",
+    }));
+
+    expect(result).toMatchObject({ ok: true, operation: "site-search", result: { status: "submitted", ...identity } });
+    expect(sendContentMessage).toHaveBeenCalledExactlyOnceWith(PAGE.id, {
+      t: "browser-content", operation: "site-search", identity, query: "YouTube",
+    });
+  });
+
+  it("accepts a verified search submission that navigates to its results before the reply", async () => {
+    const state = browserApi();
+    const identity = { captureId: "capture-search-nav", captureRevision: 1, tabId: PAGE.id, pageUrl: PAGE.url };
+    const dispatch = createBrowserRequestDispatcher({
+      api: state.api as never,
+      findCurrentTargetTab: async () => PAGE,
+      sendContentMessage: async () => {
+        state.tabs.get.mockResolvedValue({ ...PAGE, url: "https://example.com/search?q=topic" });
+        return { t: "browser-content.result", operation: "site-search", result: { ...identity, status: "submitted" } };
+      },
+    });
+    expect(await dispatch(request({ op: "site-search", query: "topic", identity, authorizationId: "auth-search-nav" })))
+      .toMatchObject({ ok: true, operation: "site-search", result: { status: "submitted" } });
   });
 
   it("fails closed when search permission or the search API is absent", async () => {
@@ -307,7 +405,7 @@ describe("extension browser request dispatcher", () => {
     }));
 
     expect(result).toMatchObject({ ok: false, operation: "search", error: { code: "unavailable" } });
-    expect(state.search.query).toHaveBeenCalledExactlyOnceWith({ text: "exact phrase", disposition: "CURRENT_TAB" });
+    expect(state.search.query).toHaveBeenCalledExactlyOnceWith({ text: "exact phrase", tabId: PAGE.id });
     expect(state.tabs.update).not.toHaveBeenCalled();
   });
 
@@ -328,7 +426,7 @@ describe("extension browser request dispatcher", () => {
     expect(state.search.query).not.toHaveBeenCalled();
   });
 
-  it("refuses browser-default search when Chrome would direct CURRENT_TAB elsewhere", async () => {
+  it("searches the retained tab even while the voice app or another window has focus", async () => {
     const state = browserApi();
     state.tabs.query.mockImplementation(async (queryInfo: Record<string, unknown> = {}) =>
       queryInfo["active"] === true ? [{ id: 8, url: "https://other.example/" }] : [{ ...PAGE }]);
@@ -337,8 +435,8 @@ describe("extension browser request dispatcher", () => {
       op: "search", route: "browser-default", query: "exact phrase", authorizationId: "auth-other-active",
     }));
 
-    expect(result).toMatchObject({ ok: false, error: { code: "stale-page" } });
-    expect(state.search.query).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ ok: true, operation: "search", result: { tabId: PAGE.id } });
+    expect(state.search.query).toHaveBeenCalledExactlyOnceWith({ text: "exact phrase", tabId: PAGE.id });
   });
 
   it("invalidates per-tab capture versions on top-level navigation, SPA changes, activation, and removal", async () => {

@@ -50,9 +50,26 @@ describe("parseBrowserCommand", () => {
     ["open https://EXAMPLE.com/a", { type: "navigate", url: "https://example.com/a", host: "example.com" }],
     ["open example.org/path", { type: "navigate", url: "https://example.org/path", host: "example.org" }],
     ["open Gmail", { type: "search", query: "Gmail", route: "browser-default" }],
+    ["You open gmail", { type: "search", query: "gmail", route: "browser-default" }],
+    ["You open gmail in a new tab", { type: "search", query: "gmail", route: "browser-default", newTab: true }],
     ["site-search   Books & tea?!", { type: "search", query: "Books & tea?!", route: "site" }],
     ["search for cats and dogs", { type: "search", query: "cats and dogs", route: "auto" }],
+    ["I want to search for YouTube in my email", { type: "search", query: "YouTube", route: "site" }],
+    ["Search this site for artificial intelligence", { type: "search", query: "artificial intelligence", route: "site" }],
+    ["Search for artificial intelligence on this website", { type: "search", query: "artificial intelligence", route: "site" }],
     ["browser search for train times", { type: "search", query: "train times", route: "browser-default" }],
+    ["Search For Wikipedia with default browser search,", { type: "search", query: "Wikipedia", route: "browser-default" }],
+    ["search for Wikipedia with browser default search.", { type: "search", query: "Wikipedia", route: "browser-default" }],
+    ["Open Wikipedia.", { type: "search", query: "Wikipedia", route: "browser-default" }],
+    ["Can you open gmail in a new tab", { type: "search", query: "gmail", route: "browser-default", newTab: true }],
+    ["And you open gmail in a new tab", { type: "search", query: "gmail", route: "browser-default", newTab: true }],
+    ["open example.org in a new tab", { type: "navigate", url: "https://example.org/", host: "example.org", newTab: true }],
+    ["open NotARealBrand in a new tab", { type: "search", query: "NotARealBrand", route: "browser-default", newTab: true }],
+    ["can you say hi to claude", { type: "greeting", target: "claude", text: "hi" }],
+    ["Can you navigate to the usage section on this page and let me know how much I have?", { type: "section", target: "usage", question: "how much I have" }],
+    ["Open the usage section", { type: "section", target: "usage" }],
+    ["How much usage do I have remaining?", { type: "question", query: "How much usage do I have remaining", identity: capture.identity }],
+    ["How much clawed usage do I have for me?", { type: "question", query: "How much clawed usage do I have", identity: capture.identity }],
     ["list tabs", { type: "list-tabs" }],
     ["switch to tab 2", { type: "switch-tab", targetTabId: 11 }],
     ["open a blank tab", { type: "open-blank" }],
@@ -78,12 +95,19 @@ describe("parseBrowserCommand", () => {
     });
   });
 
-  it("uses a complete site name as a browser-default query without a provider map", () => {
+  it("keeps an unresolved spoken site name as a browser-default query without a provider", () => {
     expect(parseBrowserCommand("open NotARealBrand", capture)).toEqual({
       type: "search",
       query: "NotARealBrand",
       route: "browser-default",
     });
+  });
+
+  it("marks open requests for unresolved site names for the semantic resolver", async () => {
+    const { isNamedSiteNavigationRequest } = await import("./commands");
+    expect(isNamedSiteNavigationRequest("Can you open Gmail? ")).toBe(true);
+    expect(isNamedSiteNavigationRequest("open example.org")).toBe(false);
+    expect(isNamedSiteNavigationRequest("search for Gmail")).toBe(false);
   });
 
   it("does not let hostile captured page prose change a user command", () => {

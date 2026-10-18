@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { MSG_MODEL_TIMEOUT, MSG_MODEL_RECOVERING } from "../src/turn";
 import { startServer } from "../src/server";
 import type { AgyRoleConfig, AgyRoleSession, AgyCliAdapter } from "../src/brain/agy/session";
 import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
@@ -54,7 +55,7 @@ async function boot(adapter: AgyCliAdapter, options: { intentWatchdog?: ReturnTy
   return { server, extension, voice };
 }
 
-function firstCallHangAdapter() {
+function firstCallHangAdapter(recoveryBootstrap?: Promise<string>) {
   const oldCall = deferred<string>();
   const calls: Array<{ role: string; prompt: string; sessionNumber: number }> = [];
   const aborted: string[] = [];
@@ -72,6 +73,7 @@ function firstCallHangAdapter() {
         call(prompt) {
           callNumber += 1;
           if (callNumber === 1) {
+            if (config.role === "intent" && sessionNumber > 0 && recoveryBootstrap !== undefined) return recoveryBootstrap;
             return Promise.resolve(config.role === "intent"
               ? '{"type":"describe"}'
               : '{"fields":[{"id":"bootstrap-field","label":"Synthetic field","confidence":0.5}]}');
@@ -93,6 +95,33 @@ function firstCallHangAdapter() {
 }
 
 describe("Agy turn routing and watchdog recovery", () => {
+  it("releases new requests immediately while a replacement AI session is stuck starting", async () => {
+    const recovery = deferred<string>();
+    const f = firstCallHangAdapter(recovery.promise);
+    const watchdog = watchdogClock();
+    const r = await boot(f.adapter, { intentWatchdog: watchdog });
+    try {
+      r.voice.send("utterance", { utteranceId: "timeout", text: "tell me a fun fact", source: "typed" });
+      await f.firstCallStarted;
+      watchdog.timers[0]!.callback();
+      await collectUntil(r.voice, (frame) => frame.type === "speak" && frame.payload.text === MSG_MODEL_TIMEOUT);
+      r.voice.send("utterance", { utteranceId: "during-recovery", text: "tell me another fact", source: "typed" });
+      await collectUntil(r.voice, (frame) => frame.type === "speak" && frame.payload.text === MSG_MODEL_RECOVERING);
+      await collectUntil(r.voice, (frame) => frame.type === "state" && frame.payload.busy === false);
+      expect(r.server.session.busy).toBe(false);
+      expect(watchdog.timers).toHaveLength(1);
+      r.voice.send("utterance", { utteranceId: "local-still-works", text: "describe this page", source: "typed" });
+      await collectUntil(r.voice, (frame) => frame.type === "speak" && frame.payload.category === "answer");
+      expect(f.calls.filter((call) => call.role === "intent")).toHaveLength(1);
+    } finally {
+      recovery.resolve('{"type":"describe"}');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      r.voice.ws.terminate();
+      r.extension.close();
+      await r.server.close();
+    }
+  });
+
   it("releases a hung queued turn, recreates the production-provider role, and ignores late output", async () => {
     const f = firstCallHangAdapter();
     const watchdog = watchdogClock();
@@ -102,13 +131,27 @@ describe("Agy turn routing and watchdog recovery", () => {
       r.voice.send("utterance", { utteranceId: "queued-intent", text: "what is tomorrow's weather", source: "typed" });
 
       await f.firstCallStarted;
-      expect(watchdog.timers[0]?.delayMs).toBe(4_000);
+      expect(watchdog.timers[0]?.delayMs).toBe(15_000);
       watchdog.timers[0]!.callback();
 
-      const fallbackFrames = await collectUntil(r.voice, (frame) => frame.type === "speak" && frame.payload.text === "I couldn't understand that");
+      const fallbackFrames = await collectUntil(r.voice, (frame) => frame.type === "speak" && frame.payload.text === MSG_MODEL_TIMEOUT);
       expect(fallbackFrames.some((frame) => frame.type === "speak" && frame.payload.text === "what is the weather today")).toBe(false);
 
-      const answerFrames = await collectUntil(r.voice, (frame) => frame.type === "speak" && frame.payload.text === "replacement role answered");
+      const queued = await collectUntil(r.voice, (frame) => frame.type === "speak" &&
+        [MSG_MODEL_RECOVERING, "replacement role answered"].includes(frame.payload.text));
+      if (queued.at(-1)?.payload.text === MSG_MODEL_RECOVERING) {
+        await collectUntil(r.voice, (frame) => frame.type === "state" && frame.payload.busy === false);
+        let recovered = false;
+        for (let retry = 0; retry < 50 && !recovered; retry++) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          r.voice.send("utterance", { utteranceId: `recovered-intent-${retry}`, text: "what is tomorrow's weather", source: "typed" });
+          const attempt = await collectUntil(r.voice, (frame) => frame.type === "speak" &&
+            [MSG_MODEL_RECOVERING, "replacement role answered"].includes(frame.payload.text));
+          recovered = attempt.at(-1)?.payload.text === "replacement role answered";
+          if (!recovered) await collectUntil(r.voice, (frame) => frame.type === "state" && frame.payload.busy === false);
+        }
+        expect(recovered).toBe(true);
+      }
       expect(f.calls.filter((call) => call.role === "intent")).toHaveLength(2);
       expect(f.created.filter((name) => name.startsWith("intent:")).length).toBe(2);
       expect(f.aborted).toContain("intent:0");
@@ -119,7 +162,7 @@ describe("Agy turn routing and watchdog recovery", () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(r.server.session.pendingGatedAction).toBeNull();
       expect(r.extension.received().filter((message) => message.type === "act.request")).toHaveLength(0);
-      expect(r.voice.frames.filter((frame) => frame.type === "speak" && frame.payload.text === "I couldn't understand that")).toHaveLength(1);
+      expect(r.voice.frames.filter((frame) => frame.type === "speak" && frame.payload.text === MSG_MODEL_TIMEOUT)).toHaveLength(1);
     } finally {
       r.voice.ws.terminate();
       r.extension.close();

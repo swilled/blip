@@ -110,6 +110,8 @@ describe("browser authorization", () => {
   });
 });
 
+const flowPhrase = "open link Account settings at target.example";
+
 function authFlow() {
   const session = new Session("fake");
   session.extensionConnected = true;
@@ -117,10 +119,10 @@ function authFlow() {
   session.browserCapture = { identity, blocks: [], links: [] };
   session.trackSpeech("speak-1", "confirm-prompt");
   const authorization = session.browserAuthorizations.begin({
-    target,
+    target: { op: "open-link", linkId: "link-risky", identity },
     sourcePageIdentity: identity,
     readbackSpeakId: "speak-1",
-    phrase,
+    phrase: flowPhrase,
     now: 1_000,
   });
   if (authorization === null) throw new Error("expected authorization to begin");
@@ -134,7 +136,7 @@ function authFlow() {
     close: () => {},
     async request(_role: string, type: string, payload: any) {
       requests.push({ type, payload });
-      return { payload: { ok: true, requestId: payload.requestId, operation: "navigate", result: { tabId: 7, status: "dispatched" } } };
+      return { payload: { ok: true, requestId: payload.requestId, operation: payload.operation.op, result: { tabId: 7, status: "dispatched" } } };
     },
   } as unknown as Hub;
   const refresher: Refresher = { request: async () => ({ ok: false, kind: "read-failed" }) };
@@ -166,7 +168,7 @@ function authFlow() {
 function dispatchedBrowserActions(requests: unknown[]): unknown[] {
   return requests.filter((entry) => {
     const operation = (entry as { payload?: { operation?: { op?: string } } }).payload?.operation;
-    return operation !== undefined && operation.op !== "capture";
+    return operation !== undefined && ["navigate", "search", "open-link"].includes(operation.op ?? "");
   });
 }
 
@@ -183,14 +185,14 @@ describe("browser authorization turn wiring", () => {
     flow.setNow(2_000);
     flow.timers[0]!.callback();
     expect(flow.session.pendingBrowserAuthorization?.status).toBe("armed");
-    await flow.utter(phrase);
+    await flow.utter(flowPhrase);
     expect(flow.requests).toHaveLength(1);
     expect(flow.session.pendingBrowserAuthorization).toBeNull();
   });
 
   it.each([
     { text: "yes", source: "voice" as const },
-    { text: phrase, source: "typed" as const },
+    { text: flowPhrase, source: "typed" as const },
     { text: "open other.example", source: "voice" as const },
   ])("refuses $source authorization '$text' before extension dispatch", async ({ text, source }) => {
     const flow = authFlow();
@@ -213,7 +215,7 @@ describe("browser authorization turn wiring", () => {
     const interrupted = authFlow();
     handleBrowserSpeakDone(interrupted.browserContext, { speakId: "speak-1", interrupted: true });
     expect(interrupted.session.pendingBrowserAuthorization).toBeNull();
-    await interrupted.utter(phrase);
+    await interrupted.utter(flowPhrase);
     expect(dispatchedBrowserActions(interrupted.requests)).toHaveLength(0);
 
     const stale = authFlow();
@@ -221,7 +223,7 @@ describe("browser authorization turn wiring", () => {
     stale.setNow(2_000);
     stale.timers[0]!.callback();
     stale.session.applyBrowserCapture({ identity: { ...identity, captureRevision: 4 }, blocks: [], links: [] });
-    await stale.utter(phrase);
+    await stale.utter(flowPhrase);
     expect(dispatchedBrowserActions(stale.requests)).toHaveLength(0);
 
     const expired = authFlow();
@@ -229,7 +231,7 @@ describe("browser authorization turn wiring", () => {
     expired.setNow(2_000);
     expired.timers[0]!.callback();
     expired.setNow(1_000 + BROWSER_AUTHORIZATION_TTL_MS);
-    await expired.utter(phrase);
+    await expired.utter(flowPhrase);
     expect(dispatchedBrowserActions(expired.requests)).toHaveLength(0);
     expect(expired.session.pendingBrowserAuthorization).toBeNull();
   });

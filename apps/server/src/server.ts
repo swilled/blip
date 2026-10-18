@@ -10,7 +10,7 @@ import { createStaticHandler, type StaticRoot } from "./hub/static";
 import { Session, type Brain } from "./session/session";
 import { createRefresher, type Refresher } from "./session/refresh";
 import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
-import { createAgyProvider, type AgyProvider } from "./brain/agy/provider";
+import { createAgyProvider, createDeferredAgyProvider, type AgyProvider } from "./brain/agy/provider";
 import { RepairCoordinator, type RepairDiagnostic, type RepairProvider } from "./brain/agy/repair-coordinator";
 import type { AgyCliAdapter, AgySessionOptions } from "./brain/agy/session";
 import { handleBrowserSpeakDone, handleDialogueFallback, handleUtterance, sayRepeat, sayStop } from "./turn";
@@ -24,7 +24,10 @@ import { createTranscriptionHttp } from "./voice/transcription-http";
 import { serveMoonshineModelFile } from "./voice/moonshine-model";
 import type { TranscribeAudio } from "./voice/local-whisper";
 import { parsePageTaskCommand } from "./browser/tasks";
+import { parseBrowserCommand } from "./browser/commands";
+import { shouldInferBrowserRequest } from "./browser/request-intent";
 import { matchGrammar } from "./brain/grammar";
+import { containsSensitivePageText } from "./brain/agy/privacy";
 
 function clearPendingThroughVoiceGate(
   ctx: GatedContext,
@@ -56,6 +59,8 @@ export type StartServerOptions = {
   fakeRequestActionPhrase?: string;
   /** Test-only: injects a scripted CLI boundary; production starts AGY only in Agy mode. */
   agyAdapter?: AgyCliAdapter;
+  /** Start deterministic browser controls while the model warms in the background. */
+  deferAgyStartup?: boolean;
   /** Narrow opt-in hooks for bounded local Agy checks; normal startup has no dispatch hooks. */
   agySessionHooks?: Pick<AgySessionOptions,
     "beforeBootstrapDispatch" | "beforePromptDispatch" | "onStartupDiagnostic" | "startupSignal"
@@ -184,10 +189,12 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   let agyProvider: AgyProvider | null = null;
   let brain: IntentBrain | AgyProvider;
   if (brainMode === "agy") {
-    agyProvider = await createAgyProvider({
+    const providerOptions = {
       ...(options.agyAdapter !== undefined ? { adapter: options.agyAdapter } : {}),
       ...(options.agySessionHooks !== undefined ? options.agySessionHooks : {}),
-    });
+    };
+    agyProvider = options.deferAgyStartup
+      ? createDeferredAgyProvider(providerOptions) : await createAgyProvider(providerOptions);
     brain = agyProvider;
   } else {
     brain = createFakeBrain({
@@ -410,6 +417,16 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       const pending = context.session.pendingGatedAction;
       if (taskCommand !== null && (pending === null || pending.binding.pageTask !== undefined)) {
         if (taskCommand.type === "cancel") clearTaskState(context, "cancelled", "page-task-cancelled");
+        return defaultHandlers.utterance?.(context);
+      }
+
+      // Explicit browser commands must reach the deterministic browser executor even when the
+      // current page has no readable form snapshot (for example, a new tab or a restricted page).
+      // Keep non-task confirmations in the reducer, and never forward obvious secret-bearing text.
+      const browserCommand = parseBrowserCommand(context.message.payload.text);
+      const browserRequest = browserCommand !== null || (agyProvider !== null && shouldInferBrowserRequest(context.message.payload.text));
+      if (browserRequest && (pending === null || pending.binding.pageTask !== undefined) &&
+          !containsSensitivePageText(context.message.payload.text)) {
         return defaultHandlers.utterance?.(context);
       }
 

@@ -69,7 +69,6 @@ export function projectExplicitPageContentRequest(
     if (!sameIdentity(block.identity, currentIdentity)) return null;
     if (safeBlocks.length >= MAX_BLOCKS) {
       incomplete = true;
-      removed += 1;
       continue;
     }
     const points = Array.from(block.text);
@@ -83,7 +82,6 @@ export function projectExplicitPageContentRequest(
     const remaining = MAX_TOTAL_CODE_POINTS - total;
     if (remaining <= 0) {
       incomplete = true;
-      removed += 1;
       continue;
     }
     const bounded = Array.from(text).slice(0, remaining).join("");

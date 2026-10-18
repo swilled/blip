@@ -17,7 +17,7 @@ export type BrowserExecutorResult =
   | { ok: false; reason: "no-extension" | "no-current-tab" | "invalid-request" | "request-failed" | "invalid-result" };
 
 export type BrowserExecutor = {
-  execute(operation: BrowserOperation): Promise<BrowserExecutorResult>;
+  execute(operation: BrowserOperation, options?: { useCurrentTab?: boolean }): Promise<BrowserExecutorResult>;
 };
 
 function sameIdentity(
@@ -31,6 +31,13 @@ function sameIdentity(
 function updateCurrentCapture(session: Session, payload: BrowserResult): void {
   if (!payload.ok) return;
   switch (payload.operation) {
+    case "navigate":
+    case "search":
+      if (payload.result.tabId !== undefined) session.tabId = payload.result.tabId;
+      return;
+    case "site-search":
+      session.tabId = payload.result.tabId;
+      return;
     case "capture": {
       const previous = session.browserCapture;
       const keepPageData = sameIdentity(previous?.identity, payload.result);
@@ -117,11 +124,17 @@ function updateCurrentCapture(session: Session, payload: BrowserResult): void {
 export function createBrowserExecutor(options: { hub: Hub; session: Session }): BrowserExecutor {
   const { hub, session } = options;
   return {
-    async execute(operation): Promise<BrowserExecutorResult> {
+    async execute(operation, executionOptions): Promise<BrowserExecutorResult> {
       if (!session.extensionConnected) return { ok: false, reason: "no-extension" };
       const tabOperation = operation.op === "tabs";
       const createsOrSelectsTab = tabOperation && (operation.action === "open-blank" || operation.action === "switch");
-      if (session.tabId === null && !tabOperation) return { ok: false, reason: "no-current-tab" };
+      const useCurrentTab = executionOptions?.useCurrentTab === true && (operation.op === "navigate" || operation.op === "search");
+      if (session.tabId === null && !tabOperation && !useCurrentTab) return { ok: false, reason: "no-current-tab" };
+      if (operation.op === "site-search") {
+        if (session.tabId !== operation.identity.tabId || !sameIdentity(session.browserCapture?.identity, operation.identity)) {
+          return { ok: false, reason: "invalid-request" };
+        }
+      }
       if (operation.op === "read-item") {
         const capture = session.browserCapture;
         if (session.tabId !== operation.identity.tabId || !capture || !sameIdentity(capture.identity, operation.identity) ||
@@ -131,7 +144,7 @@ export function createBrowserExecutor(options: { hub: Hub; session: Session }): 
       }
 
       const changesPage = operation.op === "navigate" || operation.op === "history" || operation.op === "reload" ||
-        operation.op === "search" || operation.op === "open-link" || createsOrSelectsTab;
+        operation.op === "search" || operation.op === "site-search" || operation.op === "open-link" || createsOrSelectsTab;
       if (changesPage) {
         session.clearBrowserAuthorization();
         session.browserCapture = null;
@@ -141,7 +154,7 @@ export function createBrowserExecutor(options: { hub: Hub; session: Session }): 
       const requestId = newId();
       const request: BrowserRequest = {
         requestId,
-        ...(session.tabId !== null && !(operation.op === "tabs" && operation.action === "open-blank")
+        ...(session.tabId !== null && !useCurrentTab && !(operation.op === "tabs" && operation.action === "open-blank")
           ? { tabId: session.tabId }
           : {}),
         operation,

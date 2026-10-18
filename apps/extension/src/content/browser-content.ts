@@ -11,9 +11,11 @@ import {
 import { classifyBrowserLink } from "@blip/policy/classify";
 import { boundedText } from "./text.js";
 import { isVisible } from "./visibility.js";
+import { beginOneSubmitAllowance } from "./submit-guard.js";
 import type { BrowserContentRequest, BrowserContentResponse } from "../shared/messages.js";
 
 const CONTENT_SELECTOR = "h1,h2,h3,h4,h5,h6,p";
+const CANDIDATE_SELECTOR = `${CONTENT_SELECTOR},a[href],article,li,tr,[role="article" i],[role="listitem" i],[role="row" i],[role="feeditem" i]`;
 const SKIPPED_TAGS = new Set([
   "script", "style", "noscript", "template", "iframe", "frame", "input", "textarea", "select",
   "option", "button", "form", "fieldset", "svg", "canvas",
@@ -30,6 +32,7 @@ const MAX_ITEMS = 20;
 const MAX_BLOCK_CODE_POINTS = 400;
 const MAX_TOTAL_CODE_POINTS = 4000;
 const MAX_LINKS = 100;
+const MAX_REPEATED_LINK_ROW_SIBLINGS = 32;
 const DEFAULT_TIME_BUDGET_MS = 100;
 
 type CaptureOptions = { now?: () => number; timeBudgetMs?: number };
@@ -43,6 +46,7 @@ type CaptureState = {
   items: Map<string, ItemEntry>;
   links: Map<string, LinkEntry>;
   linksTruncated: boolean;
+  repeatedLinkRows: WeakMap<Element, boolean>;
 };
 
 const captureByDocument = new WeakMap<Document, CaptureState>();
@@ -66,7 +70,46 @@ function childCandidateKind(element: Element): "heading" | "paragraph" | null {
 }
 
 function itemCandidate(element: Element): boolean {
-  return element.localName === "article" || (element.getAttribute("role") ?? "").trim().toLocaleLowerCase() === "listitem";
+  const role = (element.getAttribute("role") ?? "").trim().toLocaleLowerCase();
+  return element.localName === "article" || element.localName === "li" || element.localName === "tr" ||
+    role === "article" || role === "listitem" || role === "row" || role === "feeditem";
+}
+
+/** Infer repeated generic feed/mail cards from their shared link-row structure, without site selectors. */
+function repeatedLinkItem(element: Element, state: CaptureState, now: () => number, deadline: number): boolean {
+  const cached = state.repeatedLinkRows.get(element);
+  if (cached !== undefined) return cached;
+  const parent = element.parentElement;
+  if (!parent || parent.localName === "body" || parent.localName === "html") {
+    state.repeatedLinkRows.set(element, false);
+    return false;
+  }
+  let linkedPeers = 0;
+  // Large feeds can contain thousands of sibling rows. Only inspect a bounded leading window;
+  // those are also the items users most often mean by "latest" or "top".
+  const siblingLimit = Math.min(parent.children.length, MAX_REPEATED_LINK_ROW_SIBLINGS);
+  for (let index = 0; index < siblingLimit; index += 1) {
+    if (now() > deadline) break;
+    const peer = parent.children[index]!;
+    if (peer === element || peer.querySelector("a[href]") !== null) {
+      const textLength = Array.from(peer.textContent ?? "").length;
+      if (textLength >= 24) linkedPeers += 1;
+    }
+  }
+  const isRepeatedRow = linkedPeers >= 3 && element.querySelector("a[href]") !== null;
+  state.repeatedLinkRows.set(element, isRepeatedRow);
+  return isRepeatedRow;
+}
+
+function repeatedLinkItemAncestor(anchor: Element, state: CaptureState, now: () => number, deadline: number): Element | null {
+  if (hasItemAncestor(anchor)) return null;
+  let current = anchor.parentElement;
+  for (let depth = 0; current && depth < 6 && current.localName !== "body" && current.localName !== "html"; depth += 1) {
+    if (repeatedLinkItem(current, state, now, deadline)) return current;
+    if (itemCandidate(current)) return null;
+    current = current.parentElement;
+  }
+  return null;
 }
 
 function hasItemAncestor(element: Element): boolean {
@@ -131,6 +174,7 @@ function visibleText(
   let points = 0;
   let pendingSpace = false;
   let previousBlock: Element | null = null;
+  let previousParent: Element | null = null;
   let timedOut = false;
   let node: Node | null;
 
@@ -141,6 +185,9 @@ function visibleText(
         (options.skipNestedContentCandidates !== false && parent !== element && childCandidateKind(parent) !== null) ||
         (options.skipNestedItems === true && parent !== element &&
           (itemCandidate(parent) || hasNestedItemAncestor(parent, element)))) continue;
+    if (previousParent && parent !== previousParent && !containsElement(parent, previousParent) &&
+        !containsElement(previousParent, parent)) pendingSpace = output.length > 0;
+    previousParent = parent;
     const currentBlock = textBlockAncestor(parent, element);
     if (currentBlock && previousBlock && currentBlock !== previousBlock &&
         !containsElement(currentBlock, previousBlock) && !containsElement(previousBlock, currentBlock)) {
@@ -175,28 +222,23 @@ function visibleDateEvidence(
   now: () => number,
   deadline: number,
 ): { value: string | null; timedOut: boolean } {
-  const stack = Array.from(element.children).reverse();
   let evidence: string | null = null;
   let sawTime = false;
-  while (stack.length > 0) {
+  for (const current of element.querySelectorAll("time")) {
     if (now() > deadline) return { value: null, timedOut: true };
-    const current = stack.pop()!;
-    if (itemCandidate(current) || excluded(current)) continue;
+    if (hasNestedItemAncestor(current, element) || excluded(current)) continue;
     if (!isVisible(current)) continue;
-    if (current.localName === "time") {
-      sawTime = true;
-      const visibleTextResult = visibleText(current, 100, now, deadline, { skipNestedContentCandidates: false });
-      if (visibleTextResult.timedOut) return { value: null, timedOut: true };
-      const visibleDate = visibleTextResult.text;
-      const datetime = current.getAttribute("datetime") ?? "";
-      if (visibleTextResult.truncated || !BrowserContentItem.shape.visibleDate.safeParse(visibleDate).success ||
-          !BrowserContentItem.shape.visibleDate.safeParse(datetime).success || Date.parse(visibleDate) !== Date.parse(datetime)) {
-        return { value: null, timedOut: false };
-      }
-      if (evidence !== null && Date.parse(evidence) !== Date.parse(datetime)) return { value: null, timedOut: false };
-      evidence = datetime;
+    sawTime = true;
+    const visibleTextResult = visibleText(current, 100, now, deadline, { skipNestedContentCandidates: false });
+    if (visibleTextResult.timedOut) return { value: null, timedOut: true };
+    const visibleDate = visibleTextResult.text;
+    const datetime = current.getAttribute("datetime") ?? "";
+    if (visibleTextResult.truncated || !BrowserContentItem.shape.visibleDate.safeParse(visibleDate).success ||
+        !BrowserContentItem.shape.visibleDate.safeParse(datetime).success || Date.parse(visibleDate) !== Date.parse(datetime)) {
+      return { value: null, timedOut: false };
     }
-    for (let child = current.lastElementChild; child; child = child.previousElementSibling) stack.push(child);
+    if (evidence !== null && Date.parse(evidence) !== Date.parse(datetime)) return { value: null, timedOut: false };
+    evidence = datetime;
   }
   return { value: sawTime ? evidence : null, timedOut: false };
 }
@@ -208,6 +250,62 @@ function currentState(document: Document, identity: BrowserPageIdentity, frameId
 
 function failure(request: BrowserContentRequest, code: "stale-capture" | "stale-page" | "unsupported-frame" | "not-found" | "ambiguous" | "invalid-target" | "unauthorized" | "unsupported-destination-check" | "timeout" | "exception", message: string): BrowserContentResponse {
   return { t: "browser-content.error", operation: request.operation, code, message };
+}
+
+function submitVisibleSiteSearch(
+  document: Document,
+  request: Extract<BrowserContentRequest, { operation: "site-search" }>,
+  frameId: number,
+): BrowserContentResponse {
+  const state = currentState(document, request.identity, frameId);
+  if (!state) return failure(request, "stale-capture", "The visible search field list is no longer current.");
+  const query = boundedText(request.query, 500, 1000);
+  if (query.trim() === "" || query !== request.query) return failure(request, "invalid-target", "Say a search phrase up to 500 characters.");
+
+  const candidates = [...document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+    'input:not([type="hidden"]), textarea',
+  )].filter((field) => {
+    if (!field.isConnected || field.disabled || field.readOnly || !isVisible(field) ||
+        field.closest("[inert], [hidden], [aria-hidden='true']") !== null) return false;
+    const role = (field.getAttribute("role") ?? "").toLocaleLowerCase();
+    const labels = [field.getAttribute("aria-label"), field.getAttribute("placeholder"), field.getAttribute("name"), role,
+      ...Array.from(field.labels ?? [], (label) => label.textContent ?? "")].filter(Boolean).join(" ");
+    return field instanceof document.defaultView!.HTMLInputElement && field.type === "search" ||
+      role === "searchbox" || /search/iu.test(labels);
+  });
+  if (candidates.length === 0) return failure(request, "not-found", "I couldn't find a visible search field on this page.");
+  if (candidates.length !== 1) return failure(request, "ambiguous", "More than one visible search field matches. Nothing was submitted.");
+  const field = candidates[0]!;
+  const form = field.form;
+  if (!form || typeof form.requestSubmit !== "function") {
+    return failure(request, "not-found", "The visible search field has no verifiable submit action, so nothing was submitted.");
+  }
+  // Use the DOM type property: <button> defaults to submit, and controls can
+  // belong to a form through the form attribute without being its descendants.
+  const submitters = [...form.elements].filter((element): element is HTMLButtonElement | HTMLInputElement =>
+    (element instanceof document.defaultView!.HTMLButtonElement || element instanceof document.defaultView!.HTMLInputElement) &&
+    element.type === "submit" && !element.disabled && isVisible(element));
+  if (submitters.length > 1) return failure(request, "ambiguous", "The search form has more than one visible submit action. Nothing was submitted.");
+
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value");
+    if (descriptor?.set) descriptor.set.call(field, query);
+    else field.value = query;
+    if (field.value !== query) return failure(request, "stale-capture", "The search phrase could not be verified in the field.");
+    field.dispatchEvent(new document.defaultView!.Event("input", { bubbles: true, composed: true }));
+    field.dispatchEvent(new document.defaultView!.Event("change", { bubbles: true }));
+    if (!form.checkValidity()) return failure(request, "invalid-target", "The search form did not pass its validation.");
+    // Activation runs the site's click handler as well as native form submission.
+    // requestSubmit alone bypasses click handlers used by some search widgets.
+    const cleanup = beginOneSubmitAllowance(form, submitters[0] ?? null);
+    try {
+      if (submitters[0] !== undefined) submitters[0].click();
+      else form.requestSubmit();
+    } finally { cleanup(); }
+    return { t: "browser-content.result", operation: "site-search", result: { ...state.identity, status: "submitted" } };
+  } catch {
+    return failure(request, "exception", "The page could not submit this search.");
+  }
 }
 
 /**
@@ -224,7 +322,10 @@ export function captureVisibleContent(
   const startedAt = now();
   const deadline = startedAt + (options.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS);
   const frameId = 0;
-  const state: CaptureState = { identity, frameId, blocks: new Map(), items: new Map(), links: new Map(), linksTruncated: false };
+  const state: CaptureState = {
+    identity, frameId, blocks: new Map(), items: new Map(), links: new Map(), linksTruncated: false,
+    repeatedLinkRows: new WeakMap(),
+  };
   captureByDocument.set(document, state);
 
   if (!BrowserPageUrl.safeParse(identity.pageUrl).success || !/^https?:/i.test(identity.pageUrl)) {
@@ -234,7 +335,7 @@ export function captureVisibleContent(
   const root = document.body ?? document.documentElement;
   if (!root) return { ...identity, status: "empty", blocks: [], truncated: false };
 
-  const stack: Array<{ element: Element; next: Element | null }> = [{ element: root, next: root.firstElementChild }];
+  const candidates = root.querySelectorAll(CANDIDATE_SELECTOR);
   const rawBlocks: Array<{ kind: "heading" | "paragraph"; element: Element; text: string; truncated: boolean }> = [];
   const rawItems: Array<{ element: Element; text: string; truncated: boolean; visibleDate: string | null }> = [];
   const rawLinks: Array<{ element: HTMLAnchorElement; href: string; rawHref: string; target: string; label: string }> = [];
@@ -243,36 +344,30 @@ export function captureVisibleContent(
   let linksTruncated = false;
   let timedOut = false;
 
-  while (stack.length > 0) {
+  for (const element of candidates) {
     if (now() > deadline) { timedOut = true; break; }
-    const frame = stack[stack.length - 1]!;
-    if (frame.next === null) { stack.pop(); continue; }
-    const element = frame.next;
-    frame.next = element.nextElementSibling;
     if (SKIPPED_TAGS.has(element.localName)) continue;
-    stack.push({ element, next: element.firstElementChild });
 
     if (excluded(element) || !isVisible(element)) continue;
-    if (element.localName === "a" && !element.hasAttribute("download")) {
+    if (element.localName === "a" && !element.hasAttribute("download") && rawLinks.length < MAX_LINKS) {
       const textResult = visibleText(element, 200, now, deadline);
       if (textResult.timedOut) { timedOut = true; break; }
       const accessible = textResult.text || boundedText(element.getAttribute("aria-label"), 200, 200);
       const label = boundedText(accessible, 200, 400);
       const href = (element as HTMLAnchorElement).href || "";
-      if (label !== "" && href !== "") {
-        if (rawLinks.length < MAX_LINKS) rawLinks.push({
-          element: element as HTMLAnchorElement,
-          href,
-          rawHref: element.getAttribute("href") ?? "",
-          target: element.getAttribute("target") ?? "",
-          label,
-        });
-        else linksTruncated = true;
-      }
+      if (label !== "" && href !== "") rawLinks.push({
+        element: element as HTMLAnchorElement,
+        href,
+        rawHref: element.getAttribute("href") ?? "",
+        target: element.getAttribute("target") ?? "",
+        label,
+      });
+    } else if (element.localName === "a" && !element.hasAttribute("download")) {
+      linksTruncated = true;
     }
 
     const kind = childCandidateKind(element);
-    if (kind !== null && !hasContentAncestor(element)) {
+    if (kind !== null && rawBlocks.length < MAX_BLOCKS && !hasContentAncestor(element)) {
       const textResult = visibleText(element, MAX_BLOCK_CODE_POINTS + 1, now, deadline);
       if (textResult.timedOut) { timedOut = true; break; }
       if (textResult.text !== "") {
@@ -284,20 +379,26 @@ export function captureVisibleContent(
         });
         else blocksTruncated = true;
       }
+    } else if (kind !== null && rawBlocks.length >= MAX_BLOCKS && !hasContentAncestor(element)) {
+      blocksTruncated = true;
     }
 
-    if (itemCandidate(element) && !hasItemAncestor(element)) {
-      const textResult = visibleText(element, MAX_BLOCK_CODE_POINTS + 1, now, deadline, {
+    const itemElement = itemCandidate(element)
+      ? element
+      : !itemsTruncated && element.localName === "a" ? repeatedLinkItemAncestor(element, state, now, deadline) : null;
+    if (itemElement !== null && rawItems.length < MAX_ITEMS && !hasItemAncestor(itemElement) &&
+        !rawItems.some((raw) => raw.element === itemElement)) {
+      const textResult = visibleText(itemElement, MAX_BLOCK_CODE_POINTS + 1, now, deadline, {
         skipNestedContentCandidates: false,
         skipNestedItems: true,
       });
       if (textResult.timedOut) { timedOut = true; break; }
       if (textResult.text !== "") {
-        const dateResult = visibleDateEvidence(element, now, deadline);
+        const dateResult = visibleDateEvidence(itemElement, now, deadline);
         if (dateResult.timedOut) { timedOut = true; break; }
         if (rawItems.length < MAX_ITEMS) {
           rawItems.push({
-            element,
+            element: itemElement,
             text: boundedText(textResult.text, MAX_BLOCK_CODE_POINTS + 1, (MAX_BLOCK_CODE_POINTS + 1) * 2),
             truncated: textResult.truncated || Array.from(textResult.text).length > MAX_BLOCK_CODE_POINTS,
             visibleDate: dateResult.value,
@@ -306,10 +407,14 @@ export function captureVisibleContent(
           itemsTruncated = true;
         }
       }
+    } else if (itemElement !== null && rawItems.length >= MAX_ITEMS && !hasItemAncestor(itemElement)) {
+      itemsTruncated = true;
     }
+
+    if (rawBlocks.length >= MAX_BLOCKS && rawItems.length >= MAX_ITEMS && rawLinks.length >= MAX_LINKS) break;
   }
 
-  if (timedOut || now() > deadline) {
+  if (timedOut && rawBlocks.length === 0 && rawItems.length === 0 && rawLinks.length === 0) {
     captureByDocument.delete(document);
     return failedResult(identity, "timeout");
   }
@@ -340,12 +445,12 @@ export function captureVisibleContent(
 
   const items: BrowserContentItemType[] = [];
   let itemTotal = 0;
-  let truncated = blockTruncated || itemsTruncated;
+  let truncated = blockTruncated || itemsTruncated || linksTruncated || timedOut;
   for (const raw of rawItems) {
     if (items.length >= MAX_ITEMS) { truncated = true; break; }
-    let text = raw.text;
+    let text = boundedText(raw.text, MAX_BLOCK_CODE_POINTS, MAX_BLOCK_CODE_POINTS * 2);
     const count = Array.from(text).length;
-    if (raw.truncated || count > MAX_BLOCK_CODE_POINTS) truncated = true;
+    if (raw.truncated || Array.from(raw.text).length > MAX_BLOCK_CODE_POINTS) truncated = true;
     if (itemTotal + count > MAX_TOTAL_CODE_POINTS) {
       const remaining = MAX_TOTAL_CODE_POINTS - itemTotal;
       text = boundedText(text, remaining, remaining * 2);
@@ -444,12 +549,13 @@ function readItem(document: Document, request: Extract<BrowserContentRequest, { 
   const entry = state.items.get(request.itemId);
   if (!entry) return failure(request, "not-found", "That visible page item is no longer available.");
   const element = entry.element;
-  if (!element.isConnected || excluded(element) || !isVisible(element) || !itemCandidate(element) || hasItemAncestor(element)) {
+  const now = () => document.defaultView?.performance.now() ?? performance.now();
+  const deadline = now() + DEFAULT_TIME_BUDGET_MS;
+  const eligibleItem = itemCandidate(element) || repeatedLinkItem(element, state, now, deadline);
+  if (!element.isConnected || excluded(element) || !isVisible(element) || !eligibleItem || hasItemAncestor(element)) {
     return failure(request, "stale-capture", "The selected page item is no longer an eligible visible item.");
   }
 
-  const now = () => document.defaultView?.performance.now() ?? performance.now();
-  const deadline = now() + DEFAULT_TIME_BUDGET_MS;
   const liveText = visibleText(element, MAX_BLOCK_CODE_POINTS + 1, now, deadline, {
     skipNestedContentCandidates: false,
     skipNestedItems: true,
@@ -587,6 +693,7 @@ export function handleBrowserContentRequest(
     }
     case "read-content": return readBlock(document, request, frameId);
     case "read-item": return readItem(document, request, frameId);
+    case "site-search": return submitVisibleSiteSearch(document, request, frameId);
     case "open-link": return openLink(document, request, frameId);
     case "scroll": return scroll(document, request, frameId);
     case "find": return find(document, request, frameId);

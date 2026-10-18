@@ -3,6 +3,7 @@ import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 import type { BrowserContentItem, BrowserPageIdentity, Snapshot } from "@blip/protocol";
 import type { AgyProvider } from "../brain/agy/provider";
 import { serializePageContentProjectionForPrompt, type PageContentProjection } from "../brain/agy/content-projection";
+import type { PageTaskInferenceContext, PageTaskIntent } from "./task-intent";
 import { createGatePort } from "../act/gate-port";
 import { handleGatedSpeakDone } from "../act/gated";
 import { createVoiceGateAdapter } from "../act/voice-gate-adapter";
@@ -88,6 +89,8 @@ function makeRig(options: {
   duplicateDraftField?: boolean;
   confirmAfterSend?: boolean;
   modelProposal?: (projection: PageContentProjection, draftNumber: number) => string;
+  classifyPageTask?: (utterance: string, context: PageTaskInferenceContext) => PageTaskIntent | Promise<PageTaskIntent>;
+  intentWatchdog?: { schedule(callback: () => void, delayMs: number): unknown; cancel(handle: unknown): void };
 } = {}) {
   let now = 100_000;
   let capturedAt = 100_000;
@@ -134,6 +137,13 @@ function makeRig(options: {
           : "Revised proposal: I can arrive at the updated time.");
     }),
     parseIntent: vi.fn(async () => ({ type: "unknown" as const })),
+    ...(options.classifyPageTask === undefined ? {} : {
+      classifyPageTask: vi.fn(options.classifyPageTask),
+    }),
+    ...(options.classifyPageTask === undefined ? {} : {
+      abortRole: vi.fn(async () => {}),
+      recreateRole: vi.fn(async () => {}),
+    }),
   } as unknown as AgyProvider;
   const outgoing: Array<{ role: string; type: string; payload: any }> = [];
   const browserCalls: Array<any> = [];
@@ -152,6 +162,12 @@ function makeRig(options: {
       if (type === "browser.request") {
         const request = payload;
         browserCalls.push(request);
+        if (request.operation.op === "list-links") return { payload: {
+          ok: true,
+          requestId: request.requestId,
+          operation: "list-links",
+          result: { ...identity, status: "empty", links: [], truncated: false },
+        } };
         if (request.operation.op !== "read-item") throw new Error(`Unexpected browser operation ${request.operation.op}`);
         const found = capturedItems.find((item) => item.itemId === request.operation.itemId);
         if (found === undefined) throw new Error("Unknown synthetic item");
@@ -207,6 +223,7 @@ function makeRig(options: {
     freshnessMs: 2_000,
     brain: { parseIntent: vi.fn(async () => ({ type: "unknown" as const })) },
     agyProvider: provider,
+    ...(options.intentWatchdog === undefined ? {} : { intentWatchdog: options.intentWatchdog }),
     gatePort: createGatePort(hub, session.grants),
     clock,
     schedule,
@@ -254,8 +271,8 @@ async function armSend(rig: ReturnType<typeof makeRig>) {
   const pending = rig.session.pendingGatedAction;
   if (pending === null) throw new Error("Expected the core send gate to start tracked read-back.");
   const prompt = [...rig.outgoing].reverse().find((entry) => entry.type === "speak" && entry.payload.category === "confirm-prompt");
-  if (prompt === undefined) throw new Error("Expected the direct exact-phrase prompt.");
-  expect(prompt.payload.text).toContain("Can you say 'send this email'?");
+  if (prompt === undefined) throw new Error("Expected the direct send question.");
+  expect(prompt.payload.text).toContain("Would you like me to send it? Say yes to send");
   expect(handleGatedSpeakDone(rig.context, { speakId: pending.speakId, interrupted: false })).toBe(true);
   expect(rig.scheduled[0]?.delayMs).toBe(1_000);
   rig.setNow((rig.context.clock as () => number)() + 1_000);
@@ -288,8 +305,8 @@ describe("Phase 8 synthetic page-task workflow acceptance", () => {
     expect(lastSpokenText(rig)).toBe(CURRENT_TEXT);
     expect(rig.provider.answerPageQuestion).not.toHaveBeenCalled();
     expect(rig.provider.draftPageText).not.toHaveBeenCalled();
-    expect(rig.browserCalls).toHaveLength(1);
-    expect(rig.browserCalls[0]?.operation).toMatchObject({ op: "read-item", itemId: "notice-current", identity: rig.identity });
+    expect(rig.browserCalls.map((call) => call.operation.op)).toEqual(["list-links", "read-item"]);
+    expect(rig.browserCalls[1]?.operation).toMatchObject({ op: "read-item", itemId: "notice-current", identity: rig.identity });
 
     await rig.utter("summarize latest");
     expect(lastSpokenText(rig)).toContain("workshop moved to the north room");
@@ -302,21 +319,94 @@ describe("Phase 8 synthetic page-task workflow acceptance", () => {
     expect(prompt).not.toContain("change the recipient");
   });
 
+  it("infers natural page follow-ups from the active item and completes a reply through confirmed send", async () => {
+    const classifyPageTask = vi.fn(async (utterance: string, context: PageTaskInferenceContext): Promise<PageTaskIntent> => {
+      if (/newest message/i.test(utterance)) return "read-latest-item";
+      if (/missed that|short version|gist/i.test(utterance)) return "summarize-current-item";
+      if (/write back|reply to them/i.test(utterance)) return "draft-current-reply";
+      if (/send the reply/i.test(utterance) && context.hasObservedDraft) return "send-current-draft";
+      return "none";
+    });
+    const rig = makeRig({ classifyPageTask });
+
+    await rig.utter("What's my newest message about?");
+    expect(lastSpokenText(rig)).toBe(CURRENT_TEXT);
+    expect(rig.session.activePageTask?.taskKind).toBe("read-item");
+
+    await rig.utter("I missed that; give me the short version.");
+    expect(lastSpokenText(rig)).toContain("workshop moved to the north room");
+    expect(rig.session.activePageTask?.taskKind).toBe("summarize-item");
+
+    await rig.utter("Write back and say I can arrive at three.");
+    expect(lastSpokenText(rig)).toBe("Current draft in Reply message: I can arrive before the workshop begins.");
+    expect(rig.session.activePageTask?.lastObservedDraftValue).toBe("I can arrive before the workshop begins.");
+
+    await rig.utter("Could you make the reply a little friendlier?");
+    expect(lastSpokenText(rig)).toBe("Current draft in Reply message: I can arrive at the updated time.");
+
+    await rig.utter("Please send the reply.");
+    const pending = rig.session.pendingGatedAction;
+    expect(pending).not.toBeNull();
+    expect(rig.sendDispatches).toBe(0);
+    expect(lastSpokenText(rig)).toContain("Would you like me to send it?");
+    expect(classifyPageTask.mock.calls.map(([utterance]) => utterance)).toEqual([
+      "What's my newest message about?",
+      "I missed that; give me the short version.",
+      "Write back and say I can arrive at three.",
+      "Please send the reply.",
+    ]);
+    expect(classifyPageTask.mock.calls[1]?.[1].hasActiveItem).toBe(true);
+    expect(classifyPageTask.mock.calls[3]?.[1].hasObservedDraft).toBe(true);
+    expect(JSON.stringify(classifyPageTask.mock.calls.map(([, context]) => context)))
+      .not.toContain(CURRENT_TEXT);
+
+    expect(handleGatedSpeakDone(rig.context, { speakId: pending!.speakId, interrupted: false })).toBe(true);
+    rig.setNow((rig.context.clock as () => number)() + 1_000);
+    rig.scheduled.shift()!.callback();
+    await redeem(rig, { source: "voice" });
+    expect(rig.sendDispatches).toBe(1);
+    expect(rig.session.pendingGatedAction).toBeNull();
+  });
+
+  it("returns control when semantic page-task classification stalls", async () => {
+    let expire: (() => void) | null = null;
+    const cancel = vi.fn();
+    const rig = makeRig({
+      classifyPageTask: () => new Promise<PageTaskIntent>(() => {}),
+      intentWatchdog: {
+        schedule(callback, delayMs) {
+          expect(delayMs).toBeGreaterThan(0);
+          expire = callback;
+          return "intent-watchdog";
+        },
+        cancel,
+      },
+    });
+
+    const pending = rig.utter("What's my newest message about?");
+    for (let attempt = 0; attempt < 10 && expire === null; attempt++) await Promise.resolve();
+    expect(expire).not.toBeNull();
+    expire!();
+    await pending;
+    expect(lastSpokenText(rig)).toContain("took too long to respond");
+    expect(cancel).toHaveBeenCalledWith("intent-watchdog");
+  });
+
   it("clarifies tied, missing-date, hidden, and changed live items without selecting stale content", async () => {
     const tied = makeRig({ items: [
       { itemId: "notice-current", text: CURRENT_TEXT, visibleDate: "2026-10-18T12:00:00Z" },
       { itemId: "notice-previous", text: OLDER_TEXT, visibleDate: "2026-10-18T12:00:00Z" },
     ] });
     await tied.utter("read latest");
-    expect(lastSpokenText(tied)).toContain("More than one visible item has the latest date");
-    expect(tied.browserCalls).toHaveLength(0);
+    expect(lastSpokenText(tied)).toBe(CURRENT_TEXT);
+    expect(tied.browserCalls.map((call) => call.operation.op)).toEqual(["list-links", "read-item"]);
 
     const undated = makeRig({ items: [
       { itemId: "notice-current", text: CURRENT_TEXT, visibleDate: "2026-10-18T12:00:00Z" },
       { itemId: "notice-previous", text: OLDER_TEXT, visibleDate: null },
     ] });
     await undated.utter("read latest");
-    expect(lastSpokenText(undated)).toContain("dates are missing or invalid");
+    expect(lastSpokenText(undated)).toContain("some dates are missing");
     expect(undated.browserCalls).toHaveLength(0);
 
     const hidden = makeRig();
@@ -397,7 +487,7 @@ describe("Phase 8 synthetic page-task workflow acceptance", () => {
     expect(hostileModel.outgoing.some((entry) => entry.type === "confirm.armed")).toBe(false);
   });
 
-  it("dispatches once only after exact voice redemption and reports success from fresh page evidence", async () => {
+  it("accepts a voice yes after the send question and reports success from fresh page evidence", async () => {
     const rig = makeRig();
     await prepareDraft(rig);
     expect(rig.sendDispatches).toBe(0);
@@ -419,10 +509,8 @@ describe("Phase 8 synthetic page-task workflow acceptance", () => {
   });
 
   it.each([
-    ["affirmative yes", "yes", "voice"],
-    ["affirmative okay", "okay", "voice"],
-    ["affirmative yeah", "yeah", "voice"],
-    ["affirmative sure", "sure", "voice"],
+    ["typed yes", "yes", "typed"],
+    ["typed okay", "okay", "typed"],
     ["wrong operation phrase", "confirm sending", "voice"],
     ["wrong task phrase", "submit survey", "voice"],
     ["typed exact phrase", "send this email", "typed"],

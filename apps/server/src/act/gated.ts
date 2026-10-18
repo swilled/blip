@@ -29,6 +29,16 @@ const MSG_RESULT_UNVERIFIED = "I couldn't verify the page outcome.";
 const MSG_GRANT_EXPIRED = "The confirmation expired. Nothing was carried out; please ask me to read the form back again.";
 const MSG_DRAFT_TASK_UNAVAILABLE = "I couldn't verify one current draft, recipient, and visible send action, so nothing was sent. Please review the page and try again.";
 
+function isAffirmativeEmailReply(text: string): boolean {
+  const normalized = text.toLocaleLowerCase().replace(/[\p{P}]+/gu, " ").replace(/\s+/gu, " ").trim();
+  return ["yes", "yeah", "yep", "sure", "okay", "ok", "go ahead", "send it", "yes please", "yes send it"].includes(normalized);
+}
+
+function isNegativeEmailReply(text: string): boolean {
+  const normalized = text.toLocaleLowerCase().replace(/[\p{P}]+/gu, " ").replace(/\s+/gu, " ").trim();
+  return ["no", "nope", "no thanks", "no thank you", "keep it as a draft", "leave it as a draft"].includes(normalized);
+}
+
 export type GatedContext = {
   hub: Hub;
   /** Production supplies the explicit dispatch boundary; tests may derive it from their Hub. */
@@ -353,7 +363,7 @@ async function beginDraftSend(ctx: GatedContext): Promise<void> {
   }
 
   const actionLabel = spokenText(resolved.target.label).slice(0, 120) || "Send message";
-  const text = `Recipient: ${resolved.recipientLabel}, ${resolved.recipientValue}. Current message draft: ${resolved.draft} Requested action: ${actionLabel}. Can you say '${phrase}'?`;
+  const text = `Recipient: ${resolved.recipientLabel}, ${resolved.recipientValue}. Current message draft: ${resolved.draft} Requested action: ${actionLabel}. Would you like me to send it? Say yes to send, or no to keep it as a draft.`;
   if (text.length > MAX_READBACK_CHARS) {
     audit("refused", "readback-too-large", "send", resolved.target.id);
     speak(ctx, MSG_READBACK_TOO_LARGE, "error");
@@ -636,6 +646,13 @@ async function acceptConfirmation(ctx: GatedContext, command: Extract<GatedComma
     });
   }
 
+  if (taskBoundSend && command.source === "voice" && isNegativeEmailReply(command.text)) {
+    return finishPending(ctx, pending, "user-declined-send", {
+      wireReason: "cancelled",
+      reply: "Okay, I left it as a draft.",
+    });
+  }
+
   if (
     (command.grantId !== undefined || command.speakId !== undefined || command.utteranceId !== undefined) &&
     (command.grantId !== pending.grantId || command.speakId !== pending.speakId ||
@@ -654,7 +671,8 @@ async function acceptConfirmation(ctx: GatedContext, command: Extract<GatedComma
     now = Number.NaN;
   }
   const phraseMatches = taskBoundSend
-    ? matchesExactConfirmationPhrase(pending.phrase, command.text)
+    ? (matchesExactConfirmationPhrase(pending.phrase, command.text) ||
+      (command.source === "voice" && isAffirmativeEmailReply(command.text)))
     : matchesConfirmationPhrase(pending.kind, command.text);
   if (!phraseMatches) {
     return finishPending(ctx, pending, "phrase-mismatch", { wireReason: "cancelled", reply: MSG_CONFIRMATION_REQUIRED });

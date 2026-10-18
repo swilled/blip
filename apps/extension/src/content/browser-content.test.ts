@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrowserContentRequest, BrowserContentResponse } from "../shared/messages.js";
-import type { BrowserPageIdentity } from "@blip/protocol";
+import { BrowserContentResult, type BrowserPageIdentity } from "@blip/protocol";
 import { captureVisibleContent, handleBrowserContentRequest } from "./browser-content.js";
 import { parseBrowserCommand } from "../../../server/src/browser/commands.js";
 import { createBrowserRequestDispatcher } from "../background/browser.js";
+import { installPersistentSubmitGuard } from "./submit-guard.js";
 
 const PAGE = "https://example.test/article?session=private#part";
 const identity: BrowserPageIdentity = {
@@ -93,6 +94,7 @@ function browserDispatcher() {
 describe("bounded visible browser content", () => {
   beforeEach(() => {
     document.documentElement.innerHTML = "<head></head><body></body>";
+    installPersistentSubmitGuard(document);
     addVisibleRects();
   });
 
@@ -155,18 +157,158 @@ describe("bounded visible browser content", () => {
     roleItem.setAttribute("role", "listitem");
     roleItem.textContent = "Generic list row";
     document.body.append(roleItem);
+    const listItem = document.createElement("li");
+    listItem.textContent = "Unordered list row";
+    document.body.append(listItem);
+    const tableRow = document.createElement("tr");
+    tableRow.textContent = "Table row content";
+    document.body.append(tableRow);
+    const accessibleRow = document.createElement("div");
+    accessibleRow.setAttribute("role", "row");
+    accessibleRow.textContent = "Accessible row content";
+    document.body.append(accessibleRow);
 
     const capture = captureWithFixedClock();
-    expect(capture.items?.map(({ text, visibleDate }) => ({ text, visibleDate }))).toEqual([
+    const items = capture.items?.map(({ text, visibleDate }) => ({ text, visibleDate })) ?? [];
+    expect(items.slice(0, 5)).toEqual([
       { text: "Unique item 2026-10-18T12:30:00Z Unique item article text", visibleDate: "2026-10-18T12:30:00Z" },
       { text: "Tied item one 2026-10-17T09:00:00Z Tied item one article text", visibleDate: "2026-10-17T09:00:00Z" },
       { text: "Tied item two 2026-10-17T09:00:00Z Tied item two article text", visibleDate: "2026-10-17T09:00:00Z" },
       { text: "Missing date Missing date article text", visibleDate: null },
       { text: "Malformed date yesterday Malformed date article text", visibleDate: null },
-      { text: "Generic list row", visibleDate: null },
+    ]);
+    expect(items.slice(5).map(({ text }) => text).sort()).toEqual([
+      "Accessible row content", "Generic list row", "Table row content", "Unordered list row",
     ]);
     expect(new Set(capture.items?.map((item) => item.itemId)).size).toBe(capture.items?.length);
     expect(capture.items?.every((item) => item.identity === identity && item.frameId === 0)).toBe(true);
+  });
+
+  it("captures repeated unlabelled link rows as generic visible items", () => {
+    const list = document.createElement("div");
+    for (let index = 1; index <= 3; index += 1) {
+      const row = document.createElement("div");
+      const link = document.createElement("a");
+      link.href = `/message/${index}`;
+      link.textContent = `Subject ${index}`;
+      const snippet = document.createElement("span");
+      snippet.textContent = `Sender ${index} shared a detailed note about the upcoming event.`;
+      row.append(link, snippet);
+      list.append(row);
+    }
+    document.body.append(list);
+
+    const capture = captureWithFixedClock();
+    expect(capture.items?.map(({ text }) => text)).toEqual([
+      "Subject 1 Sender 1 shared a detailed note about the upcoming event.",
+      "Subject 2 Sender 2 shared a detailed note about the upcoming event.",
+      "Subject 3 Sender 3 shared a detailed note about the upcoming event.",
+    ]);
+    expect(capture.items?.every((item) => contentResponse(handleBrowserContentRequest(document, readItemRequest(item.itemId), 0))
+      .operation === "read-item")).toBe(true);
+  });
+
+  it("returns a valid bounded capture for a long visible article and can re-read it", () => {
+    const article = document.createElement("article");
+    article.textContent = "A long visible message. ".repeat(40);
+    document.body.append(article);
+    const capture = captureWithFixedClock();
+    expect(BrowserContentResult.safeParse(capture).success).toBe(true);
+    expect(Array.from(capture.items![0]!.text)).toHaveLength(400);
+    expect(capture.truncated).toBe(true);
+    expect(contentResponse(handleBrowserContentRequest(document, readItemRequest(capture.items![0]!.itemId), 0)).operation).toBe("read-item");
+  });
+
+  it("keeps generic item capture bounded on long inbox-style link lists", () => {
+    const list = document.createElement("div");
+    for (let index = 1; index <= 500; index += 1) {
+      const row = document.createElement("div");
+      const link = document.createElement("a");
+      link.href = `/message/${index}`;
+      link.textContent = `Subject ${index}`;
+      const snippet = document.createElement("span");
+      snippet.textContent = `Sender ${index} shared a detailed note about the upcoming event.`;
+      row.append(link, snippet);
+      list.append(row);
+    }
+    document.body.append(list);
+
+    const capture = captureWithFixedClock();
+    expect(capture.status).toBe("supported");
+    expect(capture.items).toHaveLength(20);
+    expect(capture.items?.[0]?.text).toContain("Sender 1");
+    expect(capture.items?.[19]?.text).toContain("Sender 20");
+    expect(capture.truncated).toBe(true);
+  });
+
+  it("revalidates and reads ordinary list and table rows as page items", () => {
+    const listItem = document.createElement("li");
+    listItem.textContent = "A visible list entry.";
+    document.body.append(listItem);
+    const tableRow = document.createElement("tr");
+    tableRow.textContent = "A visible table entry.";
+    document.body.append(tableRow);
+    const capture = captureWithFixedClock();
+
+    for (const item of capture.items ?? []) {
+      const response = contentResponse(handleBrowserContentRequest(document, readItemRequest(item.itemId), 0));
+      expect(response).toMatchObject({ operation: "read-item", result: { itemId: item.itemId, text: item.text } });
+    }
+    expect(capture.items?.map((item) => item.text)).toEqual(["A visible list entry.", "A visible table entry."]);
+  });
+
+  it("submits a page search only through one visible, uniquely identified search field", () => {
+    const form = document.createElement("form");
+    form.innerHTML = '<input type="search" aria-label="Search mail"><button type="submit">Search</button>';
+    document.body.append(form);
+    addVisibleRects();
+    const submitted = vi.fn((event: Event) => event.preventDefault());
+    form.addEventListener("submit", submitted);
+    captureVisibleContent(document, identity, { now: () => 0 });
+
+    const response = handleBrowserContentRequest(document, {
+      t: "browser-content", operation: "site-search", identity, query: "YouTube",
+    }, 0);
+    expect(contentResponse(response)).toMatchObject({ operation: "site-search", result: { status: "submitted", ...identity } });
+    expect((form.querySelector("input") as HTMLInputElement).value).toBe("YouTube");
+    expect(submitted).toHaveBeenCalledOnce();
+    // The allowance is consumed by this search, not retained for later submits.
+    form.requestSubmit(form.querySelector("button")!);
+    expect(submitted).toHaveBeenCalledOnce();
+  });
+
+  it("activates implicit submit buttons and their site click handlers", () => {
+    const form = document.createElement("form");
+    form.innerHTML = '<input type="search" aria-label="Search"><button>Search</button>';
+    document.body.append(form);
+    addVisibleRects();
+    const clicked = vi.fn();
+    form.querySelector("button")!.addEventListener("click", clicked);
+    const submitted = vi.fn((event: Event) => event.preventDefault());
+    form.addEventListener("submit", submitted);
+    captureVisibleContent(document, identity, { now: () => 0 });
+    handleBrowserContentRequest(document, { t: "browser-content", operation: "site-search", identity, query: "artificial intelligence" }, 0);
+    expect(clicked).toHaveBeenCalledOnce();
+    expect(submitted).toHaveBeenCalledOnce();
+  });
+
+  it("refuses an ambiguous site search without submitting either form", () => {
+    const first = document.createElement("form");
+    first.innerHTML = '<input type="search" aria-label="Search mail"><button type="submit">Search</button>';
+    const second = document.createElement("form");
+    second.innerHTML = '<input type="search" aria-label="Search contacts"><button type="submit">Search</button>';
+    document.body.append(first, second);
+    addVisibleRects();
+    const submitted = vi.fn((event: Event) => event.preventDefault());
+    first.addEventListener("submit", submitted);
+    second.addEventListener("submit", submitted);
+    captureVisibleContent(document, identity, { now: () => 0 });
+
+    const response = handleBrowserContentRequest(document, {
+      t: "browser-content", operation: "site-search", identity, query: "YouTube",
+    }, 0);
+    expect(response).toMatchObject({ t: "browser-content.error", code: "ambiguous" });
+    expect(submitted).not.toHaveBeenCalled();
   });
 
   it("omits hidden and nested item duplicates and bounds captured item text", () => {
@@ -208,6 +350,20 @@ describe("bounded visible browser content", () => {
     addText("p", "slow page");
     let tick = 0;
     expect(captureVisibleContent(document, identity, { timeBudgetMs: 0, now: () => ++tick }).status).toBe("timeout");
+  });
+
+  it("finds readable content on a large page without walking every layout node", () => {
+    for (let index = 0; index < 2500; index += 1) {
+      const layout = document.createElement("div");
+      document.body.append(layout);
+    }
+    addText("p", "The latest visible message is ready to read.");
+
+    let ticks = 0;
+    const result = captureVisibleContent(document, identity, { now: () => ticks++, timeBudgetMs: 100 });
+
+    expect(result.status).toBe("supported");
+    expect(result.blocks.map(({ text }) => text)).toEqual(["The latest visible message is ready to read."]);
   });
 
   it("lists only visible link labels with a host hint and identity, never URL query or fragment", () => {

@@ -113,6 +113,20 @@ describe("explicit page-content projection", () => {
     expect(totalBounded?.incomplete).toBe(true);
   });
 
+  it("summarizes long articles without treating excerpt budget limits as unsafe filtering", () => {
+    for (const length of [100, 450]) {
+      const result = projectExplicitPageContentRequest(
+        { type: "summary", identity },
+        Array.from({ length: 100 }, (_, index) => block(`article-${index}`, "x".repeat(length))),
+        identity,
+      );
+      expect(result).not.toBeNull();
+      expect(result?.incomplete).toBe(true);
+      expect(result!.blocks.length).toBeLessThanOrEqual(20);
+      expect(result!.blocks.reduce((sum, item) => sum + Array.from(item.text).length, 0)).toBeLessThanOrEqual(4000);
+    }
+  });
+
   it("fails closed for stale identity, excessive filtering, and sensitive questions", () => {
     expect(projectExplicitPageContentRequest(
       { type: "summary", identity },

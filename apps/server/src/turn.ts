@@ -2,7 +2,7 @@
 // The fake and (later) real brain can only produce an Intent. Ungated Intents enter the established
 // field action path; gated Intents enter the deterministic Executor and never authorize themselves.
 import { newId, type Intent, type Message, type PayloadOf, type SpeakDonePayload } from "@blip/protocol";
-import type { BrowserOperation, BrowserPageIdentity, BrowserContentBlock, BrowserResultPayload } from "@blip/protocol";
+import type { BrowserOperation, BrowserPageIdentity, BrowserContentBlock, BrowserContentResult, BrowserResultPayload } from "@blip/protocol";
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
@@ -19,11 +19,20 @@ import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
 import type { Refresher } from "./session/refresh";
 import type { Session } from "./session/session";
-import { parseBrowserCommand, type BrowserCapture, type BrowserCommand } from "./browser/commands";
+import { isNamedSiteNavigationRequest, parseBrowserCommand, relaxBrowserUtterance, type BrowserCapture, type BrowserCommand } from "./browser/commands";
 import { createBrowserExecutor, type BrowserExecutorResult } from "./browser/executor";
 import { BROWSER_AUTHORIZATION_GUARD_MS, BROWSER_AUTHORIZATION_TTL_MS, type BrowserAuthorizationTarget } from "./browser/authorization";
 import { composePageDraft, revisePageDraft } from "./browser/drafting";
-import { parsePageTaskCommand, runPageTaskCommand } from "./browser/tasks";
+import { parsePageTaskCommand, resolvePageTaskItem, runPageTaskCommand } from "./browser/tasks";
+import type { PageTaskCommand } from "./browser/tasks";
+import { pageTaskCommandForIntent, shouldInferPageTask, type PageTaskInferenceContext, type PageTaskIntent } from "./browser/task-intent";
+import { pageTaskMatchesCapture } from "./browser/task-state";
+import {
+  browserCommandForIntent,
+  shouldInferBrowserRequest,
+  splitCompoundNavigationRequest,
+  type BrowserRequestIntent,
+} from "./browser/request-intent";
 
 export type TurnContext = {
   message: Message;
@@ -58,8 +67,12 @@ export const MSG_BRAIN_FAILED = "Something went wrong on my side.";
 export const MSG_MODEL_FAILED = "I couldn't understand that";
 const MSG_FIELD_PHRASE_TOO_LONG = "That value is too long to fill.";
 const MSG_NO_CURRENT_ERRORS = "There are no errors currently detected.";
-const INTENT_WATCHDOG_MS = 4_000;
-const PAGE_CONTENT_WATCHDOG_MS = 4_000;
+const INTENT_WATCHDOG_MS = 15_000;
+const PAGE_CONTENT_WATCHDOG_MS = 15_000;
+const PAGE_ITEM_CAPTURE_RETRIES = 8;
+const PAGE_ITEM_CAPTURE_RETRY_DELAY_MS = 350;
+export const MSG_MODEL_TIMEOUT = "The AI took too long to respond. Please try again.";
+export const MSG_MODEL_RECOVERING = "The AI is reconnecting. Browser commands still work; try that request again shortly.";
 
 const intentRecoveries = new WeakMap<AgyProvider, Promise<void>>();
 const contentRecoveries = new WeakMap<AgyProvider, Promise<void>>();
@@ -78,10 +91,6 @@ function startIntentRoleRecovery(provider: AgyProvider): Promise<void> {
   return recovery;
 }
 
-async function waitForIntentRecovery(provider: AgyProvider): Promise<void> {
-  await intentRecoveries.get(provider);
-}
-
 function startContentRoleRecovery(provider: AgyProvider): Promise<void> {
   const pending = contentRecoveries.get(provider);
   if (pending !== undefined) return pending;
@@ -94,10 +103,6 @@ function startContentRoleRecovery(provider: AgyProvider): Promise<void> {
     if (contentRecoveries.get(provider) === recovery) contentRecoveries.delete(provider);
   }).catch(() => {});
   return recovery;
-}
-
-async function waitForContentRecovery(provider: AgyProvider): Promise<void> {
-  await contentRecoveries.get(provider);
 }
 
 type SpeakOptions = { interrupt?: boolean; record?: boolean };
@@ -123,8 +128,7 @@ const MSG_BROWSER_READ_FAILED = "I couldn't safely read the current browser page
 const MSG_BROWSER_AUTH_REFUSED = "That browser confirmation was not accepted. Nothing was done.";
 const MSG_BROWSER_AUTH_EXPIRED = "That browser confirmation expired. Nothing was done.";
 const MSG_BROWSER_AUTH_PAGE_CHANGED = "The browser page changed. Nothing was done; please ask again.";
-const MSG_SITE_SEARCH_FIELD = "I couldn't uniquely identify a visible search field and submit action on this page, so nothing was submitted.";
-const MSG_SITE_SEARCH_VALUE = "I couldn't verify the search query in the field, so nothing was submitted.";
+const MSG_SITE_SEARCH_FIELD = "I couldn't identify one visible search field with a safe submit action on this page, so nothing was submitted.";
 const MSG_PRIVATE_PAGE_CONTENT = "I found page content that may contain private information, so I didn't read it aloud.";
 
 function browserFailureText(result: BrowserExecutorResult): string {
@@ -206,11 +210,23 @@ function speakContent(ctx: TurnContext, blocks: BrowserContentBlock[], mode: "re
   speak(ctx.hub, ctx.session, safeBlocks.map((block) => block.text).join(" ") + (privateBlocks.length > 0 ? " " + MSG_PRIVATE_PAGE_CONTENT : ""), "answer");
 }
 
+/** Use bounded semantic article/list captures when a page has no ordinary heading/paragraph text. */
+function readablePageBlocks(capture: BrowserContentResult): BrowserContentBlock[] {
+  const blocks = [...capture.blocks];
+  for (const item of capture.items ?? []) {
+    const repeatedBlockCount = blocks.filter((block) => item.text.includes(block.text)).length;
+    if (blocks.some((block) => block.text.includes(item.text)) || repeatedBlockCount > 1) continue;
+    blocks.push({ contentId: item.itemId, kind: "paragraph", text: item.text, identity: item.identity, frameId: item.frameId });
+  }
+  return blocks;
+}
+
 async function answerExplicitPageContent(
   ctx: TurnContext,
   command: Extract<BrowserCommand, { type: "summary" | "question" }>,
   blocks: BrowserContentBlock[],
   identity: BrowserPageIdentity,
+  retriesLeft = 1,
 ): Promise<void> {
   const provider = ctx.agyProvider;
   if (provider === undefined) {
@@ -229,10 +245,12 @@ async function answerExplicitPageContent(
   }
 
   ctx.hub.send("voice", "earcon", { name: "thinking" });
+  if (contentRecoveries.has(provider)) return speak(ctx.hub, ctx.session, MSG_MODEL_RECOVERING, "error");
   let timer: unknown;
   let settled = false;
   let rejectTimeout!: (error: Error) => void;
   let controller: AbortController | undefined;
+  let timedOut = false;
   const watchdog = ctx.intentWatchdog ?? {
     schedule: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs),
     cancel: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
@@ -240,10 +258,10 @@ async function answerExplicitPageContent(
   const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
 
   try {
-    await waitForContentRecovery(provider);
     controller = new AbortController();
     timer = watchdog.schedule(() => {
       if (settled) return;
+      timedOut = true;
       controller?.abort(new Error("Agy page-content watchdog expired."));
       void startContentRoleRecovery(provider).catch(() => {});
       rejectTimeout(new Error("Agy page-content watchdog expired."));
@@ -252,7 +270,23 @@ async function answerExplicitPageContent(
     settled = true;
     const latest = ctx.session.browserCapture?.identity;
     if (latest === undefined || !identityMatches(latest, projection.identity)) {
-      return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+      // Loading/DOM notifications invalidate capture handles even when the
+      // excerpt used for this read-only answer is still present. Revalidate its
+      // actual evidence instead of discarding the answer for a handle change.
+      const refreshed = await createBrowserExecutor({ hub: ctx.hub, session: ctx.session }).execute({ op: "capture" });
+      if (!refreshed.ok || !refreshed.payload.ok || refreshed.payload.operation !== "capture") {
+        return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+      }
+      const page = refreshed.payload.result;
+      const verified = projectExplicitPageContentRequest({ ...request, identity: page }, readablePageBlocks(page), page);
+      if (page.tabId !== identity.tabId || page.pageUrl !== identity.pageUrl || verified === null ||
+          JSON.stringify(verified.blocks) !== JSON.stringify(projection.blocks)) {
+        if (retriesLeft > 0 && page.status === "supported" && verified !== null &&
+            page.tabId === identity.tabId && page.pageUrl === identity.pageUrl) {
+          return answerExplicitPageContent(ctx, command, readablePageBlocks(page), page, retriesLeft - 1);
+        }
+        return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+      }
     }
     if (containsSensitivePageText(answer)) {
       return speak(ctx.hub, ctx.session, MSG_PRIVATE_PAGE_CONTENT, "error");
@@ -261,7 +295,7 @@ async function answerExplicitPageContent(
     speak(ctx.hub, ctx.session, incompleteNotice + answer.trim(), "answer");
   } catch {
     settled = true;
-    speak(ctx.hub, ctx.session, "I couldn't safely answer about the current page. Please ask again.", "error");
+    speak(ctx.hub, ctx.session, timedOut ? MSG_MODEL_TIMEOUT : "I couldn't safely answer about the current page. Please ask again.", "error");
   } finally {
     if (timer !== undefined) watchdog.cancel(timer);
   }
@@ -422,46 +456,59 @@ async function beginBrowserAuthorization(
   ctx.hub.pushState();
 }
 
-function matchesSearchField(snapshot: Snapshot, model: NonNullable<Session["model"]>): Array<NonNullable<Session["model"]>["fields"][number]> {
-  const visibleFields = new Set(snapshot.elements.filter((element) => element.category === "field" && element.visible).map((element) => element.id));
-  return model.fields.filter((field) => {
-    if (!visibleFields.has(field.id) || field.disabled || field.sensitive !== "none") return false;
-    if (!["text", "email", "url", "textarea"].includes(field.type)) return false;
-    return /search/iu.test([field.label, field.role, field.autocomplete ?? ""].join(" "));
-  });
-}
-
 async function trySiteSearch(ctx: TurnContext, query: string, forced: boolean): Promise<"submitted" | "not-site-search" | "refused"> {
-  const captured = await captureIntentPage(ctx);
-  if (!captured.ok) {
-    speak(ctx.hub, ctx.session, captured.reply, "error");
+  const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+  const capture = await executor.execute({ op: "capture" });
+  if (!capture.ok) {
+    if (!forced && capture.reason === "no-current-tab") return "not-site-search";
+    speakBrowserFailure(ctx, capture);
     return "refused";
   }
-  const fields = matchesSearchField(captured.snapshot, captured.model);
-  if (fields.length === 0) return forced ? (speak(ctx.hub, ctx.session, MSG_SITE_SEARCH_FIELD, "error"), "refused") : "not-site-search";
-  if (fields.length !== 1) {
-    speak(ctx.hub, ctx.session, "More than one visible search field matches. Nothing was submitted.", "error");
+  if (!capture.payload.ok || capture.payload.operation !== "capture") {
+    if (!forced && capture.payload.ok === false && ["unsupported-page", "restricted-page"].includes(capture.payload.error.code)) {
+      return "not-site-search";
+    }
+    speakBrowserFailure(ctx, capture);
     return "refused";
   }
-  const submitActions = captured.model.actions.filter((action) => action.kind === "submit");
-  if (submitActions.length !== 1) {
-    speak(ctx.hub, ctx.session, MSG_SITE_SEARCH_FIELD, "error");
+  const page = capture.payload.result;
+  if (page.status !== "supported") return forced ? (speak(ctx.hub, ctx.session, MSG_SITE_SEARCH_FIELD, "error"), "refused") : "not-site-search";
+
+  const result = await executor.execute({
+    op: "site-search", query, identity: page, authorizationId: newId(),
+  });
+  if (!result.ok) {
+    if (result.reason === "request-failed") {
+      speak(ctx.hub, ctx.session, "Page search didn't respond. If Blip was just updated, reload its extension at edge://extensions, then try again.", "error");
+      return "refused";
+    }
+    speakBrowserFailure(ctx, result);
     return "refused";
   }
-  const field = fields[0]!;
-  const fill = await executeUngated(ctx, { type: "set_fields", fills: [{ fieldId: field.id, value: query }] });
-  if (fill.category === "error") {
-    speak(ctx.hub, ctx.session, fill.text, "error");
+  if (!result.payload.ok || result.payload.operation !== "site-search") {
+    if (!forced && result.payload.ok === false && ["not-found", "ambiguous"].includes(result.payload.error.code)) {
+      return "not-site-search";
+    }
+    speakBrowserFailure(ctx, result);
     return "refused";
   }
-  const observed = ctx.session.model?.fields.find((candidate) => candidate.id === field.id);
-  if (observed === undefined || observed.value !== query || !observed.hasValue) {
-    speak(ctx.hub, ctx.session, MSG_SITE_SEARCH_VALUE, "error");
-    return "refused";
+  // Submission acknowledgement is not evidence that results actually loaded.
+  // Read fresh page state, including for searches that update in place.
+  const previousText = JSON.stringify(page.blocks.map(block => [block.kind, block.text]));
+  for (let attempt = 0; attempt < 10; attempt++) {
+    if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 400));
+    const checked = await executor.execute({ op: "capture" });
+    if (checked.ok && checked.payload.ok && checked.payload.operation === "capture") {
+      const current = checked.payload.result;
+      if (current.status === "supported" && current.blocks.length > 0 &&
+          (current.pageUrl !== page.pageUrl || JSON.stringify(current.blocks.map(block => [block.kind, block.text])) !== previousText)) {
+        speak(ctx.hub, ctx.session, `Searched this page for ${query}.`, "answer");
+        return "submitted";
+      }
+    }
   }
-  // The existing form Executor owns the tracked full-form read-back and exact submit phrase.
-  await createVoiceGateAdapter(ctx).arm({ actionId: submitActions[0]!.id });
-  return "submitted";
+  speak(ctx.hub, ctx.session, "I entered the search, but couldn't verify that results loaded.", "error");
+  return "refused";
 }
 
 function speakBrowserResult(ctx: TurnContext, payload: BrowserResultPayload, command: BrowserCommand): void {
@@ -488,8 +535,15 @@ function speakBrowserResult(ctx: TurnContext, payload: BrowserResultPayload, com
     }
     case "scroll": return speak(ctx.hub, ctx.session, payload.result.moved ? "Scrolled the page." : "The page could not scroll further in that direction.", "answer");
     case "find": return speak(ctx.hub, ctx.session, payload.result.found ? `I found ${payload.result.matchCount} matches for that text.` : "I couldn't find that text on the page.", "answer");
-    case "navigate": return speak(ctx.hub, ctx.session, "Opened the requested website.", "answer");
+    case "navigate": {
+      const prompt = command.type === "navigate" ? command.postNavigationPrompt : undefined;
+      return speak(ctx.hub, ctx.session, `Opened the requested website.${prompt === undefined ? "" : ` ${prompt}`}`, "answer");
+    }
     case "search": return speak(ctx.hub, ctx.session, "Browser-default search was submitted.", "answer");
+    case "site-search": {
+      const query = command.type === "search" ? command.query : "that phrase";
+      return speak(ctx.hub, ctx.session, `Searched this page for ${query}.`, "answer");
+    }
     case "open-link": return speak(ctx.hub, ctx.session, "Opened the selected visible link.", "answer");
     case "history": return speak(ctx.hub, ctx.session, "Moved through browser history.", "answer");
     case "reload": return speak(ctx.hub, ctx.session, "Reloaded the current page.", "answer");
@@ -559,18 +613,112 @@ async function executeAuthorizedBrowserCommand(ctx: TurnContext, auth: ReturnTyp
   speakBrowserResult(ctx, result.payload, userCommand);
 }
 
+/** Follow only unique, freshly captured safe navigation links; never guess a destination URL. */
+async function openPageSection(ctx: TurnContext, command: Extract<BrowserCommand, { type: "section" }>, source: "voice" | "typed"): Promise<void> {
+  const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+  const normalize = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/gu, " ").trim();
+  let openedSettings = false;
+  for (let step = 0; step < 2; step++) {
+    const before = await executor.execute({ op: "capture" });
+    if (!before.ok || !before.payload.ok || before.payload.operation !== "capture") return speakBrowserFailure(ctx, before);
+    const previousText = before.payload.result.blocks.map((block) => block.text).join("\n");
+    const listed = await executor.execute({ op: "list-links" });
+    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "list-links") return speakBrowserFailure(ctx, listed);
+    const page = listed.payload.result;
+    const wanted = normalize(command.target);
+    if (wanted === "") return speak(ctx.hub, ctx.session, "Say which section you want to open.", "answer");
+    const exact = page.links.filter((link) => normalize(link.label) === wanted);
+    let matches = exact.length > 0 ? exact : page.links.filter((link) => normalize(link.label).includes(wanted));
+    let settingsHop = false;
+    if (matches.length === 0 && !openedSettings) {
+      matches = page.links.filter((link) => normalize(link.label) === "settings" && link.navigationSafety === "same-origin-safe-get");
+      settingsHop = true;
+    }
+    if (matches.length !== 1) return speak(ctx.hub, ctx.session, matches.length > 1
+      ? `More than one visible link matches ${command.target}. Say its full label.`
+      : `I couldn't find a visible link to ${command.target} on this page.`, "answer");
+    const link = matches[0]!;
+    if (link.navigationSafety !== "same-origin-safe-get") {
+      return runBrowserCommand(ctx, {
+        type: "open-link", linkId: link.linkId, identity: page, label: link.label, hostHint: link.hostHint,
+        navigationSafety: link.navigationSafety ?? "confirmation-required",
+      }, source);
+    }
+    const opened = await executor.execute({
+      op: "open-link", linkId: link.linkId, identity: page, authorizationId: newId(), authorizationMode: "user-command",
+    });
+    if (!opened.ok || !opened.payload.ok) return speakBrowserFailure(ctx, opened);
+    if (!settingsHop && command.question === undefined) return speakBrowserResult(ctx, opened.payload, command);
+    // Navigation is dispatched asynchronously. Read only a new document or changed page text,
+    // rather than answering from the old capture while the destination is still loading.
+    let arrived = false;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const captured = await executor.execute({ op: "capture" });
+      if (!captured.ok || !captured.payload.ok || captured.payload.operation !== "capture") return speakBrowserFailure(ctx, captured);
+      const next = captured.payload.result;
+      if (next.tabId !== page.tabId) return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+      if (next.status === "supported" && next.blocks.length > 0 &&
+          (next.pageUrl !== page.pageUrl || next.blocks.map((block) => block.text).join("\n") !== previousText)) {
+        arrived = true;
+        if (!settingsHop) return answerExplicitPageContent(ctx, { type: "question", query: command.question! }, next.blocks, next);
+        break;
+      }
+    }
+    if (!arrived) return speak(ctx.hub, ctx.session, "The section is still loading. Ask me to read it once it finishes.", "answer");
+    openedSettings = true;
+  }
+}
+
 async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, source: "voice" | "typed"): Promise<void> {
   if (command.type === "clarify") return speak(ctx.hub, ctx.session, command.question, "answer");
+  if ((command.type === "navigate" || command.type === "search") && command.newTab) {
+    const opened = await createBrowserExecutor({ hub: ctx.hub, session: ctx.session }).execute({ op: "tabs", action: "open-blank" });
+    if (!opened.ok || !opened.payload.ok || opened.payload.operation !== "tabs") return speakBrowserFailure(ctx, opened);
+    if (opened.payload.result.activeTabId === null) return speak(ctx.hub, ctx.session, "I couldn't select the new browser tab.", "error");
+  }
+  if (command.type === "greeting") {
+    const captured = await captureIntentPage(ctx);
+    if (!captured.ok) return speak(ctx.hub, ctx.session, captured.reply, "error");
+    const target = command.target.toLocaleLowerCase();
+    if (![captured.model.url, captured.snapshot.title].some((value) => value.toLocaleLowerCase().includes(target))) {
+      return speak(ctx.hub, ctx.session, `Open ${command.target} first, then ask me to say ${command.text}.`, "answer");
+    }
+    const fields = captured.model.fields.filter((field) => !field.disabled && field.sensitive === "none" &&
+      (field.type === "textarea" || /\b(?:message|chat|prompt|reply)\b/iu.test(field.label)));
+    if (fields.length !== 1) return speak(ctx.hub, ctx.session, "I couldn't uniquely identify the message box on this page.", "answer");
+    const field = fields[0]!;
+    const element = captured.snapshot.elements.find((element) => element.id === field.id && element.visible);
+    if (element === undefined || !["input", "textarea"].includes(element.tag)) {
+      return speak(ctx.hub, ctx.session, "I can't type into this page's custom editor yet.", "answer");
+    }
+    if (field.hasValue) return speak(ctx.hub, ctx.session, "The message box already contains text. Clear it first so I don't overwrite your draft.", "answer");
+    const filled = await executeUngated(ctx, { type: "set_fields", fills: [{ fieldId: field.id, value: command.text }] });
+    if (filled.category === "error") return speak(ctx.hub, ctx.session, filled.text, "error");
+    const actions = ctx.session.model?.actions.filter((action) => action.kind === "send" || action.kind === "submit") ?? [];
+    if (actions.length !== 1) return speak(ctx.hub, ctx.session, "I entered the greeting, but couldn't uniquely identify the Send button.", "answer");
+    return createVoiceGateAdapter(ctx).arm({ actionId: actions[0]!.id });
+  }
   if (command.type === "search") {
-    if (command.route === "site" && source !== "typed") return speak(ctx.hub, ctx.session, "Use the typed site-search command to search this page.", "error");
     if (command.route !== "browser-default") {
       const site = await trySiteSearch(ctx, command.query, command.route === "site");
       if (site !== "not-site-search") return;
     }
-    return beginBrowserAuthorization(ctx, { op: "search", route: "browser-default", query: command.query }, command);
+    const result = await createBrowserExecutor({ hub: ctx.hub, session: ctx.session }).execute({
+      op: "search", route: "browser-default", query: command.query, authorizationId: newId(),
+    }, { useCurrentTab: command.newTab !== true });
+    if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
+    return speakBrowserResult(ctx, result.payload, command);
   }
   if (command.type === "navigate") {
-    return beginBrowserAuthorization(ctx, { op: "navigate", url: command.url }, command);
+    const result = await createBrowserExecutor({ hub: ctx.hub, session: ctx.session }).execute({
+      op: "navigate", url: command.url, authorizationId: newId(),
+    }, { useCurrentTab: command.newTab !== true });
+    if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
+    return speakBrowserResult(ctx, result.payload, command);
+  }
+  if (command.type === "section") {
+    return openPageSection(ctx, command, source);
   }
   if (command.type === "open-link") {
     const current = ctx.session.browserCapture?.identity;
@@ -627,9 +775,9 @@ async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, sour
     if (capture.payload.result.status === "capture-failed") return speak(ctx.hub, ctx.session, MSG_BROWSER_READ_FAILED, "error");
     if (capture.payload.result.status === "empty") return speak(ctx.hub, ctx.session, "I couldn't find readable page content.", "answer");
     if (command.type === "summary" || command.type === "question") {
-      return answerExplicitPageContent(ctx, command, capture.payload.result.blocks, capture.payload.result);
+      return answerExplicitPageContent(ctx, command, readablePageBlocks(capture.payload.result), capture.payload.result);
     }
-    return speakContent(ctx, capture.payload.result.blocks, "read");
+    return speakContent(ctx, readablePageBlocks(capture.payload.result), "read");
   }
 
   if (command.type === "switch-tab") {
@@ -686,15 +834,29 @@ async function handleBrowserUtterance(ctx: TurnContext): Promise<boolean> {
   const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
 
   // Resolve user-selected links and tabs only against a fresh bounded capture/list.
-  if (/^(?:open|click)\s+(?:the\s+)?link\b/iu.test(text)) {
-    const listed = await executor.execute({ op: "list-links" });
-    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "list-links") {
+  const normalized = relaxBrowserUtterance(text);
+  const initial = parseBrowserCommand(text);
+  // A bare site name is not a URL. Let Agy resolve the official home page instead of first
+  // attempting a link capture or treating the name as a generic search query.
+  if (ctx.agyProvider?.classifyBrowserRequest !== undefined && initial?.type === "search" &&
+      initial.route === "browser-default" && isNamedSiteNavigationRequest(text)) return false;
+  if (/^(?:switch to|go to)\s+tab\b/iu.test(normalized)) {
+    const listed = await executor.execute({ op: "tabs", action: "list" });
+    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "tabs") {
       speakBrowserFailure(ctx, listed);
       return true;
     }
-  } else if (/^(?:switch to|go to)\s+tab\b/iu.test(text)) {
-    const listed = await executor.execute({ op: "tabs", action: "list" });
-    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "tabs") {
+  } else if (/^(?:open|click|go to|navigate to|take me to)\s+/iu.test(normalized) &&
+      !/^(?:open|go to|navigate to|take me to)\s+(?:https?:\/\/|[\w-]+\.[\w-]+)/iu.test(normalized) &&
+      initial?.type !== "open-blank" && initial?.type !== "navigate" &&
+      !((initial?.type === "search") && initial.newTab)) {
+    const listed = await executor.execute({ op: "list-links" });
+    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "list-links") {
+      const fallback = parseBrowserCommand(text);
+      if (fallback?.type === "search") {
+        await runBrowserCommand(ctx, fallback, source);
+        return true;
+      }
       speakBrowserFailure(ctx, listed);
       return true;
     }
@@ -706,11 +868,63 @@ async function handleBrowserUtterance(ctx: TurnContext): Promise<boolean> {
   return true;
 }
 
+/** Open the uniquely linked top item on a repeated visible list before reading its full page. */
+async function readLatestLinkedItem(ctx: TurnContext, command: PageTaskCommand, executor: ReturnType<typeof createBrowserExecutor>): Promise<boolean> {
+  if (command.type !== "read-item" || command.selection.type !== "latest") return false;
+  const initial = ctx.session.browserCapture;
+  if (initial?.identity === undefined || (initial.items?.length ?? 0) < 2) return false;
+  const selected = resolvePageTaskItem(ctx.session, command.selection);
+  if (!selected.ok) return false;
+  const listed = await executor.execute({ op: "list-links", identity: selected.item.identity });
+  if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "list-links") return false;
+  const normalize = (value: string) => value.toLocaleLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/gu, " ").trim();
+  const itemText = normalize(selected.item.text);
+  const candidates = listed.payload.result.links.filter((link) => {
+    const label = normalize(link.label);
+    return label.length >= 4 && itemText.includes(label);
+  });
+  if (candidates.length === 0) return false;
+  const longest = Math.max(...candidates.map((link) => normalize(link.label).length));
+  const primary = candidates.filter((link) => normalize(link.label).length === longest);
+  if (primary.length !== 1 || primary[0]!.navigationSafety !== "same-origin-safe-get") return false;
+
+  const beforeText = [...(initial.blocks ?? []).map((block) => block.text), ...(initial.items ?? []).map((item) => item.text)].join("\n");
+  const opened = await executor.execute({
+    op: "open-link",
+    linkId: primary[0]!.linkId,
+    identity: listed.payload.result,
+    authorizationId: newId(),
+    authorizationMode: "user-command",
+  });
+  if (!opened.ok || !opened.payload.ok) {
+    speakBrowserFailure(ctx, opened);
+    return true;
+  }
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const captured = await executor.execute({ op: "capture" });
+    if (!captured.ok || !captured.payload.ok || captured.payload.operation !== "capture") {
+      speakBrowserFailure(ctx, captured);
+      return true;
+    }
+    const page = captured.payload.result;
+    const blocks = readablePageBlocks(page);
+    const nextText = blocks.map((block) => block.text).join("\n");
+    if (page.status === "supported" && blocks.length > 0 &&
+        (page.pageUrl !== selected.item.identity.pageUrl || nextText !== beforeText)) {
+      return speakContent(ctx, blocks, "read"), true;
+    }
+  }
+  speak(ctx.hub, ctx.session, "I opened the latest visible item, but its contents are still loading. Ask me to read it again in a moment.", "answer");
+  return true;
+}
+
 /** Route explicit item tasks through deterministic selection, optional tool-less prose, and observed fills. */
-async function handlePageTaskUtterance(ctx: TurnContext): Promise<boolean> {
+async function handlePageTaskUtterance(ctx: TurnContext, inferredCommand?: PageTaskCommand): Promise<boolean> {
   if (ctx.message.type !== "utterance") return false;
   const { text } = ctx.message.payload;
-  const command = parsePageTaskCommand(text);
+  const command = inferredCommand ?? parsePageTaskCommand(text);
   if (command === null) return false;
   if (command.type === "send-draft") {
     await executeGatedAction(ctx, { type: "draft-send" });
@@ -718,12 +932,41 @@ async function handlePageTaskUtterance(ctx: TurnContext): Promise<boolean> {
   }
 
   const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+  const needsVisibleItems = command.type === "read-item" || command.type === "summarize-item" ||
+    command.type === "read-items" || command.type === "question-item" || command.type === "draft";
+  const capture = ctx.session.browserCapture;
+  const hasCurrentItems = capture?.identity !== undefined && ctx.session.tabId === capture.identity.tabId &&
+    (ctx.session.model === null || ctx.session.model.url === capture.identity.pageUrl) &&
+    (capture.items?.length ?? 0) > 0;
+  if (needsVisibleItems && !hasCurrentItems) {
+    for (let attempt = 0; attempt <= PAGE_ITEM_CAPTURE_RETRIES; attempt++) {
+      const result = await executor.execute({ op: "capture" });
+      if (!result.ok || !result.payload.ok || result.payload.operation !== "capture") {
+        speakBrowserFailure(ctx, result);
+        return true;
+      }
+      if (result.payload.result.status !== "supported") {
+        return speak(ctx.hub, ctx.session, "This page doesn't expose a readable email or other visible item yet.", "answer"), true;
+      }
+      if ((result.payload.result.items?.length ?? 0) > 0 || attempt === PAGE_ITEM_CAPTURE_RETRIES) break;
+      await new Promise((resolve) => setTimeout(resolve, PAGE_ITEM_CAPTURE_RETRY_DELAY_MS));
+    }
+  }
+  if (await readLatestLinkedItem(ctx, command, executor)) return true;
+  if (command.type === "draft" && (ctx.session.model === null || ctx.session.stale ||
+      ctx.session.model.url !== ctx.session.browserCapture?.identity?.pageUrl)) {
+    const ready = await ensureSnapshot(ctx, ctx.freshnessMs);
+    if (!ready.ok) {
+      speak(ctx.hub, ctx.session, ready.reply, "error");
+      return true;
+    }
+  }
   const result = await runPageTaskCommand(ctx.session, text, {
     executor,
     ...(ctx.agyProvider === undefined ? {} : {
       requestContent: (projection) => ctx.agyProvider!.answerPageQuestion(projection),
     }),
-  });
+  }, command);
   switch (result.type) {
     case "not-task": return false;
     case "clarify":
@@ -733,6 +976,7 @@ async function handlePageTaskUtterance(ctx: TurnContext): Promise<boolean> {
       speak(ctx.hub, ctx.session, "Cancelled. Nothing was sent.", "answer");
       return true;
     case "read":
+    case "read-many":
     case "answer":
       speak(ctx.hub, ctx.session, result.text, "answer");
       return true;
@@ -772,6 +1016,174 @@ async function handlePageTaskUtterance(ctx: TurnContext): Promise<boolean> {
       return true;
     }
   }
+}
+
+/**
+ * Give the intent model a closed page-task classification after local browser grammars have had
+ * first refusal. It sees only capture counts and active-task state, never page text or identifiers.
+ */
+async function handleInferredPageTaskUtterance(ctx: TurnContext): Promise<boolean> {
+  if (ctx.message.type !== "utterance" || ctx.agyProvider?.classifyPageTask === undefined ||
+      !ctx.session.extensionConnected || ctx.session.tabId === null || containsSensitiveUtterance(ctx.message.payload.text)) {
+    return false;
+  }
+
+  const { text, source } = ctx.message.payload;
+  if (!shouldInferPageTask(text, ctx.session.activePageTask !== null)) return false;
+  const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+  let capture = ctx.session.browserCapture;
+  const currentCapture = capture?.identity !== undefined && capture.identity.tabId === ctx.session.tabId &&
+    capture.identity.pageUrl === ctx.session.model?.url;
+  const hasPageData = capture !== null && ((capture.blocks?.length ?? 0) > 0 || (capture.items?.length ?? 0) > 0);
+  if (!currentCapture || !hasPageData) {
+    const result = await executor.execute({ op: "capture" });
+    if (!result.ok || !result.payload.ok || result.payload.operation !== "capture" || result.payload.result.status !== "supported") {
+      return false;
+    }
+    capture = ctx.session.browserCapture;
+  }
+
+  const identity = capture?.identity;
+  if (capture === null || identity === undefined || identity.tabId !== ctx.session.tabId ||
+      ((capture.blocks?.length ?? 0) === 0 && (capture.items?.length ?? 0) === 0)) return false;
+  const active = ctx.session.activePageTask;
+  const inferenceContext: PageTaskInferenceContext = {
+    visibleBlockCount: Math.min(capture.blocks.length, 100),
+    visibleItemCount: Math.min(capture.items?.length ?? 0, 100),
+    datedItemCount: Math.min((capture.items ?? []).filter((item) => item.visibleDate !== null).length, 100),
+    hasActiveItem: active !== null && pageTaskMatchesCapture(active, capture, ctx.session.tabId),
+    hasObservedDraft: active !== null && pageTaskMatchesCapture(active, capture, ctx.session.tabId) &&
+      active.draftTargetId !== null && active.lastObservedDraftValue !== null,
+  };
+  if (!shouldInferPageTask(text, inferenceContext.hasActiveItem || inferenceContext.hasObservedDraft)) return false;
+
+  ctx.hub.send("voice", "earcon", { name: "thinking" });
+  let intent: PageTaskIntent;
+  let timedOut = false;
+  let timer: unknown;
+  let rejectTimeout!: (error: Error) => void;
+  const controller = new AbortController();
+  const watchdog = ctx.intentWatchdog ?? {
+    schedule: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs),
+    cancel: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  };
+  const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
+  try {
+    timer = watchdog.schedule(() => {
+      timedOut = true;
+      controller.abort(new Error("Page-task classification watchdog expired."));
+      void startIntentRoleRecovery(ctx.agyProvider!);
+      rejectTimeout(new Error("Page-task classification watchdog expired."));
+    }, INTENT_WATCHDOG_MS);
+    intent = await Promise.race([
+      ctx.agyProvider.classifyPageTask(text, inferenceContext, controller.signal),
+      timeout,
+    ]);
+  } catch {
+    if (timedOut) {
+      ctx.hub.send("voice", "earcon", { name: "error" });
+      speak(ctx.hub, ctx.session, MSG_MODEL_TIMEOUT, "error");
+      return true;
+    }
+    return false;
+  } finally {
+    if (timer !== undefined) watchdog.cancel(timer);
+  }
+  const latestCapture = ctx.session.browserCapture;
+  if (ctx.session.tabId !== identity.tabId || latestCapture?.identity === undefined ||
+      !identityMatches(latestCapture.identity, identity)) {
+    speak(ctx.hub, ctx.session, "The browser page changed while I was understanding that. Please try once it finishes loading.", "answer");
+    return true;
+  }
+
+  if (intent === "read-page") {
+    await runBrowserCommand(ctx, { type: "read-page", identity }, source);
+    return true;
+  }
+  if (intent === "summarize-page") {
+    await runBrowserCommand(ctx, { type: "summary", identity }, source);
+    return true;
+  }
+  if (intent === "question-page") {
+    await runBrowserCommand(ctx, { type: "question", query: text, identity }, source);
+    return true;
+  }
+
+  const command = pageTaskCommandForIntent(intent, text);
+  if (command === null) return false;
+  return handlePageTaskUtterance(ctx, command);
+}
+
+/** Use a bounded, no-tools classifier for browser phrasing outside the deterministic grammar. */
+async function handleInferredBrowserRequestUtterance(ctx: TurnContext): Promise<boolean> {
+  if (ctx.message.type !== "utterance" || ctx.agyProvider?.classifyBrowserRequest === undefined ||
+      !ctx.session.extensionConnected ||
+      containsSensitiveUtterance(ctx.message.payload.text)) return false;
+  const { text, source } = ctx.message.payload;
+  if (!shouldInferBrowserRequest(text)) return false;
+
+  const compound = splitCompoundNavigationRequest(text);
+  const classificationText = compound?.navigationRequest ?? text;
+
+  ctx.hub.send("voice", "earcon", { name: "thinking" });
+  let inferred: BrowserRequestIntent;
+  let timedOut = false;
+  let timer: unknown;
+  let rejectTimeout!: (error: Error) => void;
+  const controller = new AbortController();
+  const watchdog = ctx.intentWatchdog ?? {
+    schedule: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs),
+    cancel: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  };
+  const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
+  try {
+    timer = watchdog.schedule(() => {
+      timedOut = true;
+      controller.abort(new Error("Browser request classification watchdog expired."));
+      void startIntentRoleRecovery(ctx.agyProvider!);
+      rejectTimeout(new Error("Browser request classification watchdog expired."));
+    }, INTENT_WATCHDOG_MS);
+    inferred = await Promise.race([
+      ctx.agyProvider.classifyBrowserRequest(classificationText, controller.signal),
+      timeout,
+    ]);
+  } catch {
+    if (timedOut) {
+      ctx.hub.send("voice", "earcon", { name: "error" });
+      speak(ctx.hub, ctx.session, MSG_MODEL_TIMEOUT, "error");
+      return true;
+    }
+    return false;
+  } finally {
+    if (timer !== undefined) watchdog.cancel(timer);
+  }
+
+  const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+  if (inferred.intent === "switch-tab") {
+    const listed = await executor.execute({ op: "tabs", action: "list" });
+    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "tabs") {
+      speakBrowserFailure(ctx, listed);
+      return true;
+    }
+  } else if (inferred.intent === "open-link") {
+    const listed = await executor.execute({ op: "list-links" });
+    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "list-links") {
+      speakBrowserFailure(ctx, listed);
+      return true;
+    }
+  }
+
+  let command = browserCommandForIntent(inferred, classificationText, commandCapture(ctx.session));
+  if (command?.type === "navigate" && compound !== null) {
+    command = { ...command, postNavigationPrompt: compound.followUp };
+  }
+  if (command === null) {
+    if (inferred.intent === "none") return false;
+    speak(ctx.hub, ctx.session, "I couldn't safely resolve that browser request. Say the site name or web address again.", "answer");
+    return true;
+  }
+  await runBrowserCommand(ctx, command, source);
+  return true;
 }
 
 /** `stop`: cut off whatever the voice UI is saying. */
@@ -866,9 +1278,11 @@ async function runAgyIntent(ctx: TurnContext, text: string, page: { snapshot: Sn
     speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
     return;
   }
+  if (intentRecoveries.has(provider)) return speak(ctx.hub, ctx.session, MSG_MODEL_RECOVERING, "error");
 
   let timer: unknown;
   let settled = false;
+  let timedOut = false;
   let rejectTimeout!: (error: Error) => void;
   const watchdog = ctx.intentWatchdog ?? {
     schedule: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs),
@@ -877,10 +1291,10 @@ async function runAgyIntent(ctx: TurnContext, text: string, page: { snapshot: Sn
   const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
 
   try {
-    await waitForIntentRecovery(provider);
     const controller = new AbortController();
     timer = watchdog.schedule(() => {
       if (settled) return;
+      timedOut = true;
       controller.abort(new Error("Agy intent watchdog expired."));
       void startIntentRoleRecovery(provider).catch(() => {});
       rejectTimeout(new Error("Agy intent watchdog expired."));
@@ -900,7 +1314,7 @@ async function runAgyIntent(ctx: TurnContext, text: string, page: { snapshot: Sn
   } catch {
     settled = true;
     ctx.hub.send("voice", "earcon", { name: "error" });
-    speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
+    speak(ctx.hub, ctx.session, timedOut ? MSG_MODEL_TIMEOUT : MSG_MODEL_FAILED, "error");
   } finally {
     settled = true;
     if (timer !== undefined) watchdog.cancel(timer);
@@ -1031,6 +1445,8 @@ export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
 
   if (await handlePageTaskUtterance(ctx)) return;
   if (await handleBrowserUtterance(ctx)) return;
+  if (await handleInferredPageTaskUtterance(ctx)) return;
+  if (await handleInferredBrowserRequestUtterance(ctx)) return;
 
   hub.send("voice", "earcon", { name: "thinking" });
   if (ctx.agyProvider !== undefined) {

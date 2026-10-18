@@ -2,11 +2,24 @@ import { Intent } from "@blip/protocol";
 import { z } from "zod";
 import type { IntentBrain } from "../fake-brain";
 import {
+  PageTaskIntentSchema,
+  serializePageTaskIntentPrompt,
+  type PageTaskInferenceContext,
+  type PageTaskIntent,
+} from "../../browser/task-intent";
+import {
+  BrowserRequestIntentSchema,
+  isValidBrowserRequestIntent,
+  serializeBrowserRequestPrompt,
+  type BrowserRequestIntent,
+} from "../../browser/request-intent";
+import {
   containsPageActionInstruction,
   serializePageContentProjectionForPrompt,
   type PageContentProjection,
 } from "./content-projection";
 import { containsSensitivePageText } from "./privacy";
+import { log } from "../../log";
 import {
   AgyRoleSessionManager,
   UnexpectedAgyToolCallError,
@@ -35,6 +48,8 @@ export type AgyOutputFailureCategory =
   | "intent_shape_rejected"
   | "repair_schema_rejected"
   | "content_schema_rejected"
+  | "browser_task_schema_rejected"
+  | "browser_request_schema_rejected"
   | "content_prose_rejected";
 
 export class InvalidAgyOutputError extends Error {
@@ -56,6 +71,10 @@ export class InvalidAgyOutputError extends Error {
 export type AgyProvider = IntentBrain & {
   allowGeneralKnowledge: true;
   parseIntent(prompt: string, signal?: AbortSignal): Promise<z.infer<typeof Intent>>;
+  /** Classifies natural page requests without receiving page text or producing action arguments. */
+  classifyPageTask(utterance: string, context: PageTaskInferenceContext, signal?: AbortSignal): Promise<PageTaskIntent>;
+  /** Classifies unfamiliar browser phrasing; arguments are copied from the user's words and validated locally. */
+  classifyBrowserRequest(utterance: string, signal?: AbortSignal): Promise<BrowserRequestIntent>;
   repairFormModel(prompt: string, signal?: AbortSignal): Promise<RepairPatch>;
   /** Returns bounded prose only; page content cannot become a browser command or authorization. */
   answerPageQuestion(projection: PageContentProjection, signal?: AbortSignal): Promise<string>;
@@ -68,9 +87,75 @@ export type AgyProvider = IntentBrain & {
 
 export type AgyProviderOptions = AgySessionOptions;
 
+/** Keep deterministic browser control available while the model process starts or recovers. */
+export function createDeferredAgyProvider(options: AgyProviderOptions = {}): AgyProvider {
+  let current: AgyProvider | null = null;
+  let pending: Promise<AgyProvider> | null = null;
+  let startup: AbortController | null = null;
+  let closed = false;
+  function ready(): Promise<AgyProvider> {
+    if (closed) return Promise.reject(new Error("Agy provider is closed."));
+    if (current) return Promise.resolve(current);
+    if (pending) return pending;
+    startup = new AbortController();
+    const signal = options.startupSignal
+      ? AbortSignal.any([startup.signal, options.startupSignal]) : startup.signal;
+    pending = createAgyProvider({ ...options, startupSignal: signal })
+      .then((provider) => { current = provider; return provider; })
+      .finally(() => { pending = null; });
+    void pending.catch(() => {
+      if (!closed && !startup?.signal.aborted) log("warn", { msg: "model startup unavailable; browser controls remain ready", code: "model-startup" });
+    });
+    return pending;
+  }
+  async function get(signal?: AbortSignal): Promise<AgyProvider> {
+    signal?.throwIfAborted();
+    const provider = ready();
+    if (!signal) return provider;
+    let abort!: () => void;
+    const aborted = new Promise<never>((_resolve, reject) => {
+      abort = () => reject(signal.reason ?? new Error("Model request aborted."));
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) abort();
+    });
+    try {
+      const result = await Promise.race([provider, aborted]);
+      signal.throwIfAborted();
+      return result;
+    } finally { signal.removeEventListener("abort", abort); }
+  }
+  void ready().catch(() => {});
+  return {
+    allowGeneralKnowledge: true,
+    parseIntent: async (prompt, signal?: AbortSignal) => (await get(signal)).parseIntent(prompt, signal),
+    classifyPageTask: async (text, context, signal) => (await get(signal)).classifyPageTask(text, context, signal),
+    classifyBrowserRequest: async (text, signal) => (await get(signal)).classifyBrowserRequest(text, signal),
+    repairFormModel: async (prompt, signal) => (await get(signal)).repairFormModel(prompt, signal),
+    answerPageQuestion: async (projection, signal) => (await get(signal)).answerPageQuestion(projection, signal),
+    draftPageText: async (projection, signal) => (await get(signal)).draftPageText(projection, signal),
+    async abortRole(role) {
+      if (current) return current.abortRole(role);
+      startup?.abort();
+      await pending?.catch(() => {});
+    },
+    async recreateRole(role) {
+      if (current) return current.recreateRole(role);
+      await ready();
+    },
+    async close() {
+      closed = true;
+      startup?.abort();
+      await pending?.catch(() => {});
+      await current?.close();
+    },
+  };
+}
+
 function parseJson(role: AgyRole, raw: string): unknown {
   try {
-    return JSON.parse(raw) as unknown;
+    const trimmed = raw.trim();
+    const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```$/iu.exec(trimmed);
+    return JSON.parse(fenced?.[1] ?? trimmed) as unknown;
   } catch {
     throw new InvalidAgyOutputError(role, "invalid_json");
   }
@@ -129,6 +214,22 @@ export async function createAgyProvider(options: AgyProviderOptions = {}): Promi
     allowGeneralKnowledge: true,
     async parseIntent(prompt, signal?: AbortSignal) {
       return parseIntentStrict(await sessions.call("intent", prompt, signal));
+    },
+    async classifyPageTask(utterance, context, signal) {
+      const raw = await sessions.call("intent", serializePageTaskIntentPrompt(utterance, context), signal);
+      const value = parseJson("intent", raw);
+      const parsed = PageTaskIntentSchema.safeParse(value);
+      if (!parsed.success) throw new InvalidAgyOutputError("intent", "browser_task_schema_rejected");
+      return parsed.data.intent;
+    },
+    async classifyBrowserRequest(utterance, signal) {
+      const raw = await sessions.call("intent", serializeBrowserRequestPrompt(utterance), signal);
+      const value = parseJson("intent", raw);
+      const parsed = BrowserRequestIntentSchema.safeParse(value);
+      if (!parsed.success || !isValidBrowserRequestIntent(parsed.data)) {
+        throw new InvalidAgyOutputError("intent", "browser_request_schema_rejected");
+      }
+      return parsed.data;
     },
     async repairFormModel(prompt, signal) {
       const parsed = RepairPatchSchema.safeParse(parseJson("repair", await sessions.call("repair", prompt, signal)));

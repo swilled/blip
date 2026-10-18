@@ -48,6 +48,7 @@ const validOperations: BrowserOperationType[] = [
   { op: "history", direction: "back" },
   { op: "reload" },
   { op: "search", route: "browser-default", query: "recent articles", authorizationId: "auth-2" },
+  { op: "site-search", query: "recent articles", identity, authorizationId: "auth-site-search" },
   { op: "tabs", action: "list" },
   { op: "tabs", action: "switch", targetTabId: 8 },
   { op: "tabs", action: "open-blank" },
@@ -67,6 +68,7 @@ const validSuccessResults = [
   { ok: true, requestId: "request-1", operation: "history", result: { tabId: 7, status: "completed" } },
   { ok: true, requestId: "request-1", operation: "reload", result: { tabId: 7, status: "dispatched" } },
   { ok: true, requestId: "request-1", operation: "search", result: { tabId: 7, status: "dispatched" } },
+  { ok: true, requestId: "request-1", operation: "site-search", result: { ...identity, status: "submitted" } },
   { ok: true, requestId: "request-1", operation: "tabs", result: { activeTabId: 7, tabs: [{ tabId: 7, title: "Article", hostHint: "example.test" }], truncated: false } },
   { ok: true, requestId: "request-1", operation: "list-links", result: {
     ...identity, status: "supported",
@@ -85,9 +87,9 @@ describe("BrowserOperation", () => {
     expect(BrowserOperation.safeParse(operation).success).toBe(true);
   });
 
-  it("contains exactly the 13 closed operation discriminants", () => {
+  it("contains exactly the 14 closed operation discriminants", () => {
     expect(BrowserOperation.options.map((option) => option.shape.op.value)).toEqual([
-      "location", "capture", "navigate", "history", "reload", "search", "tabs",
+      "location", "capture", "navigate", "history", "reload", "search", "site-search", "tabs",
       "list-links", "read-content", "read-item", "open-link", "scroll", "find",
     ]);
     expect(BrowserOperation.safeParse({ op: "script", script: "location.href='https://evil.test'" }).success).toBe(false);

@@ -29,7 +29,7 @@ type BrowserApi = {
     reload?(tabId: number, properties?: { bypassCache?: boolean }): Promise<void>;
   };
   search?: {
-    query?(queryInfo: { text: string; disposition: "CURRENT_TAB" }): Promise<void>;
+    query?(queryInfo: { text: string; tabId?: number; disposition?: "CURRENT_TAB" | "NEW_TAB" | "NEW_WINDOW" }): Promise<void>;
   };
   permissions?: {
     contains?(permissions: { permissions: string[] }): Promise<boolean>;
@@ -203,7 +203,7 @@ async function listTabs(api: BrowserApi, dependencies: BrowserRequestDependencie
 }
 
 function authorizationId(operation: BrowserOperation): string | undefined {
-  if (operation.op === "navigate" || operation.op === "search" || operation.op === "open-link") {
+  if (operation.op === "navigate" || operation.op === "search" || operation.op === "site-search" || operation.op === "open-link") {
     return operation.authorizationId;
   }
   return undefined;
@@ -252,7 +252,14 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       if (operation.action === "open-blank") {
         if (!api.tabs?.create) return failure(requestId, "tabs", "unavailable", "A blank tab could not be created.");
         try {
-          const created = await api.tabs.create({ active: true, url: "about:blank" });
+          let created = await api.tabs.create({ active: true, url: "about:blank" });
+          // Chromium can return a newly created tab before its URL is populated.
+          // Wait for that exact tab, never substitute another active tab.
+          for (let attempt = 0; typeof created.id === "number" &&
+              (created.url === undefined || created.url === "") && attempt < 10 && api.tabs.get; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            created = await api.tabs.get(created.id);
+          }
           if (!isBrowserTargetTab(created) || created.url !== "about:blank") {
             return failure(requestId, "tabs", "unavailable", "The browser did not create a blank tab.");
           }
@@ -301,10 +308,32 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       });
     }
 
+    if (operation.op === "site-search") {
+      const current = await liveCurrentTab(api, dependencies, operation.identity.tabId, operation.identity.pageUrl);
+      if (!current) return failure(requestId, "site-search", "stale-page", "The search field no longer belongs to the current page.");
+      const request: BrowserContentRequest = {
+        t: "browser-content", operation: "site-search", identity: operation.identity, query: operation.query,
+      };
+      const sent = await sendContent(dependencies, current.id, request);
+      if (!sent.ok) return failure(requestId, "site-search", sent.code, "The page search field could not be reached.");
+      const typed = sent.response as BrowserContentResponse;
+      const failed = contentFailure(requestId, "site-search", typed);
+      if (failed) return failed;
+      if (typed.t !== "browser-content.result" || typed.operation !== "site-search" ||
+          !sameIdentity(operation.identity, typed.result)) {
+        return failure(requestId, "site-search", "stale-capture", "The search result did not match the current page.");
+      }
+      // A successful search may immediately navigate away from the source page. The content
+      // response verifies the source identity at submission; a changed URL is an expected result.
+      snapshotVersions.forget(current.id);
+      return success(requestId, "site-search", typed.result);
+    }
+
     if (operation.op === "capture" || operation.op === "list-links") {
-      const current = await liveCurrentTab(api, dependencies, tabId);
+      const expectedIdentity = operation.op === "list-links" ? operation.identity : undefined;
+      const current = await liveCurrentTab(api, dependencies, expectedIdentity?.tabId ?? tabId, expectedIdentity?.pageUrl);
       if (!current) return failure(requestId, operation.op, tabId === undefined ? "unsupported-page" : "stale-page", "The current browser page changed before content capture.");
-      const identity = nextIdentity(current);
+      const identity = expectedIdentity ?? nextIdentity(current);
       if (!identity) return failure(requestId, operation.op, "restricted-page", "This browser page cannot be read as web content.");
       const request: BrowserContentRequest = { t: "browser-content", operation: operation.op, identity };
       const sent = await sendContent(dependencies, current.id, request);
@@ -371,9 +400,30 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       const parsedDestination = BrowserDestinationUrl.safeParse(operation.url);
       if (!parsedDestination.success) return failure(requestId, "navigate", "invalid-target", "Navigation requires a canonical HTTP(S) destination.");
       if (authorizationId(operation) === undefined) return failure(requestId, "navigate", "unauthorized", "Navigation requires core authorization.");
-      if (!api.tabs?.update) return failure(requestId, "navigate", "unavailable", "Browser navigation is unavailable.");
       const current = await liveCurrentTab(api, dependencies, tabId);
-      if (!current) return failure(requestId, "navigate", "stale-page", "The authorized source tab changed before navigation.");
+      if (!current) {
+        // Blip itself is excluded from page control, so its standalone window may have no
+        // retained web tab yet. An unbound navigation opens the requested destination in a new
+        // active tab; a request bound to a now-stale page still fails closed.
+        if (tabId !== undefined) return failure(requestId, "navigate", "stale-page", "The authorized source tab changed before navigation.");
+        if (!api.tabs?.create) return failure(requestId, "navigate", "unavailable", "Browser navigation is unavailable.");
+        try {
+          const created = await api.tabs.create({ active: true, url: parsedDestination.data });
+          if (!Number.isSafeInteger(created.id) || created.id! < 0) {
+            return failure(requestId, "navigate", "unavailable", "The browser did not create a destination tab.");
+          }
+          const destinationTab = { ...created, id: created.id!, url: parsedDestination.data };
+          if (!isSupportedTargetTab(destinationTab)) {
+            return failure(requestId, "navigate", "invalid-target", "The browser created an unsupported destination tab.");
+          }
+          (dependencies.rememberTargetTab ?? rememberTargetTab)(destinationTab);
+          snapshotVersions.forget(destinationTab.id);
+          return success(requestId, "navigate", { tabId: destinationTab.id, status: "dispatched" });
+        } catch {
+          return failure(requestId, "navigate", "exception", "The browser could not open the requested website.");
+        }
+      }
+      if (!api.tabs?.update) return failure(requestId, "navigate", "unavailable", "Browser navigation is unavailable.");
       const beforeUrl = current.url;
       const rechecked = await liveCurrentTab(api, dependencies, current.id, beforeUrl);
       if (!rechecked) return failure(requestId, "navigate", "stale-page", "The authorized source page changed before navigation.");
@@ -409,8 +459,8 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
         return failure(requestId, "search", "unavailable", "Site search is handled by the core form workflow.");
       }
       const current = await liveCurrentTab(api, dependencies, tabId);
-      if (!current) return failure(requestId, "search", "stale-page", "The authorized search source tab changed.");
-      const sourceUrl = current.url;
+      if (!current && tabId !== undefined) return failure(requestId, "search", "stale-page", "The authorized search source tab changed.");
+      const sourceUrl = current?.url;
       let hasPermission = false;
       try {
         hasPermission = await api.permissions?.contains?.({ permissions: ["search"] }) === true;
@@ -420,23 +470,18 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       if (!hasPermission || !api.search?.query) {
         return failure(requestId, "search", "unavailable", "Browser-default search is unavailable without its API permission.");
       }
-      const rechecked = await liveCurrentTab(api, dependencies, current.id, sourceUrl);
-      if (!rechecked) return failure(requestId, "search", "stale-page", "The authorized search source page changed before dispatch.");
-      if (!api.tabs?.query) return failure(requestId, "search", "unavailable", "The active browser tab could not be verified.");
-      let activeTab: TabRecord | undefined;
-      try {
-        const activeTabs = await api.tabs.query({ active: true, lastFocusedWindow: true });
-        activeTab = activeTabs[0];
-      } catch {
-        return failure(requestId, "search", "unavailable", "The active browser tab could not be verified.");
-      }
-      if (!activeTab || activeTab.id !== current.id || activeTab.url !== sourceUrl) {
-        return failure(requestId, "search", "stale-page", "The authorized search source is not the active browser tab.");
+      if (current) {
+        const rechecked = await liveCurrentTab(api, dependencies, current.id, sourceUrl);
+        if (!rechecked) return failure(requestId, "search", "stale-page", "The authorized search source page changed before dispatch.");
       }
       try {
-        await api.search.query({ text: operation.query, disposition: "CURRENT_TAB" });
-        snapshotVersions.forget(current.id);
-        return success(requestId, "search", { tabId: current.id, status: "dispatched" });
+        // The voice app can own the foreground window. Address a retained browser tab explicitly;
+        // when no page exists yet, ask the browser to open results in a fresh tab instead.
+        await api.search.query(current
+          ? { text: operation.query, tabId: current.id }
+          : { text: operation.query, disposition: "NEW_TAB" });
+        if (current) snapshotVersions.forget(current.id);
+        return success(requestId, "search", { ...(current ? { tabId: current.id } : {}), status: "dispatched" });
       } catch {
         return failure(requestId, "search", "unavailable", "Browser-default search failed; no fallback was used.");
       }

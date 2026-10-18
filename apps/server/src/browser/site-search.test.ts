@@ -74,7 +74,7 @@ function makeSnapshot(version: number, value: string | null): Snapshot {
   };
 }
 
-function setup(options: { observedValue?: string } = {}) {
+function setup(options: { observedValue?: string; searchTimeout?: boolean; resultsNeverLoad?: boolean } = {}) {
   gateMock.arm.mockReset().mockImplementation(async ({ actionId }: { actionId: string }) => {
     gateMock.order.push(`arm:${actionId}`);
   });
@@ -93,6 +93,7 @@ function setup(options: { observedValue?: string } = {}) {
     },
   };
   const calls: Array<{ type: string; payload: unknown }> = [];
+  let searched = false;
   const hub = {
     send: () => true,
     pushState: () => true,
@@ -101,8 +102,21 @@ function setup(options: { observedValue?: string } = {}) {
     async request(_role: string, type: string, payload: any) {
       calls.push({ type, payload });
       gateMock.order.push(`request:${type}`);
+      if (type === "browser.request") {
+        const operation = payload.operation;
+        const identity = { captureId: "site-search-capture", captureRevision: 1, tabId: 3, pageUrl: "https://search.example/" };
+        if (operation.op === "capture") return { payload: {
+          ok: true, requestId: payload.requestId, operation: "capture",
+          result: { ...identity, status: "supported", blocks: searched ? [{ contentId: "results", kind: "paragraph", text: "The search results.", identity, frameId: 0 }] : [], items: [], truncated: false },
+        } };
+        if (operation.op === "site-search" && options.searchTimeout) throw new Error("request timeout: browser.request got no reply within 8000 ms");
+        if (operation.op === "site-search") searched = !options.resultsNeverLoad;
+        if (operation.op === "site-search") return { payload: options.observedValue === "different query"
+          ? { ok: false, requestId: payload.requestId, operation: "site-search", error: { code: "ambiguous", message: "More than one visible search field matches." } }
+          : { ok: true, requestId: payload.requestId, operation: "site-search", result: { ...identity, status: "submitted" } } };
+        throw new Error(`unexpected browser operation ${operation.op}`);
+      }
       if (type !== "act.request") throw new Error(`unexpected request ${type}`);
-      if (payload.action.op === "fill") currentValue = payload.action.value;
       return {
         type: "act.result",
         payload: {
@@ -129,7 +143,15 @@ describe("typed site search", () => {
     gateMock.order.length = 0;
   });
 
-  it("fills an input[type=search], verifies the exact current value, then arms the unique submit gate", async () => {
+  it("explains how to recover when the running extension does not answer page search", async () => {
+    const ctx = setup({ searchTimeout: true });
+    await handleUtterance({ ...ctx, freshnessMs: 2_000, brain: { parseIntent: async () => ({ type: "unknown" }) } });
+    expect(ctx.session.lastSpoken).toContain("reload its extension at edge://extensions");
+    expect(ctx.session.pendingGatedAction).toBeNull();
+    expect(ctx.calls.filter(call => call.type === "browser.request")).toHaveLength(2);
+  });
+
+  it("submits an exact page search without entering the generic action-review gate", async () => {
     const ctx = setup();
     await handleUtterance({
       ...ctx,
@@ -137,16 +159,26 @@ describe("typed site search", () => {
       brain: { parseIntent: async () => ({ type: "unknown" }) },
     });
 
-    const act = ctx.calls.find((call) => call.type === "act.request")?.payload as { action: { value?: string } } | undefined;
-    expect(act?.action.value).toBe(query);
-    expect(gateMock.arm).toHaveBeenCalledTimes(1);
-    expect(gateMock.arm).toHaveBeenCalledWith({ actionId: "submit-search" });
-    expect(gateMock.order.indexOf("request:act.request")).toBeLessThan(gateMock.order.indexOf("snapshot:refresh"));
-    expect(gateMock.order.indexOf("snapshot:refresh")).toBeLessThan(gateMock.order.indexOf("arm:submit-search"));
-    expect(ctx.calls.some((call) => call.type === "browser.request")).toBe(false);
+    const operations = ctx.calls.filter((call) => call.type === "browser.request").map((call) => (call.payload as any).operation);
+    expect(operations).toMatchObject([{ op: "capture" }, { op: "site-search", query }, { op: "capture" }]);
+    expect(gateMock.arm).not.toHaveBeenCalled();
+    expect(ctx.calls.some((call) => call.type === "act.request")).toBe(false);
+    expect(ctx.session.pendingGatedAction).toBeNull();
   });
 
-  it("does not arm submit when the extension read-back differs from the exact query", async () => {
+  it("does not announce success or submit twice when a search only fills the field", async () => {
+    vi.useFakeTimers();
+    try {
+      const ctx = setup({ resultsNeverLoad: true });
+      const completion = handleUtterance({ ...ctx, freshnessMs: 2_000, brain: { parseIntent: async () => ({ type: "unknown" }) } });
+      await vi.runAllTimersAsync();
+      await completion;
+      expect(ctx.session.lastSpoken).toContain("couldn't verify that results loaded");
+      expect(ctx.calls.filter(call => call.type === "browser.request" && (call.payload as any).operation.op === "site-search")).toHaveLength(1);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("refuses an ambiguous visible page search without entering a confirmation flow", async () => {
     const ctx = setup({ observedValue: "different query" });
     await handleUtterance({
       ...ctx,
@@ -154,6 +186,7 @@ describe("typed site search", () => {
       brain: { parseIntent: async () => ({ type: "unknown" }) },
     });
     expect(gateMock.arm).not.toHaveBeenCalled();
-    expect(ctx.calls.some((call) => call.type === "browser.request")).toBe(false);
+    expect(ctx.calls.filter((call) => call.type === "browser.request")).toHaveLength(2);
+    expect(ctx.session.pendingGatedAction).toBeNull();
   });
 });

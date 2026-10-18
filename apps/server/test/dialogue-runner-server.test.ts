@@ -75,7 +75,7 @@ function setSnapshotField(snapshot: Snapshot, id: string, value: string): void {
 type ScheduledTask = { callback: () => void; delayMs: number };
 
 /** Real loopback clients with a local-only snapshot/browser/act responder and no AGY process. */
-async function startConfiguredTaskDemo() {
+async function startConfiguredTaskDemo(options: { delayFirstItemCapture?: boolean } = {}) {
   let now = 100_000;
   let snapshot = taskSnapshot();
   let captureRevision = 1;
@@ -85,6 +85,7 @@ async function startConfiguredTaskDemo() {
   let successfulPageResult = true;
   let sendDispatches = 0;
   let draftNumber = 0;
+  let itemCaptureCount = 0;
   const scheduled: ScheduledTask[] = [];
   const identity = (): BrowserPageIdentity => ({
     captureId,
@@ -104,12 +105,15 @@ async function startConfiguredTaskDemo() {
       let bootstrapped = false;
       return {
         async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
-        async call() {
+        async call(prompt = "") {
           if (!bootstrapped) {
             bootstrapped = true;
             return config.role === "intent" ? '{"type":"describe"}' : config.role === "content" ? '{"prose":"Ready."}' : '{"fields":[]}';
           }
           if (config.role === "content") {
+            if (prompt.includes('"type":"summary"')) {
+              return JSON.stringify({ prose: "The message asks you to confirm your preferred arrival time." });
+            }
             draftNumber += 1;
             return JSON.stringify({ prose: draftNumber % 2 === 1
               ? "I can arrive before the workshop begins."
@@ -154,7 +158,29 @@ async function startConfiguredTaskDemo() {
         extension.send("snapshot.result", { ok: true, snapshot }, { replyTo: frame.id });
       } else if (frame.type === "browser.request") {
         const request = frame.payload;
-        if (request.operation.op === "capture") {
+        if (request.operation.op === "tabs" && request.operation.action === "open-blank") {
+          snapshot.tabId += 1;
+          captureId = `synthetic-capture-tab-${snapshot.tabId}`;
+          captureRevision += 1;
+          extension.send("browser.result", {
+            ok: true,
+            requestId: request.requestId,
+            operation: "tabs",
+            result: { activeTabId: snapshot.tabId, tabs: [], truncated: false },
+          }, { replyTo: frame.id });
+        } else if (request.operation.op === "navigate") {
+          snapshot.url = TASK_PAGE_URL;
+          snapshot.origin = new URL(TASK_PAGE_URL).origin;
+          captureId = `synthetic-capture-gmail-${snapshot.tabId}`;
+          captureRevision += 1;
+          extension.send("browser.result", {
+            ok: true,
+            requestId: request.requestId,
+            operation: "navigate",
+            result: { tabId: snapshot.tabId, status: "dispatched" },
+          }, { replyTo: frame.id });
+        } else if (request.operation.op === "capture") {
+          itemCaptureCount += 1;
           extension.send("browser.result", {
             ok: true,
             requestId: request.requestId,
@@ -163,9 +189,16 @@ async function startConfiguredTaskDemo() {
               ...identity(),
               status: "supported",
               blocks: [],
-              items: items(),
+              items: options.delayFirstItemCapture === true && itemCaptureCount === 1 ? [] : items(),
               truncated: false,
             },
+          }, { replyTo: frame.id });
+        } else if (request.operation.op === "list-links") {
+          extension.send("browser.result", {
+            ok: true,
+            requestId: request.requestId,
+            operation: "list-links",
+            result: { ...identity(), status: "empty", links: [], truncated: false },
           }, { replyTo: frame.id });
         } else if (request.operation.op === "read-item") {
           const item = items().find((candidate) => candidate.itemId === request.operation.itemId)!;
@@ -204,7 +237,9 @@ async function startConfiguredTaskDemo() {
     get voice() { return voice; },
     extension,
     scheduled,
+    get draftValue() { return draftValue; },
     get sendDispatches() { return sendDispatches; },
+    get itemCaptureCount() { return itemCaptureCount; },
     get now() { return now; },
     setNow(value: number) { now = value; },
     setSuccessfulPageResult(value: boolean) { successfulPageResult = value; },
@@ -253,18 +288,22 @@ async function prepareCurrentPageTask(rig: DemoRig): Promise<void> {
 }
 
 async function prepareObservedDraft(rig: DemoRig): Promise<void> {
-  sendVoiceUtterance(rig.voice, "draft a reply to latest for recipient Synthetic Contact in field Reply message");
-  await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.text.startsWith("Current draft in Reply message:"));
+  sendVoiceUtterance(rig.voice, "Draft a response");
+  const initialReadback = await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.text.startsWith("Current draft in Reply message:"));
+  expect(initialReadback.payload.text).toContain("I can arrive before the workshop begins.");
   expect(rig.server.session.activePageTask?.lastObservedDraftValue).toBeTruthy();
-  sendVoiceUtterance(rig.voice, "revise draft make it more concise");
-  await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.text.startsWith("Current draft in Reply message:"));
+  sendVoiceUtterance(rig.voice, "Make it shorter");
+  const revisedReadback = await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.text.startsWith("Current draft in Reply message:"));
+  expect(revisedReadback.payload.text).toContain("I can arrive at the updated time.");
   expect(rig.server.session.activePageTask?.lastObservedDraftValue).toContain("updated time");
 }
 
 async function beginObservedDraftSend(rig: DemoRig): Promise<PendingTaskGate> {
-  sendVoiceUtterance(rig.voice, "send this email");
+  sendVoiceUtterance(rig.voice, "yes, that's good");
   const prompt = await waitForFrame(rig.voice, (frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt");
-  expect(prompt.payload.text).toContain("Can you say 'send this email'?");
+  expect(prompt.payload.text).toContain("Recipient: Recipient, Synthetic Contact.");
+  expect(prompt.payload.text).toContain("Current message draft: I can arrive at the updated time.");
+  expect(prompt.payload.text).toContain("Would you like me to send it? Say yes to send");
   const pending = rig.server.session.pendingGatedAction;
   if (pending === null) throw new Error("Core task send did not create its read-back grant state.");
   return pending;
@@ -300,6 +339,114 @@ function sendRedeem(
 }
 
 describe("core server dialogue runner option", () => {
+  it("keeps direct browser navigation available while model startup is pending", async () => {
+    const adapter: AgyCliAdapter = {
+      createSession(config) {
+        return {
+          async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
+          async call() { return new Promise<string>(() => {}); },
+          abort() {}, async close() {},
+        };
+      },
+    };
+    const server = await startServer({ port: 0, brain: "agy", dialogueRunner: true, agyAdapter: adapter, deferAgyStartup: true });
+    const extension = await bindClient(server.port, "extension");
+    const voice = await bindClient(server.port, "voice");
+    try {
+      sendVoiceUtterance(voice, "Open https://www.wikipedia.org/");
+      const request = await waitForFrame(extension, (frame) => frame.type === "browser.request");
+      expect(request.payload.operation).toMatchObject({ op: "navigate", url: "https://www.wikipedia.org/" });
+      extension.send("browser.result", {
+        ok: true, requestId: request.payload.requestId, operation: "navigate", result: { tabId: 11, status: "dispatched" },
+      }, { replyTo: request.id });
+      await speakText(voice, "Opened the requested website.");
+    } finally { voice.close(); extension.close(); await server.close(); }
+  });
+
+  it.each([
+    ["Gmail.", "Gmail", "https://gmail.com/"],
+    ["Open Wikipedia", "Wikipedia", "https://www.wikipedia.org/"],
+  ])("routes a named site through the configured runner with no form: %s", async (text, target, url) => {
+    const adapter: AgyCliAdapter = {
+      createSession(config) {
+        return {
+          async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
+          async call(prompt = "") {
+            return prompt.includes("Classify the user's browser request")
+              ? `\`\`\`json\n${JSON.stringify({ intent: "navigate", target, destinationUrl: url })}\n\`\`\``
+              : config.role === "intent" ? '{"type":"describe"}' : '{"fields":[]}';
+          },
+          abort() {},
+          async close() {},
+        };
+      },
+    };
+    const server = await startServer({ port: 0, dialogueRunner: true, brain: "agy", agyAdapter: adapter });
+    const extension = await bindClient(server.port, "extension");
+    const voice = await bindClient(server.port, "voice");
+    try {
+      expect(server.session.model).toBeNull();
+      sendVoiceUtterance(voice, text);
+      const request = await waitForFrame(extension, (frame) => ["browser.request", "snapshot.request"].includes(frame.type));
+      expect(request.type).toBe("browser.request");
+      expect(request.payload.operation).toMatchObject({ op: "navigate", url });
+      extension.send("browser.result", {
+        ok: true, requestId: request.payload.requestId, operation: "navigate", result: { tabId: 11, status: "dispatched" },
+      }, { replyTo: request.id });
+      await speakText(voice, "Opened the requested website.");
+    } finally {
+      voice.close(); extension.close(); await server.close();
+    }
+  });
+
+  it("opens a direct website from a new tab and reloads without requiring a page snapshot", async () => {
+    const server = await startServer({ port: 0, dialogueRunner: true, brain: "fake", fakeDelayMs: 0 });
+    const extension = await bindClient(server.port, "extension");
+    const voice = await bindClient(server.port, "voice");
+    try {
+      sendVoiceUtterance(voice, "new tab");
+      const blankRequest = await waitForFrame(extension, (frame) => frame.type === "browser.request");
+      expect(blankRequest.payload.operation).toEqual({ op: "tabs", action: "open-blank" });
+      extension.send("browser.result", {
+        ok: true,
+        requestId: blankRequest.payload.requestId,
+        operation: "tabs",
+        result: { activeTabId: 9, tabs: [], truncated: false },
+      }, { replyTo: blankRequest.id });
+      await speakText(voice, "Opened a blank tab.");
+      expect(server.session.tabId).toBe(9);
+
+      sendVoiceUtterance(voice, "Can you open https://mail.google.com/");
+      const navigateRequest = await waitForFrame(extension, (frame) => frame.type === "browser.request");
+      expect(navigateRequest.payload).toMatchObject({
+        operation: { op: "navigate", url: "https://mail.google.com/" },
+      });
+      extension.send("browser.result", {
+        ok: true,
+        requestId: navigateRequest.payload.requestId,
+        operation: "navigate",
+        result: { tabId: 9, status: "dispatched" },
+      }, { replyTo: navigateRequest.id });
+      await speakText(voice, "Opened the requested website.");
+
+      sendVoiceUtterance(voice, "Can you reload this page?");
+      const reloadRequest = await waitForFrame(extension, (frame) => frame.type === "browser.request");
+      expect(reloadRequest.payload).toMatchObject({ tabId: 9, operation: { op: "reload" } });
+      extension.send("browser.result", {
+        ok: true,
+        requestId: reloadRequest.payload.requestId,
+        operation: "reload",
+        result: { tabId: 9, status: "dispatched" },
+      }, { replyTo: reloadRequest.id });
+      await speakText(voice, "Reloaded the current page.");
+      expect(server.session.pendingGatedAction).toBeNull();
+    } finally {
+      voice.close();
+      extension.close();
+      await server.close();
+    }
+  });
+
   it("tracks rate-only acknowledgement speech and rejects invalid settings", async () => {
     const server = await startServer({ port: 0, dialogueRunner: true });
     const voice = await bindClient(server.port, "voice");
@@ -460,20 +607,29 @@ describe("core server dialogue runner option", () => {
   });
 
   it("demo configured Phase 8 handler composition", async () => {
-    const rig = await startConfiguredTaskDemo();
+    const rig = await startConfiguredTaskDemo({ delayFirstItemCapture: true });
     try {
-      await prepareCurrentPageTask(rig);
+      sendVoiceUtterance(rig.voice, "Open a new tab");
+      await speakText(rig.voice, "Opened a blank tab.");
+      sendVoiceUtterance(rig.voice, "Open https://mail.google.com/");
+      await speakText(rig.voice, "Opened the requested website.");
+      expect(rig.server.session.model).toBeNull();
 
-      sendVoiceUtterance(rig.voice, "read latest");
+      sendVoiceUtterance(rig.voice, "What's the latest email I have?");
       await speakText(rig.voice, TASK_ITEM_TEXT);
+      expect(rig.itemCaptureCount).toBe(2);
       expect(rig.server.session.activePageTask?.itemId).toBe("notice-current");
+
+      sendVoiceUtterance(rig.voice, "Could you summarize it again?");
+      await speakText(rig.voice, "The message asks you to confirm your preferred arrival time.");
+      expect(rig.server.session.model).toBeNull();
 
       await prepareObservedDraft(rig);
       const pending = await armObservedDraftSend(rig);
       expect(pending.grantId).toBeDefined();
       expect(rig.server.session.activePageTask?.associatedGrantId).toBe(pending.grantId);
 
-      sendRedeem(rig.voice, pending, { source: "voice" });
+      sendRedeem(rig.voice, pending, { source: "voice", phrase: "yes" });
       await speakText(rig.voice, "The page confirms the action.");
       expect(rig.sendDispatches).toBe(1);
       expect(rig.server.session.pendingGatedAction).toBeNull();
@@ -499,13 +655,34 @@ describe("core server dialogue runner option", () => {
     }
   });
 
+  it("keeps the revised draft when the user declines the final send question", async () => {
+    const rig = await startConfiguredTaskDemo();
+    try {
+      sendVoiceUtterance(rig.voice, "Open a new tab");
+      await speakText(rig.voice, "Opened a blank tab.");
+      sendVoiceUtterance(rig.voice, "Open https://mail.google.com/");
+      await speakText(rig.voice, "Opened the requested website.");
+      sendVoiceUtterance(rig.voice, "Read my latest email to me");
+      await speakText(rig.voice, TASK_ITEM_TEXT);
+      sendVoiceUtterance(rig.voice, "Could you summarize it again?");
+      await speakText(rig.voice, "The message asks you to confirm your preferred arrival time.");
+      await prepareObservedDraft(rig);
+      const pending = await armObservedDraftSend(rig);
+
+      sendRedeem(rig.voice, pending, { source: "voice", phrase: "no" });
+      await speakText(rig.voice, "Okay, I left it as a draft.");
+      expect(rig.sendDispatches).toBe(0);
+      expect(rig.server.session.pendingGatedAction).toBeNull();
+      expect(rig.draftValue).toContain("updated time");
+    } finally {
+      await rig.stop();
+    }
+  });
+
   it.each([
     ["missing source", { omitSource: true }],
     ["typed source", { source: "typed" as const }],
-    ["bare yes", { phrase: "yes" }],
-    ["bare okay", { phrase: "okay" }],
-    ["bare yeah", { phrase: "yeah" }],
-    ["bare sure", { phrase: "sure" }],
+    ["typed yes", { phrase: "yes", source: "typed" as const }],
     ["wrong phrase", { phrase: "submit survey" }],
     ["stale grant", { grantId: "stale-grant-id" }],
     ["stale speak", { speakId: "stale-speak-id" }],
