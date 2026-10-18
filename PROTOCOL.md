@@ -101,7 +101,7 @@ The proposed `browser.request` message is server-to-extension and `browser.resul
 | `scroll` | `direction: up or down`, `pixels: 1–2000` |
 | `find` | user-derived `query` (1–500 Unicode code points) |
 
-The protocol validates shape only. Deterministic server code must keep URLs and queries sourced from the user's words, resolve links from a uniquely selected visible live candidate, and authorize gated work before dispatch. Page text and model output cannot invent or rewrite a destination, query, link, tab, or action target. The required authorization IDs do not add confirmation authority to `Intent`.
+The protocol validates shape only. Deterministic server code must keep URLs and queries sourced from the user's words, resolve links from a uniquely selected visible live candidate, and authorize gated work before dispatch. It may issue an `authorizationId` only after read-back of the exact operation and target and a matching operation-specific spoken phrase; a bare "yes" never authorizes it. The grant is one-use and target-bound, and the extension revalidates before dispatch. Page text and model output cannot invent or rewrite a destination, query, link, tab, or action target. The required authorization IDs do not add confirmation authority to `Intent`.
 
 `BrowserResultPayload` has `ok: true` and a typed result for its `operation`, or `ok: false` with the same bounded `requestId`, operation, and a closed error code plus a message of at most 300 Unicode code points. Successful location results distinguish `supported` from `restricted` pages. Tab results expose at most 50 entries, with a bounded title and host hint rather than a navigable URL.
 

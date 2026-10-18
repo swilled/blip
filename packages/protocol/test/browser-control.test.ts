@@ -97,6 +97,10 @@ describe("browser content and link bounds", () => {
     const emojiBlock = "😀".repeat(400);
     const capture = { ...identity, status: "supported", blocks: [{ kind: "paragraph", text: emojiBlock }], truncated: false };
     expect(BrowserContentResult.safeParse(capture).success).toBe(true);
+    expect(BrowserContentResult.safeParse({
+      ...capture,
+      blocks: Array.from({ length: 20 }, () => ({ kind: "paragraph", text: "x".repeat(200) })),
+    }).success).toBe(true);
     expect(BrowserContentResult.safeParse({ ...capture, blocks: [{ kind: "paragraph", text: emojiBlock + "😀" }] }).success).toBe(false);
     expect(BrowserContentResult.safeParse({
       ...capture,
