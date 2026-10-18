@@ -1,5 +1,6 @@
 import type {
   BrowserContentBlock,
+  BrowserContentItem,
   BrowserLinkRecord,
   BrowserPageIdentity,
   BrowserResultPayload,
@@ -11,6 +12,7 @@ type BrowserTabsResult = Extract<BrowserResultPayload, { ok: true; operation: "t
 export type BrowserCapture = {
   identity?: BrowserPageIdentity;
   blocks: BrowserContentBlock[];
+  items?: BrowserContentItem[];
   links: BrowserLinkRecord[];
   tabs?: BrowserTabsResult;
 };

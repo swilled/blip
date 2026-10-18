@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Message } from "@blip/protocol";
+import type { BrowserContentItem, BrowserOperation, BrowserPageIdentity, BrowserLinkRecord, Message } from "@blip/protocol";
 import type { Hub } from "../hub/hub";
 import { Session } from "../session/session";
 import type { Refresher } from "../session/refresh";
 import { handleUtterance } from "../turn";
 import type { AgyProvider } from "../brain/agy/provider";
 import type { PageContentProjection } from "../brain/agy/content-projection";
+import { createBrowserExecutor } from "./executor";
 
 const identity = {
   captureId: "content-capture-1",
@@ -13,6 +14,14 @@ const identity = {
   tabId: 7,
   pageUrl: "https://article.example/",
 };
+
+function contentItem(itemId: string, pageIdentity: BrowserPageIdentity = identity): BrowserContentItem {
+  return { itemId, text: "Synthetic visible item.", visibleDate: null, identity: pageIdentity, frameId: 0 };
+}
+
+function visibleLink(linkId: string, pageIdentity: BrowserPageIdentity): BrowserLinkRecord {
+  return { linkId, label: "Read more", hostHint: "article.example", identity: pageIdentity, frameId: 0 };
+}
 
 function contentBlock(contentId: string, text: string) {
   return {
@@ -342,5 +351,98 @@ describe("direct page content speech privacy", () => {
     expect(ambiguousOperations).toEqual(["capture"]);
     expect(JSON.stringify(ambiguous.sent)).toContain("More than one page text block matches. Please be more specific.");
     expect(ambiguous.parseIntent).not.toHaveBeenCalled();
+  });
+});
+
+describe("accepted semantic item captures", () => {
+  it("stores items only from accepted captures and preserves them only for the exact capture identity", async () => {
+    const session = new Session("fake");
+    session.extensionConnected = true;
+    session.tabId = identity.tabId;
+    let nextResult: unknown;
+    const hub = {
+      request: async (_role: string, _type: string, request: { requestId: string; operation: BrowserOperation }) => ({
+        payload: {
+          ok: true,
+          requestId: request.requestId,
+          operation: request.operation.op,
+          result: nextResult,
+        },
+      }),
+    } as unknown as Hub;
+    const executor = createBrowserExecutor({ hub, session });
+    const item = contentItem("item-current");
+
+    nextResult = { ...identity, status: "supported", blocks: [], items: [item], truncated: false };
+    expect(await executor.execute({ op: "capture" })).toMatchObject({ ok: true });
+    expect(session.browserCapture?.items).toEqual([item]);
+
+    nextResult = {
+      ...identity,
+      status: "supported",
+      links: [visibleLink("link-current", identity)],
+      truncated: false,
+    };
+    expect(await executor.execute({ op: "list-links" })).toMatchObject({ ok: true });
+    expect(session.browserCapture?.items).toEqual([item]);
+    expect(session.browserCapture?.links).toEqual([visibleLink("link-current", identity)]);
+    expect(JSON.stringify(session.browserCapture)).not.toContain("href");
+
+    nextResult = {
+      ...identity,
+      status: "supported",
+      blocks: [contentBlock("selected-block", "Selected visible paragraph.")],
+      items: [contentItem("item-from-read-result")],
+      truncated: false,
+    };
+    expect(await executor.execute({
+      op: "read-content", kind: "paragraph", contentId: "selected-block", identity,
+    })).toMatchObject({ ok: true });
+    expect(session.browserCapture?.items).toEqual([item]);
+
+    const changedIdentities: BrowserPageIdentity[] = [
+      { ...identity, captureId: "replacement-capture" },
+      { ...identity, captureRevision: identity.captureRevision + 1 },
+      { ...identity, tabId: identity.tabId + 1 },
+      { ...identity, pageUrl: "https://article.example/updated/" },
+    ];
+    for (const changedIdentity of changedIdentities) {
+      nextResult = { ...identity, status: "supported", blocks: [], items: [item], truncated: false };
+      expect(await executor.execute({ op: "capture" })).toMatchObject({ ok: true });
+      nextResult = {
+        ...changedIdentity,
+        status: "supported",
+        links: [visibleLink("link-changed", changedIdentity)],
+        truncated: false,
+      };
+      expect(await executor.execute({ op: "list-links" })).toMatchObject({ ok: true });
+      expect(session.browserCapture?.items).toEqual([]);
+      expect(session.browserCapture?.links).toEqual([visibleLink("link-changed", changedIdentity)]);
+    }
+  });
+
+  it("rejects item records whose identity differs from their capture result", async () => {
+    const session = new Session("fake");
+    session.extensionConnected = true;
+    session.tabId = identity.tabId;
+    const hub = {
+      request: async (_role: string, _type: string, request: { requestId: string; operation: BrowserOperation }) => ({
+        payload: {
+          ok: true,
+          requestId: request.requestId,
+          operation: request.operation.op,
+          result: {
+            ...identity,
+            status: "supported",
+            blocks: [],
+            items: [contentItem("wrong-identity", { ...identity, captureRevision: 2 })],
+            truncated: false,
+          },
+        },
+      }),
+    } as unknown as Hub;
+    const result = await createBrowserExecutor({ hub, session }).execute({ op: "capture" });
+    expect(result).toEqual({ ok: false, reason: "invalid-result" });
+    expect(session.browserCapture).toBeNull();
   });
 });

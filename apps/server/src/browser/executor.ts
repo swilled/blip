@@ -36,6 +36,7 @@ function updateCurrentCapture(session: Session, payload: BrowserResult): void {
       session.applyBrowserCapture({
         identity: payload.result,
         blocks: payload.result.blocks,
+        items: payload.result.items ?? [],
         links: keepPageData ? previous!.links : [],
         ...(keepPageData && previous?.tabs !== undefined ? { tabs: previous.tabs } : {}),
       });
@@ -47,6 +48,7 @@ function updateCurrentCapture(session: Session, payload: BrowserResult): void {
       session.applyBrowserCapture({
         identity: payload.result,
         blocks: keepPageData ? previous!.blocks : [],
+        items: keepPageData ? previous?.items ?? [] : [],
         links: payload.result.links,
         ...(keepPageData && previous?.tabs !== undefined ? { tabs: previous.tabs } : {}),
       });
@@ -58,6 +60,7 @@ function updateCurrentCapture(session: Session, payload: BrowserResult): void {
       session.applyBrowserCapture({
         identity: payload.result,
         blocks: payload.result.blocks,
+        items: keepPageData ? previous?.items ?? [] : [],
         links: keepPageData ? previous!.links : [],
         ...(keepPageData && previous?.tabs !== undefined ? { tabs: previous.tabs } : {}),
       });
@@ -71,7 +74,7 @@ function updateCurrentCapture(session: Session, payload: BrowserResult): void {
         session.tabId = payload.result.activeTabId;
       }
       session.applyBrowserCapture({
-        ...(changedTab ? { blocks: [], links: [] } : session.browserCapture ?? { blocks: [], links: [] }),
+        ...(changedTab ? { blocks: [], items: [], links: [] } : session.browserCapture ?? { blocks: [], items: [], links: [] }),
         tabs: payload.result,
       });
       return;
@@ -84,6 +87,7 @@ function updateCurrentCapture(session: Session, payload: BrowserResult): void {
       session.applyBrowserCapture({
         identity: payload.result.identity,
         blocks: keepPageData ? previous.blocks : [],
+        items: keepPageData ? previous.items ?? [] : [],
         links: keepPageData ? previous.links : [],
         ...(keepPageData && previous.tabs !== undefined ? { tabs: previous.tabs } : {}),
       });

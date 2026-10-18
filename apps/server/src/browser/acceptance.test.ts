@@ -212,6 +212,9 @@ function makeBrowserRig(options: {
           result: { ...currentIdentity, status: blocks.length > 0 ? "supported" : "empty", blocks, truncated: false },
         };
       }
+      // The read-item routing path is implemented by the next Phase 8 plan; keep this fake closed meanwhile.
+      case "read-item":
+        return browserFailure(request, "unavailable");
       case "open-link":
         if (!linksAreLive) return browserFailure(request, "stale-capture");
         if (changeCaptureOnNextRead) {

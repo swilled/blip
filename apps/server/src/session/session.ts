@@ -180,14 +180,22 @@ export class Session {
   applyBrowserCapture(capture: BrowserCapture): void {
     const previous = this.browserCapture?.identity;
     const next = capture.identity;
-    if (previous !== undefined && next !== undefined && (
-      previous.captureId !== next.captureId || previous.captureRevision !== next.captureRevision ||
-      previous.tabId !== next.tabId || previous.pageUrl !== next.pageUrl
-    )) {
+    const sameIdentity = previous !== undefined && next !== undefined &&
+      previous.captureId === next.captureId && previous.captureRevision === next.captureRevision &&
+      previous.tabId === next.tabId && previous.pageUrl === next.pageUrl;
+    if (previous !== undefined && next !== undefined && !sameIdentity) {
       this.clearBrowserAuthorization();
       this.stale = true;
     }
-    this.browserCapture = capture;
+    const matchesCapture = (record: { identity: NonNullable<BrowserCapture["identity"]> }) => next !== undefined &&
+      record.identity.captureId === next.captureId && record.identity.captureRevision === next.captureRevision &&
+      record.identity.tabId === next.tabId && record.identity.pageUrl === next.pageUrl;
+    this.browserCapture = {
+      ...capture,
+      blocks: next === undefined ? [] : capture.blocks.filter(matchesCapture),
+      links: next === undefined ? [] : capture.links.filter(matchesCapture),
+      ...(capture.items !== undefined ? { items: next === undefined ? [] : capture.items.filter(matchesCapture) } : {}),
+    };
   }
 
   /** Drop any pending confirmation and its inaccessible one-use grant. */
