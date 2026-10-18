@@ -145,7 +145,7 @@ None - no external service configuration required.
 ## Self-Check: PASSED
 
 - Summary file exists at the plan output path.
-- Task commits `3ccebc4` and `6b0da81` are present in git history.
+- Task commits `3ccebc4` and `eccf7a6` are present in git history.
 
 ---
 *Phase: 07-implement-generic-user-directed-browser-control-and-content-reading*
