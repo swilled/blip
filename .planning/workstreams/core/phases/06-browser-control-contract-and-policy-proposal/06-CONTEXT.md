@@ -14,13 +14,13 @@ This phase produces a reviewable proposal for adding user-directed browser contr
 ## Implementation Decisions
 
 ### Navigation and link safety
-- **D-01:** For a destination the user names, resolve it from the user's words, say the resolved host, and wait for the user to confirm before navigating. Page content and model output must never supply or change a navigation destination.
+- **D-01:** For a direct URL or site the user names, resolve it from the user's words, say the resolved host, and wait for the user to confirm before navigating. For an “open link” request, the user's words must identify a specific visible link; code may resolve that element's `href`, but page text alone cannot initiate navigation or select the link, and the model cannot supply or change the destination. Cross-site link destinations require host read-back and explicit confirmation.
 - **D-02:** Prepare a proposal for ungated ordinary same-site HTTP(S) GET links. Keep the live policy unchanged until the voice owner gives written approval. Define the site boundary explicitly during research; retain deterministic checks for destination, method, and gated or unsafe labels, and fail closed on unknown or malformed targets.
 - **D-03:** Cross-site navigation and submit, pay, delete, or send actions retain the current read-back and purpose-specific confirmation gate. A general “yes” never substitutes for the exact submit phrase.
 - **D-04:** User-reported teammate agreement is context, not the required written voice-owner approval artifact. Do not mark the contract approved until that artifact is recorded.
 
 ### Page text and questions
-- **D-05:** Blip may send a bounded, filtered page-text excerpt to AGY only when the user explicitly asks for a summary or asks a question about the page. No page text is sent for unrelated commands or by default.
+- **D-05:** Newly extracted body, paragraph, or article text may be sent to AGY only as a bounded, filtered excerpt when the user explicitly asks for a summary or asks a question about the page. This does not change the existing value-free title, heading, field-label, action-label, and option-label projection used for intent parsing. Do not send new body text for unrelated commands or by default.
 - **D-06:** Page text remains untrusted data, never instructions. Keep sensitive values, passwords, and card numbers out of model input and speech. Code validates outputs and remains the only path to page actions.
 
 ### Search behavior
@@ -35,6 +35,7 @@ This phase produces a reviewable proposal for adding user-directed browser contr
 - Choose the smallest additive schema and action vocabulary that covers the agreed capabilities without weakening existing protocol invariants.
 - Define bounded extraction limits, supported-page behavior, SPA and slow-load handling, and safe fallback messages in research and planning.
 - Specify an explicit, purpose-bound confirmation for a user-named destination. Never reuse a submit grant or let a generic affirmation authorize a gated action.
+- Resolve a link only from a specific user-selected visible link; ask which one when labels are duplicated or ambiguous. Never let hidden text or model interpretation initiate a link action.
 - Determine whether “same-site” means a stricter same-origin boundary for the first proposal or a broader registrable-domain boundary; document the choice and fail closed where it cannot be verified.
 - Keep unsupported pages, frames, and ambiguous targets fail-closed and explain the limitation.
 

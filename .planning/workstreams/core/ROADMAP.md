@@ -215,7 +215,8 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 ### Phase 6: Browser control contract and policy proposal
 
 **Goal:** Define a teammate-reviewable, additive protocol and policy proposal for user-directed page reading, navigation, links, search, tabs, scrolling, and summaries. Preserve the existing form flow, privacy rules, and confirmation gates. This phase does not implement browser-control features. No contract change may merge before the voice owner approves it in writing.
-**Requirements**: Proposal only; no v1 requirement IDs change in this phase. AGENT-01 remains deferred for a separate later phase.
+**Requirements**: TBD
+**Planning note:** Proposal-only phase; no v1 requirement IDs change. AGENT-01 remains deferred for a separate later phase.
 **Depends on:** Phase 5 technical acceptance (passed); written v1 release gates remain independent.
 **Plans:** 0 plans
 
