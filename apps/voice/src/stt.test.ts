@@ -1,177 +1,134 @@
-import { describe, it, expect } from "vitest";
-import {
-  createStt,
-  MSG_DIDNT_CATCH,
-  MSG_MIC,
-  MSG_CLICK_WINDOW,
-  MSG_STT_UNAVAILABLE,
-  type RecognitionLike,
-  type SttFinal,
-  type SttError,
-  type SttResultEvent,
-} from "./stt";
-
-function fakeRec() {
-  const calls = { start: 0, stop: 0 };
-  const rec: RecognitionLike = {
-    lang: "",
-    continuous: true,
-    interimResults: false,
-    maxAlternatives: 0,
-    onresult: null,
-    onerror: null,
-    onend: null,
-    start() {
-      calls.start++;
-    },
-    stop() {
-      calls.stop++;
-    },
-  };
-  return { rec, calls };
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createStt, MSG_CAPTURE_LIMIT, MSG_DIDNT_CATCH, MSG_MIC, MSG_MIC_MISSING, MSG_STT_NETWORK, MSG_STT_UNAVAILABLE, MSG_CLICK_WINDOW, type RecognitionLike, type SttFinal, type SttError, type SttResultEvent } from "./stt";
+function result(text: string, final = true, confidence = 0.9): SttResultEvent {
+  return { results: { length: 1, 0: { isFinal: final, length: 1, 0: { transcript: text, confidence } } } };
 }
-
-function res(isFinal: boolean, alts: Array<[string, number]>) {
-  const r: Record<number, { transcript: string; confidence: number }> & {
-    isFinal: boolean;
-    length: number;
-  } = { isFinal, length: alts.length };
-  alts.forEach(([transcript, confidence], i) => {
-    r[i] = { transcript, confidence };
-  });
-  return r;
-}
-function event(...results: ReturnType<typeof res>[]): SttResultEvent {
-  const list: Record<number, unknown> & { length: number } = { length: results.length };
-  results.forEach((r, i) => (list[i] = r));
-  return { results: list as SttResultEvent["results"] };
-}
-
 function setup(canListen = () => true) {
-  const f = fakeRec();
-  const interim: string[] = [];
-  const finals: SttFinal[] = [];
-  const errors: SttError[] = [];
+  const records: Array<{ rec: RecognitionLike; start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; abort: ReturnType<typeof vi.fn> }> = [];
+  const finals: SttFinal[] = [], errors: SttError[] = [], interim: string[] = [], stages: string[] = [];
   const stt = createStt({
-    makeRecognition: () => f.rec,
-    onInterim: (t) => interim.push(t),
-    onFinal: (x) => finals.push(x),
-    onError: (e) => errors.push(e),
-    canListen,
+    makeRecognition() {
+      const start = vi.fn(), stop = vi.fn(), abort = vi.fn();
+      const rec: RecognitionLike = { lang: "", continuous: false, interimResults: false, maxAlternatives: 0, onresult: null, onerror: null, onend: null, start, stop, abort };
+      records.push({ rec, start, stop, abort }); return rec;
+    },
+    onInterim: text => interim.push(text), onFinal: f => finals.push(f), onError: e => errors.push(e), onStage: s => stages.push(s), canListen,
   });
-  return { f, stt, interim, finals, errors };
+  const first = () => records[0]!;
+  const complete = (text: string) => { const r = records.at(-1)!.rec; r.onresult!(result(text)); stt.release(); r.onend!(); };
+  return { stt, records, first, finals, errors, interim, stages, complete };
 }
-
-describe("stt", () => {
-  it("one start per press; a second press while active is ignored", () => {
-    const { f, stt } = setup();
-    stt.press();
-    stt.press();
-    expect(f.calls.start).toBe(1);
-    expect(f.rec.continuous).toBe(true);
-    expect(f.rec.maxAlternatives).toBe(3);
-    expect(f.rec.lang).toBe("en-US");
-    expect(f.rec.interimResults).toBe(true);
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+describe("held speech capture", () => {
+  it("waits for native readiness and ignores a duplicate press", () => {
+    const t = setup(); t.stt.press(); t.stt.press();
+    expect(t.records).toHaveLength(1);
+    expect(t.stages).toEqual(["starting"]);
+    t.first().rec.onstart!();
+    expect(t.stages.at(-1)).toBe("listening");
+    expect(t.first().rec).toMatchObject({ lang: "en-US", continuous: true, interimResults: true, maxAlternatives: 3 });
+    t.stt.cancel();
   });
-
-  it("release stops; interim then a single final", () => {
-    const { f, stt, interim, finals } = setup();
-    stt.press();
-    f.rec.onresult!(event(res(false, [["open the", 0]])));
-    expect(interim).toEqual(["open the"]);
-    stt.release();
-    expect(f.calls.stop).toBe(1);
-    f.rec.onresult!(event(res(true, [["open the menu", 0.9]])));
-    f.rec.onresult!(event(res(true, [["open the menu", 0.9]])));
-    f.rec.onend!();
-    expect(finals).toEqual([{ text: "open the menu", confidence: 0.9, alternatives: [] }]);
-    expect(stt.isActive()).toBe(false);
+  it("delivers once only after release and finalization", () => {
+    const t = setup(); t.stt.press();
+    const r = t.first().rec;
+    r.onresult!(result("read the", false));
+    expect(t.interim).toEqual(["read the"]); expect(t.finals).toEqual([]);
+    t.stt.release(); expect(t.first().stop).toHaveBeenCalledOnce();
+    r.onresult!(result("read the form"));
+    r.onend!(); r.onend!();
+    expect(t.finals.map(x => x.text)).toEqual(["read the form"]);
+    expect(t.stt.isActive()).toBe(false);
   });
-
-  it("waits for all final chunks before delivering a multiword utterance", () => {
-    const { f, stt, finals } = setup();
-    stt.press();
-
-    f.rec.onresult!(event(res(true, [["read the", 0.9]])));
-    expect(finals).toEqual([]);
-
-    f.rec.onresult!(
-      event(res(true, [["read the", 0.9]]), res(true, [["form", 0.8]])),
-    );
-    expect(finals).toEqual([]);
-
-    f.rec.onend!();
-    expect(finals).toHaveLength(1);
-    expect(finals[0]!.text).toBe("read the form");
-    expect(finals[0]!.confidence).toBeCloseTo(0.85);
-    expect(finals[0]!.alternatives).toEqual([]);
+  it("recovers an automatic end without treating it as key release", () => {
+    const t = setup(); t.stt.press();
+    t.first().rec.onend!();
+    expect(t.stt.isActive()).toBe(true); expect(t.errors).toEqual([]);
+    vi.advanceTimersByTime(999); expect(t.records).toHaveLength(1);
+    vi.advanceTimersByTime(1); expect(t.records).toHaveLength(2);
+    t.complete("what's required");
+    expect(t.finals[0]?.text).toBe("what's required");
   });
-
-  it("clamps confidence and limits alternatives", () => {
-    const { f, stt, finals } = setup();
-    stt.press();
-    const long = "x".repeat(900);
-    f.rec.onresult!(
-      event(
-        res(true, [
-          ["best", 1.7],
-          ["best", 0.5],
-          ["alt one", 0.4],
-          [long, 0.3],
-          ["alt three", 0.2],
-          ["alt four", 0.1],
-        ]),
-      ),
-    );
-    f.rec.onend!();
-    const out = finals[0]!;
-    expect(out.confidence).toBe(1);
-    expect(out.alternatives).toHaveLength(3);
-    expect(out.alternatives).not.toContain("best");
-    expect(out.alternatives.every((a) => a.length <= 500)).toBe(true);
+  it("collects final chunks across sessions with no duplicate prefix", () => {
+    const t = setup(); t.stt.press();
+    const r = t.first().rec;
+    r.onresult!(result("read the")); r.onresult!(result("read the")); r.onend!();
+    vi.advanceTimersByTime(1000);
+    t.complete("form");
+    expect(t.finals.map(x => x.text)).toEqual(["read the form"]);
+    expect(t.interim.at(-1)).toBe("read the form");
   });
-
-  it("maps errors to the copywriting messages with no retry", () => {
-    for (const [code, msg] of [
-      ["no-speech", MSG_DIDNT_CATCH],
-      ["not-allowed", MSG_MIC],
-      ["network", MSG_DIDNT_CATCH],
-    ] as const) {
-      const { f, stt, errors } = setup();
-      stt.press();
-      f.rec.onerror!({ error: code });
-      f.rec.onend!();
-      expect(errors).toHaveLength(1);
-      expect(errors[0]!.message).toBe(msg);
-      expect(f.calls.start).toBe(1);
+  it("survives no-speech while held and cancels a pending restart on release", () => {
+    const t = setup(); t.stt.press();
+    t.first().rec.onerror!({ error: "no-speech" }); t.first().rec.onend!();
+    expect(t.errors).toEqual([]);
+    t.stt.release(); vi.advanceTimersByTime(10000);
+    expect(t.records).toHaveLength(1);
+    expect(t.errors[0]?.message).toBe(MSG_DIDNT_CATCH);
+  });
+  it("bounds repeated automatic recovery", () => {
+    const t = setup(); t.stt.press();
+    for (let i = 0; i < 6; i++) { t.records.at(-1)!.rec.onend!(); vi.advanceTimersByTime(1000); }
+    expect(t.records).toHaveLength(6);
+    expect(t.errors).toHaveLength(1);
+    expect(t.stt.isActive()).toBe(false);
+  });
+  it("settles terminal errors without waiting for an end event", () => {
+    for (const [code, message] of [["not-allowed", MSG_MIC], ["audio-capture", MSG_MIC_MISSING], ["network", MSG_STT_NETWORK]]) {
+      const t = setup(); t.stt.press(); t.first().rec.onresult!(result("submit"));
+      t.first().rec.onerror!({ error: code! });
+      expect(t.errors[0]?.message).toBe(message);
+      expect(t.first().abort).toHaveBeenCalledOnce();
+      expect(t.stt.isActive()).toBe(false);
+      t.first().rec.onend!(); expect(t.finals).toEqual([]);
     }
   });
-
-  it("an end with no result reports a single didn't-catch error", () => {
-    const { f, stt, errors } = setup();
-    stt.press();
-    f.rec.onend!();
-    expect(errors.map((e) => e.message)).toEqual([MSG_DIDNT_CATCH]);
-    expect(f.calls.start).toBe(1);
+  it("discards a prefix if the browser loses an unfinished interim", () => {
+    const t = setup(); t.stt.press();
+    t.first().rec.onresult!(result("submit survey", false)); t.first().rec.onend!();
+    expect(t.finals).toEqual([]); expect(t.errors).toHaveLength(1);
   });
-
-  it("does not start when canListen is false and reports the click message", () => {
-    const { f, stt, errors } = setup(() => false);
-    stt.press();
-    expect(f.calls.start).toBe(0);
-    expect(errors).toEqual([{ kind: "unfocused", message: MSG_CLICK_WINDOW }]);
+  it("ignores old callbacks and cannot merge rapid consecutive holds", () => {
+    const t = setup(); t.stt.press(); const old = t.first().rec;
+    old.onresult!(result("old text")); t.stt.cancel(); t.stt.press();
+    old.onresult!(result("submit survey")); old.onend!();
+    t.complete("read the form");
+    expect(t.finals.map(x => x.text)).toEqual(["read the form"]);
   });
-
-  it("reports an unavailable browser speech API instead of throwing", () => {
+  it("does not let a press steal a finalizing capture", () => {
+    const t = setup(); t.stt.press(); t.stt.release(); t.stt.press();
+    expect(t.records).toHaveLength(1); t.first().rec.onresult!(result("one")); t.first().rec.onend!();
+    t.stt.press(); t.complete("two");
+    expect(t.finals.map(x => x.text)).toEqual(["one", "two"]);
+  });
+  it("aborts a missing finalization and never sends its partial prefix", () => {
+    const t = setup(); t.stt.press(); t.first().rec.onresult!(result("read the"));
+    t.stt.release(); vi.advanceTimersByTime(2000);
+    expect(t.finals).toEqual([]); expect(t.errors[0]?.message).toContain("did not finish");
+    expect(t.first().abort).toHaveBeenCalledOnce();
+  });
+  it("bounds startup and the physical hold", () => {
+    const a = setup(); a.stt.press(); vi.advanceTimersByTime(8000);
+    expect(a.errors[0]?.message).toContain("did not start");
+    const b = setup(); b.stt.press(); b.first().rec.onstart!();
+    vi.advanceTimersByTime(10000); expect(b.errors[0]?.message).toBe(MSG_CAPTURE_LIMIT);
+    expect(b.finals).toEqual([]);
+  });
+  it("rejects overlong final input without truncating it into a command", () => {
+    const t = setup(); t.stt.press(); t.first().rec.onresult!(result("x".repeat(501)));
+    expect(t.errors[0]?.message).toContain("too long"); expect(t.finals).toEqual([]);
+  });
+  it("keeps bounded alternatives and confidence only for the full hypothesis", () => {
+    const t = setup(); t.stt.press();
+    t.first().rec.onresult!({ results: { length: 1, 0: { isFinal: true, length: 3, 0: { transcript: "best", confidence: 2 }, 1: { transcript: "other", confidence: 0 }, 2: { transcript: "best", confidence: 0 } } } });
+    t.stt.release(); t.first().rec.onend!();
+    expect(t.finals).toEqual([{ text: "best", confidence: 1, alternatives: ["other"] }]);
+  });
+  it("reports browser absence or focus rejection instead of throwing", () => {
+    const t = setup(() => false); t.stt.press(); expect(t.errors[0]?.message).toBe(MSG_CLICK_WINDOW);
     const errors: SttError[] = [];
-    const stt = createStt({
-      makeRecognition: () => { throw new Error("missing browser API"); },
-      onInterim: () => {},
-      onFinal: () => {},
-      onError: (error) => errors.push(error),
-      canListen: () => true,
-    });
-    expect(() => stt.press()).not.toThrow();
-    expect(errors).toEqual([{ kind: "other", message: MSG_STT_UNAVAILABLE }]);
+    createStt({ makeRecognition() { throw new Error("absent"); }, onFinal() {}, onInterim() {}, onError: e => errors.push(e), canListen: () => true }).press();
+    expect(errors[0]?.message).toBe(MSG_STT_UNAVAILABLE);
   });
 });
