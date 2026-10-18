@@ -1,4 +1,4 @@
-import { classifyUtterancePrivacy, dialogueStateName, initialState, reduce, speakEffect, isSpeechRate } from "@blip/dialogue";
+import { classifyUtterancePrivacy, dialogueStateName, initialState, reduce, speakEffect, isSpeechRate, confirmWindowOpen, phraseMatches } from "@blip/dialogue";
 import {
   newId,
   type ActRequest,
@@ -372,13 +372,33 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     utterance(context) {
       if (context.role !== "voice" || context.message.type !== "utterance") return;
       const utterance = context.message.payload;
+      const epoch = context.session.voiceEpoch;
       activeSession = context.session;
       sessionHub = context.hub;
       return enqueue(async () => {
+        if (!syncVoice(context, epoch)) return;
+        const capture = context.session.voiceCapture;
+        context.session.voiceCapture = null;
         context.session.busy = true;
         context.hub.pushState();
         if (context.session.model === null || context.session.stale) {
           await refreshSnapshot(context.session, "user");
+        }
+        if (utterance.source === "voice" && state.confirm && phraseMatches(utterance.text, state.confirm.phrase)) {
+          const eligible = capture?.eligible && capture.ended && capture.epoch === epoch
+            && capture.grantId === state.confirm.grantId
+            && capture.speechRevision === context.session.speechRevision
+            && capture.snapshotRevision === context.session.snapshotRevision
+            && now() >= capture.startedAt && now() - capture.startedAt <= 12000
+            && !context.session.hasOutstandingSpeech()
+            && confirmWindowOpen(state.outstanding.length, state.lastDoneAt, now());
+          if (!eligible) {
+            const blocked = speakEffect(state, "Wait for all speech to finish, then hold to talk and say the confirmation phrase again.", "confirm-prompt");
+            state = blocked.state;
+            await runEffect(blocked.effect, context.session, context.hub, context);
+            context.session.busy = false; context.hub.pushState();
+            return;
+          }
         }
         try {
           await dispatch({ type: "utterance", utterance }, context);
@@ -390,9 +410,11 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     "confirm.redeem"(context) {
       if (context.role !== "voice" || context.message.type !== "confirm.redeem") return;
       const redemption = context.message.payload;
+      const epoch = context.session.voiceEpoch;
       activeSession = context.session;
       sessionHub = context.hub;
       return enqueue(async () => {
+        if (!syncVoice(context, epoch)) return;
         context.session.busy = true;
         context.hub.pushState();
         try {
@@ -446,13 +468,19 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     "speak.done"(context) {
       if (context.role !== "voice" || context.message.type !== "speak.done") return;
       const done = context.message.payload;
+      const epoch = context.session.voiceEpoch;
       activeSession = context.session;
       sessionHub = context.hub;
       return enqueue(async () => {
+        if (!syncVoice(context, epoch)) return;
         // Never let an unknown, duplicate, NVDA-only, or otherwise untracked completion reach the
         // reducer. Matching a read-back id alone is not evidence that its output actually finished.
         if (!context.session.completeSpeech(done.speakId, done.interrupted, now())) return;
         await dispatch({ type: "speak.done", done }, context);
+        if (done.interrupted && state.confirm) {
+          context.session.voiceCapture = null;
+          await dispatch({ type: "control", cmd: "stop" }, context);
+        }
       });
     },
     settings(context) {
@@ -493,6 +521,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       activeSession = context.session;
       sessionHub = context.hub;
       return enqueue(async () => {
+        context.session.voiceCapture = null;
         context.session.stale = true;
         const confirm = state.confirm;
         if (confirm !== null) {
@@ -515,11 +544,32 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       });
     },
     ptt(context) {
-      if (context.role !== "voice" || context.message.type !== "ptt" || context.message.payload.state !== "start") return;
+      if (context.role !== "voice" || context.message.type !== "ptt") return;
+      const hold = context.message.payload.state;
+      const epoch = context.session.voiceEpoch;
+      const receivedAt = now();
+      const receivedSpeechRevision = context.session.speechRevision;
       activeSession = context.session;
       sessionHub = context.hub;
       return enqueue(async () => {
+        if (!syncVoice(context, epoch)) return;
+        const session = context.session;
+        if (hold === "end") {
+          if (session.voiceCapture?.epoch === epoch) session.voiceCapture.ended = true;
+          return;
+        }
+        if (session.voiceCapture && !session.voiceCapture.ended) return;
         const confirm = state.confirm;
+        const eligible = confirm !== null && !session.stale && !session.hasOutstandingSpeech()
+          && confirmWindowOpen(state.outstanding.length, state.lastDoneAt, receivedAt)
+          && session.lastSpeechDoneAt !== null && receivedAt - session.lastSpeechDoneAt >= 1000
+          && receivedSpeechRevision === session.speechRevision;
+        session.voiceCapture = { epoch, eligible, ended: false, startedAt: receivedAt, speechRevision: session.speechRevision, snapshotRevision: session.snapshotRevision, grantId: confirm?.grantId ?? null };
+        if (eligible) return;
+        if (state.mode === "reading-back") {
+          await dispatch({ type: "control", cmd: "stop" }, context);
+          return;
+        }
         if (confirm === null) return;
         clearTimeout(expiryTimers.get(confirm.grantId));
         expiryTimers.delete(confirm.grantId);
@@ -537,10 +587,13 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       if (context.role !== "voice" || context.message.type !== "control") return;
       const { cmd } = context.message.payload;
       const messageId = context.message.id;
+      const epoch = context.session.voiceEpoch;
       activeSession = context.session;
       sessionHub = context.hub;
       if (cmd !== "reconnect-browser") {
         return enqueue(async () => {
+          if (!syncVoice(context, epoch)) return;
+          context.session.voiceCapture = null;
           await dispatch({ type: "control", cmd }, context);
         });
       }

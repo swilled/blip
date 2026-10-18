@@ -98,6 +98,82 @@ async function arm(rig: ReturnType<typeof makeRig>) {
 }
 
 describe("dialogue reducer to core GatePort integration", () => {
+  async function finishSpeech(rig: ReturnType<typeof makeRig>) {
+    for (const frame of rig.frames("speak")) {
+      await rig.handle("voice", "speak.done", { speakId: frame.payload.speakId, interrupted: false });
+    }
+    rig.clock += 1000;
+  }
+  async function spoken(rig: ReturnType<typeof makeRig>, text: string) {
+    await rig.handle("voice", "ptt", { state: "start" });
+    await rig.handle("voice", "ptt", { state: "end" });
+    await rig.handle("voice", "utterance", { utteranceId: `u-${rig.clock}-${text}`, text, source: "voice" });
+  }
+  function clicks(rig: ReturnType<typeof makeRig>) {
+    return rig.requests.filter(r => r.type === "act.request" && (r.payload as ActRequest).action.op === "click");
+  }
+  it("rejects spoken near phrases then accepts a fresh exact hold", async () => {
+    const rig = makeRig();
+    await arm(rig);
+    for (const phrase of ["yes", "submit form"]) {
+      await finishSpeech(rig);
+      await spoken(rig, phrase);
+      expect(clicks(rig)).toHaveLength(0);
+    }
+    await finishSpeech(rig);
+    await spoken(rig, "submit survey");
+    expect(clicks(rig)).toHaveLength(1);
+  });
+  it("invalidates capture when tracked rate speech starts, then allows fresh recovery", async () => {
+    const rig = makeRig();
+    await arm(rig);
+    await finishSpeech(rig);
+    await rig.handle("voice", "ptt", { state: "start" });
+    await rig.handle("voice", "settings", { outputMode: "agent-voice", rate: 1.26 });
+    await finishSpeech(rig);
+    await rig.handle("voice", "ptt", { state: "end" });
+    await rig.handle("voice", "utterance", { utteranceId: "stale-rate", text: "submit survey", source: "voice" });
+    expect(clicks(rig)).toHaveLength(0);
+    await finishSpeech(rig);
+    await spoken(rig, "submit survey");
+    expect(clicks(rig)).toHaveLength(1);
+  });
+  it.each(["cooldown", "output failure", "connection replacement", "page edit"])("rejects capture after %s", async (reason) => {
+    const rig = makeRig();
+    await arm(rig);
+    await finishSpeech(rig);
+    if (reason === "cooldown") rig.clock -= 500;
+    await rig.handle("voice", "ptt", { state: "start" });
+    if (reason === "output failure") {
+      await rig.handle("voice", "settings", { outputMode: "agent-voice", rate: 0.79 });
+      const ack = rig.frames("speak").at(-1)!;
+      await rig.handle("voice", "speak.done", { speakId: ack.payload.speakId, interrupted: true });
+      expect(rig.session.pendingGatedAction).toBeNull();
+    }
+    if (reason === "connection replacement") rig.session.voiceConnected = true;
+    if (reason === "page edit") await rig.handle("extension", "page.changed", {
+      tabId: rig.snapshot.tabId, url: rig.snapshot.url, reason: "mutation", structuralHash: rig.snapshot.structuralHash,
+    });
+    rig.clock += 1000;
+    await rig.handle("voice", "ptt", { state: "end" });
+    await rig.handle("voice", "utterance", { utteranceId: `invalid-${reason}`, text: "submit survey", source: "voice" });
+    expect(clicks(rig)).toHaveLength(0);
+  });
+  it("preserves a quiet armed grant through a real PTT capture and submits once", async () => {
+    const rig = makeRig();
+    await arm(rig);
+    const prompt = rig.frames("speak").findLast(f => f.payload.category === "confirm-prompt")!;
+    await rig.handle("voice", "speak.done", { speakId: prompt.payload.speakId, interrupted: false });
+    rig.clock += 1000;
+    const grantId = rig.session.pendingGatedAction?.grantId;
+    await rig.handle("voice", "ptt", { state: "start" });
+    await rig.handle("voice", "ptt", { state: "end" });
+    expect(rig.session.pendingGatedAction?.grantId).toBe(grantId);
+    await rig.handle("voice", "utterance", { utteranceId: "spoken-exact", text: "submit survey", source: "voice" });
+    expect(rig.requests.filter(r => r.type === "act.request" && (r.payload as ActRequest).action.op === "click")).toHaveLength(1);
+    await rig.handle("voice", "utterance", { utteranceId: "spoken-replay", text: "submit survey", source: "voice" });
+    expect(rig.requests.filter(r => r.type === "act.request" && (r.payload as ActRequest).action.op === "click")).toHaveLength(1);
+  });
   it("does not arm from a client completion when the selected output has no completion signal", async () => {
     const rig = makeRig();
     rig.session.outputMode = "screen-reader";

@@ -66,6 +66,7 @@ export class Session {
   #voiceConnected = false;
   voiceEpoch = 0;
   speechRevision = 0;
+  lastSpeechDoneAt: number | null = null;
   speechRate = 1;
   voiceCapture: { epoch: number; eligible: boolean; ended: boolean; startedAt: number; speechRevision: number; snapshotRevision: number; grantId: string | null } | null = null;
   get voiceConnected(): boolean { return this.#voiceConnected; }
@@ -77,6 +78,7 @@ export class Session {
       this.pendingGatedAction = null;
       this.#speech.clear();
       this.activeSpeakId = null;
+      this.lastSpeechDoneAt = null;
       this.speechRate = 1;
     }
     this.#voiceConnected = value;
@@ -116,8 +118,12 @@ export class Session {
       !Number.isFinite(completedAt)
     ) return false;
     this.#speech.set(speakId, { ...speech, completedAt, interrupted });
+    this.lastSpeechDoneAt = completedAt;
     if (this.activeSpeakId === speakId) this.activeSpeakId = null;
     return true;
+  }
+  hasOutstandingSpeech(): boolean {
+    return [...this.#speech.values()].some(speech => speech.completedAt === null);
   }
 
   /** Drop a speech whose selected output accepted it but cannot report when playback finished. */
