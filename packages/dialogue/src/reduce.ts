@@ -6,7 +6,7 @@ import { orientationText, untrustedInstructionWarningText } from "./templates";
 import { fillableFields } from "./fields";
 import { continueProfileBatch, continueUndo, handleActResult, handleChangeUtterance, handleFillUtterance, handleOptionPick, handleProfileFillUtterance, handleReadUtterance, handleSpellUtterance, handleUndoUtterance } from "./read-fill";
 import { handleArmedUtterance, handleReadbackUtterance, handleSubmitFlow, handleSubmitUtterance } from "./submit";
-import { classifyLongUtterancePrivacy } from "./sensitive";
+import { classifyUtterancePrivacy } from "./sensitive";
 
 // Pure grammar-first reducer. No IO, no clock. Page text (the title) is data and is sanitized
 // before it is spoken; only counts are spoken, never field labels or values.
@@ -112,12 +112,12 @@ function reduceEvent(
   if (state.mode === "awaiting-confirm") return handleArmedUtterance(state, event, ctx);
   if (state.mode === "reading-back") return handleReadbackUtterance(state, event, ctx);
   if (state.mode === "executing") return { state, effects: [] };
-  const longUtterancePrivacy = classifyLongUtterancePrivacy(raw, ctx.form, state.currentFieldId);
-  if (longUtterancePrivacy === "sensitive") {
+  const utterancePrivacy = classifyUtterancePrivacy(raw, ctx.form, state.currentFieldId);
+  if (utterancePrivacy === "sensitive") {
     return answer(state, "Sensitive information must be typed directly. Please repeat your command without including it.");
   }
-  if (longUtterancePrivacy === "unknown") {
-    return answer(state, "I can't safely process a long request until the page is available. Please reconnect and try again.");
+  if (utterancePrivacy === "unknown") {
+    return answer(state, "I can't safely process a request until the page is available. Please reconnect and try again.");
   }
   if (raw.length > 200) {
     return { state, effects: [{ kind: "parseIntent", text: raw }] };

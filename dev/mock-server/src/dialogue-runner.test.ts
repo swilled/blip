@@ -287,6 +287,72 @@ describe("real voice dialogue runner", () => {
     expect(session.busy).toBe(false);
   });
 
+  it("blocks a short sensitive disclosure before transcript or model routing without a matching field", async () => {
+    let clock = 0;
+    const sentinel = "private-short-sentinel-38461";
+    const { hub, sent } = recordingHub();
+    const session = new Session("fake");
+    session.model = form;
+    session.extensionConnected = true;
+    session.stale = false;
+    let intentCalls = 0;
+    const handlers = createDialogueHandlers({
+      gate: createStubGate(() => clock),
+      now: () => clock,
+      parseIntent: async () => { intentCalls += 1; },
+    });
+    for (const [index, text] of [
+      `the password is ${sentinel}`,
+      `fill password is ${sentinel}`,
+      `spell the password is ${sentinel}`,
+    ].entries()) {
+      const ctx = voiceContext(hub, session, message("utterance", {
+        utteranceId: `short-sensitive-no-field-${index}`,
+        text,
+        source: "typed",
+      }));
+      await handlers.utterance?.(ctx);
+    }
+
+    expect(sent.filter((frame) => frame.type === "transcript").map((frame) => frame.payload)).toEqual(
+      [0, 1, 2].map((index) => ({
+        utteranceId: `short-sensitive-no-field-${index}`,
+        heardAs: "[sensitive entry withheld]",
+        routedTo: "grammar",
+      })),
+    );
+    expect(JSON.stringify(sent)).not.toContain(sentinel);
+    expect(intentCalls).toBe(0);
+  });
+
+  it("fails closed for opaque short utterances when no page is available", async () => {
+    let clock = 0;
+    const sentinel = "opaque-short-sentinel-51608";
+    const { hub, sent } = recordingHub();
+    const session = new Session("fake");
+    let intentCalls = 0;
+    const handlers = createDialogueHandlers({
+      gate: createStubGate(() => clock),
+      now: () => clock,
+      parseIntent: async () => { intentCalls += 1; },
+    });
+    const ctx = voiceContext(hub, session, message("utterance", {
+      utteranceId: "opaque-short-no-page",
+      text: sentinel,
+      source: "typed",
+    }));
+
+    await handlers.utterance?.(ctx);
+
+    expect(sent.find((frame) => frame.type === "transcript")?.payload).toEqual({
+      utteranceId: "opaque-short-no-page",
+      heardAs: "[sensitive entry withheld]",
+      routedTo: "grammar",
+    });
+    expect(JSON.stringify(sent)).not.toContain(sentinel);
+    expect(intentCalls).toBe(0);
+  });
+
   it("withholds sensitive dictation from transcript, speech, reducer state, and intent parsing", async () => {
     let clock = 0;
     const sentinel = "secret-sentinel-82641";
@@ -318,11 +384,14 @@ describe("real voice dialogue runner", () => {
 
     await utter(`change password to ${sentinel}${"x".repeat(205)}`);
     await utter(`change password to ${sentinel}`);
+    await utter(sentinel);
     await utter("done");
 
     const transcript = sent.filter((frame) => frame.type === "transcript").map((frame) => frame.payload);
     expect(transcript[0]).toEqual({ utteranceId: "sensitive-0", heardAs: "[sensitive entry withheld]", routedTo: "grammar" });
     expect(transcript[1]).toEqual({ utteranceId: "sensitive-1", heardAs: "[sensitive entry withheld]", routedTo: "grammar" });
+    expect(transcript[2]).toEqual({ utteranceId: "sensitive-2", heardAs: "[sensitive entry withheld]", routedTo: "grammar" });
+    expect(transcript[3]).toEqual({ utteranceId: "sensitive-3", heardAs: "done", routedTo: "grammar" });
     expect(JSON.stringify(sent)).not.toContain(sentinel);
     expect(session.lastSpoken).not.toContain(sentinel);
     expect(intentCalls).toBe(0);
@@ -361,6 +430,42 @@ describe("real voice dialogue runner", () => {
     expect(intentCalls).toBe(0);
     expect(sent.some((frame) => frame.type === "speak"
       && (frame.payload as { text: string }).text.includes("until the page is available"))).toBe(true);
+  });
+
+  it("redacts arbitrary dictation if a sensitive field loses its page context", async () => {
+    let clock = 0;
+    const sentinel = "stale-sensitive-sentinel-64017";
+    const { hub, sent } = recordingHub();
+    const session = new Session("fake");
+    session.model = FormModel.parse({
+      ...form,
+      fields: form.fields.map((field) => field.id === "e2"
+        ? { ...field, label: "Password", type: "password", sensitive: "password", hasValue: true, value: null }
+        : field),
+    });
+    session.extensionConnected = true;
+    session.stale = false;
+    let intentCalls = 0;
+    const handlers = createDialogueHandlers({
+      gate: createStubGate(() => clock),
+      now: () => clock,
+      parseIntent: async () => { intentCalls += 1; },
+    });
+    const utter = async (id: string, text: string): Promise<void> => {
+      const ctx = voiceContext(hub, session, message("utterance", { utteranceId: id, text, source: "typed" }));
+      await handlers.utterance?.(ctx);
+    };
+
+    await utter("sensitive-focus-before-stale", "change password");
+    session.stale = true;
+    await utter("sensitive-focus-after-stale", sentinel);
+
+    expect(sent.filter((frame) => frame.type === "transcript").map((frame) => frame.payload)).toEqual([
+      { utteranceId: "sensitive-focus-before-stale", heardAs: "[sensitive entry withheld]", routedTo: "grammar" },
+      { utteranceId: "sensitive-focus-after-stale", heardAs: "[sensitive entry withheld]", routedTo: "grammar" },
+    ]);
+    expect(JSON.stringify(sent)).not.toContain(sentinel);
+    expect(intentCalls).toBe(0);
   });
 
   it("normalizes punctuation variants of sensitive terms before model routing", async () => {

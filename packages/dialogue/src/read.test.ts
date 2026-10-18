@@ -7,6 +7,7 @@ import { initialState } from "./state";
 import { reduce } from "./reduce";
 import { requiredEmptyText } from "./templates";
 import { profileFieldMatches, profileTokenMatch } from "./fields";
+import { classifyUtterancePrivacy } from "./sensitive";
 
 const survey = FormModel.parse(surveyJson);
 const broken = FormModel.parse(brokenJson);
@@ -30,6 +31,25 @@ function readSecondSurveyBatch() {
 }
 
 describe("dialogue read and option picks", () => {
+  it("only allows sensitive-field handoff commands outside confirmation/read-back modes", () => {
+    const sensitive = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e2"
+        ? { ...field, label: "Password", type: "password", sensitive: "password", hasValue: true, value: null }
+        : field),
+    });
+    expect(classifyUtterancePrivacy("change password to private-sentinel", sensitive, null, true)).toBe("safe");
+    expect(classifyUtterancePrivacy("change password to private-sentinel", sensitive, null, false)).toBe("sensitive");
+
+    const nonKeywordSensitiveLabel = FormModel.parse({
+      ...survey,
+      fields: survey.fields.map((field) => field.id === "e2"
+        ? { ...field, label: "Security answer", sensitive: "otp", hasValue: true, value: null }
+        : field),
+    });
+    expect(classifyUtterancePrivacy("change security answer to private-sentinel", nonKeywordSensitiveLabel, null, false)).toBe("sensitive");
+  });
+
   it("maps supported autocomplete detail tokens regardless of section and shipping or billing token order", () => {
     const withAutocomplete = FormModel.parse({
       ...survey,

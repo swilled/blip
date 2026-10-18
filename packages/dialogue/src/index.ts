@@ -1,6 +1,6 @@
 export { reduce } from "./reduce";
-export { classifyLongUtterancePrivacy } from "./sensitive";
-export type { LongUtterancePrivacy } from "./sensitive";
+export { classifyUtterancePrivacy } from "./sensitive";
+export type { UtterancePrivacy } from "./sensitive";
 export type { Effect, DialogueState, DialogueContext } from "./effects";
 export type { DialogueEvent } from "./events";
 export { cancelEffect, dialogueStateName, initialState, speakEffect } from "./state";
