@@ -211,7 +211,7 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 | 4. AGY Subscription Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
 | 6. Browser Control Contract and Policy Proposal | 2/2 | Proposal complete; follow-on phases authorized, review pending before merge | 2026-10-18 |
-| 7. Generic Browser Control and Content Reading | 0/0 | Context captured; ready to plan | - |
+| 7. Generic Browser Control and Content Reading | 1/6 | In Progress - 07-01 complete; five plans remain | - |
 | 8. Multi-Step Web Reading and Drafting | 0/0 | Planned after Phase 7 | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
@@ -233,7 +233,15 @@ Plans:
 **Goal:** Implement core-owned browser primitives from the Phase 6 proposal so users can direct Blip from a new tab to supported sites, navigate, read bounded page content, follow selected links, search, switch tabs, scroll, and find text. Every target must come from the user's words or a user-selected live page item. Page text stays untrusted and actions remain in the Executor.
 **Requirements**: No shared requirement changes in this phase
 **Depends on:** Phase 6 proposal; core owner has authorized local implementation. Written voice-owner review remains required before shared protocol or live policy changes merge.
-**Plans:** 0 plans
+**Plans:** 1/6 plans executed
+
+Plans:
+- [x] 07-01-PLAN.md — Add closed browser operation and content result schemas
+- [ ] 07-02-PLAN.md
+- [ ] 07-03-PLAN.md
+- [ ] 07-04-PLAN.md
+- [ ] 07-05-PLAN.md
+- [ ] 07-06-PLAN.md
 
 ### Phase 8: Multi-step web reading and drafting
 
