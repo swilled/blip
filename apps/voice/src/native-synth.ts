@@ -14,7 +14,7 @@ export function createNativeSynth(deps: {
   let preferred: string | null = null;
   function choose(): SpeechSynthesisVoice | null {
     const voices = ss.getVoices();
-    const requested = voices.find(v => v.voiceURI === preferred && /^en(?:-|$)/i.test(v.lang));
+    const requested = voices.find(v => v.localService && v.voiceURI === preferred && /^en(?:-|$)/i.test(v.lang));
     if (requested) { chosen = requested; return chosen; }
     if (chosen && voices.some(v => v.voiceURI === chosen!.voiceURI)) return chosen;
     const english = voices.filter(v => /^en(?:-|$)/i.test(v.lang)).sort((a, b) => a.name.localeCompare(b.name));
@@ -39,7 +39,7 @@ export function createNativeSynth(deps: {
   const voicesChanged = () => { if (choose()) launch(); };
   ss.addEventListener("voiceschanged", voicesChanged);
   return {
-    getVoices: () => ss.getVoices().filter(v => /^en(?:-|$)/i.test(v.lang)),
+    getVoices: () => ss.getVoices().filter(v => v.localService && /^en(?:-|$)/i.test(v.lang)),
     setVoice(uri) { preferred = uri; chosen = null; },
     speak(text, handlers, rate) {
       if (current) { handlers.onerror("audio-busy"); return; }

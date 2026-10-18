@@ -19,7 +19,7 @@ describe("native synthesis lifecycle", () => {
   it("applies a chosen voice to the next item without disturbing current speech or rate", () => {
     const t = setup();
     const zira = { ...voice, voiceURI: "local-zira", name: "Microsoft Zira" };
-    t.setVoices([voice, zira]); t.speak(1.26); vi.advanceTimersByTime(0);
+    t.setVoices([voice, zira, { ...voice, name: "Network voice", voiceURI: "remote", localService: false }]); t.speak(1.26); vi.advanceTimersByTime(0);
     t.synth.setVoice(zira.voiceURI);
     expect(t.spoken[0].voice).toBe(voice); expect(t.spoken[0].rate).toBe(1.26);
     t.spoken[0].onend!({} as never); t.speak(0.5); vi.advanceTimersByTime(0);
