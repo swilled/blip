@@ -208,7 +208,7 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. AGY Subscription Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
-| 6. Browser Control Contract and Policy Proposal | 0/2 | Plans drafted; checker revision in progress | - |
+| 6. Browser Control Contract and Policy Proposal | 0/2 | Executing proposal and evidence documents | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 
