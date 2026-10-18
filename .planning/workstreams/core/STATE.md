@@ -153,6 +153,10 @@ None yet.
 - [Phase 5] Technical AGY acceptance passes. Written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain release gates.
 - [Phase 5] Teammate review and promotion of the integration branch to `main` are required before `demo-safe` tagging.
 
+### Roadmap Evolution
+
+- Phase 6 added: Browser control contract and policy proposal.
+
 ## Deferred Items
 
 Items acknowledged and deferred at milestone close, most recent first:
@@ -163,6 +167,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T01:58:15Z
-Stopped at: Reconciled Phase 5 AGY evidence and reran the full test suite, typecheck, extension/voice builds, fake-browser E2Es, isolated extension/server smoke, and the full fake-brain launcher smoke. The latest smoke emitted the pass marker with extension and voice connected and the synthetic survey selected. Commits 25015c7, c6dacf7, and the smoke-evidence documentation update are pushed to the integration branch. Written M0 sign-off, teammate review, mainline promotion, and tagging remain.
-Resume file: None
+Last session: 2026-10-18T04:16:17Z
+Stopped at: Captured Phase 6 browser-control decisions in context and discussion log. Next: plan Phase 6's additive protocol and policy proposal. Phase 5 technical acceptance is complete; written M0 sign-off, teammate review, mainline promotion, and tagging remain unchanged.
+Resume file: .planning/workstreams/core/phases/06-browser-control-contract-and-policy-proposal/06-CONTEXT.md
