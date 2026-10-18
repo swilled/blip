@@ -1,6 +1,6 @@
 # Core Release Checklist
 
-**Updated:** 2026-10-18 01:51 UTC
+**Updated:** 2026-10-18 01:58 UTC
 **Branch:** `integration/ho8-voice-gate`
 **Branch tip at reconciliation start:** `ac4fb1c`
 **Release state:** Technical Phase 5 acceptance is ready for human review. Do not tag or merge until the remaining written sign-off and teammate review gates are complete.
@@ -14,7 +14,7 @@ This checklist records the current evidence and separates it from the remaining 
 - [x] **Full AGY I3:** 05-26 verified exact repair identity, AGY cache reuse, intent, fictional fills, tracked read-back, exact phrase, and exactly one local submit. See [the revalidation summary](phases/05-hostile-pages-real-web-and-freeze/05-AGY-REVALIDATION-SUMMARY.md).
 - [x] **Launcher cache prewarm:** AGY refreshed the exact `.chrome-profile/demo-repair-cache-v1` entry in 05-27; 05-29 loaded it in a fresh session with zero repair prompts.
 - [x] **Fake-brain browser E2Es:** `demo-form.e2e.test.ts` and `voice-warning.e2e.test.ts` passed on the current code.
-- [~] **One-command smoke:** a prior run emitted the pass marker. The latest rerun did not emit its completion marker after Edge reused an existing profile; the user's Edge process was left open. Treat a fresh marker as outstanding before freeze.
+- [x] **One-command smoke:** `npm run demo -- --brain=fake --smoke` emitted the pass marker with extension and voice connected and the synthetic survey selected. The dedicated profile was confirmed free before launch; the user's regular Edge window was left open.
 
 ## Automated checks from this reconciliation
 
@@ -23,6 +23,7 @@ This checklist records the current evidence and separates it from the remaining 
 - [x] `npm run ext:build`.
 - [x] `npm run build --workspace @blip/voice`.
 - [x] `npm run ext:smoke` — fresh isolated Edge profile connected the production extension to the local server. This verifies the extension/server handshake and does not replace the outstanding full demo-launcher smoke.
+- [x] `npm run demo -- --brain=fake --smoke` — full launcher readiness passed, including extension, voice, and synthetic survey selection.
 - [x] Focused repair diagnostics and cache-refresh tests - 8 passed; 2 browser-gated tests skipped in the non-live run.
 - [x] Offline I3 preflight for 05-29 - passed with the fake brain, zero provider prompts, and an isolated empty cache.
 - [x] Bounded live AGY checks 05-13 (hostile refusal), 05-26 (full I3), and 05-29 (launcher-cache reload) passed.
@@ -44,4 +45,4 @@ This checklist records the current evidence and separates it from the remaining 
 
 ## Current recommendation
 
-The branch is technically ready for human review. Keep the GSD phase and milestone open until written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging are complete. The latest one-command smoke rerun remains inconclusive because Edge reused an existing profile, but an earlier run emitted the pass marker and current fake-brain browser E2Es pass.
+The branch is technically ready for human review. Keep the GSD phase and milestone open until written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging are complete. Full fake-brain launcher smoke, isolated extension/server smoke, and fake-browser E2Es now pass.

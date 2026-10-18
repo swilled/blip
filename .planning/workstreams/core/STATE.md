@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: AGY hostile-page, full I3, launcher-cache, fake browser E2E, full test, and build acceptance pass on integration/ho8-voice-gate. Written M0 protocol sign-off, teammate review, and mainline promotion remain before demo-safe tagging. Public-form DEMO-03 is deferred because this hackathon has no URL.
 stopped_at: Reconciled Phase 5 after AGY hostile check 05-13, full I3 05-26, launcher-cache refresh 05-27 and fresh reload 05-29, plus current full tests. See RELEASE-CHECKLIST.md.
-last_updated: "2026-10-18T01:51:43Z"
+last_updated: "2026-10-18T01:58:15Z"
 progress:
   total_phases: 5
   completed_phases: 3
@@ -20,7 +20,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** All 60 original roadmap plans have been executed. Phase 5 technical acceptance passes on the current AGY server brain (Gemini 3.8 Flash Low for intent, Medium for repair): hostile-page refusal, full local I3, exact launcher-cache prewarm/reload, fake-brain browser E2Es, full tests, typecheck, and builds. The latest one-command smoke rerun was inconclusive because Edge reused an existing profile; an earlier smoke emitted the pass marker. Written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain release gates. Public-form DEMO-03 is deferred.
+**Current focus:** All 60 original roadmap plans have been executed. Phase 5 technical acceptance passes on the current AGY server brain (Gemini 3.8 Flash Low for intent, Medium for repair): hostile-page refusal, full local I3, exact launcher-cache prewarm/reload, fake-brain browser E2Es, full tests, typecheck, builds, isolated extension/server smoke, and full fake-brain launcher smoke. Written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain release gates. Public-form DEMO-03 is deferred.
 
 ## Current Position
 
@@ -163,6 +163,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T01:51:43Z
-Stopped at: Reconciled Phase 5 AGY evidence and reran the full test suite, typecheck, extension/voice builds, fake-browser E2Es, and isolated extension/server smoke. Commits 25015c7 and c6dacf7 are pushed to the integration branch for teammate review. Hostile refusal, full I3, launcher cache, and technical acceptance pass. Written M0 sign-off, teammate review, mainline promotion, tagging, and a fresh full launcher smoke remain.
+Last session: 2026-10-18T01:58:15Z
+Stopped at: Reconciled Phase 5 AGY evidence and reran the full test suite, typecheck, extension/voice builds, fake-browser E2Es, isolated extension/server smoke, and the full fake-brain launcher smoke. The latest smoke emitted the pass marker with extension and voice connected and the synthetic survey selected. Commits 25015c7, c6dacf7, and the smoke-evidence documentation update are pushed to the integration branch. Written M0 sign-off, teammate review, mainline promotion, and tagging remain.
 Resume file: None

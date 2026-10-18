@@ -32,7 +32,7 @@
   "next": {
     "command": "/gsd-audit-milestone core",
     "label": "Reconcile core v1 acceptance and release evidence",
-    "reason": "Phase 5 technical acceptance passes: AGY hostile-page refusal, full local I3, launcher-cache prewarm/reload, fake-browser E2Es, full tests, typecheck, and production builds. GSD closeout awaits written M0 sign-off, teammate review, mainline promotion, and demo-safe tagging; the latest one-command smoke rerun remains inconclusive."
+    "reason": "Phase 5 technical acceptance passes: AGY hostile-page refusal, full local I3, launcher-cache prewarm/reload, full fake-brain launcher smoke, fake-browser E2Es, full tests, typecheck, and production builds. GSD closeout awaits written M0 sign-off, teammate review, mainline promotion, and demo-safe tagging."
   },
-  "updated_at": "2026-10-18T01:51:43Z"
+  "updated_at": "2026-10-18T01:58:15Z"
 }
