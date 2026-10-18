@@ -1,24 +1,23 @@
 ---
-status: waiting_on_human
+status: complete
 phase: 03-full-command-set-with-real-claude
 plan: 04
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 # Plan 03-04 Checkpoint
 
-The human I3 run is recorded in `03-UAT.md` as approved. Plan 03-04 is not complete because its blocking precondition requires Phase 2 I2 to have passed its own human run with the connected Gate/Executor.
+The blocking human I3 run and its Phase 2 I2 precondition are complete. The I3 outcome is recorded in `03-UAT.md`; the separate connected I2 outcome is recorded in Phase 2's `02-VERIFICATION.md`.
 
 ## Confirmed
 
-- Core reports the HO-8 Gate/Executor integration landed. Core's integrated checkout has automated coverage for the tracked dialogue runner, exact `submit survey` phrase, one-use grant dispatch, and page-result handling.
-- The team-owned Microsoft Form was available and identified by Blip during the reported Phase 3 run.
-- The user reported that the exact-phrase submit interaction said “confirmation phrase received.” That report does not establish that the local I2 form submitted exactly once or that Blip read the page's actual result.
-- The latest Phase 2 verification in this workstream still records the successful connected-gate I2 human run as `human_needed`.
-- On 2026-10-17, after the integrated local demo was reopened, the user confirmed that the page displayed `Local submit observed. No data was sent.` after the exact-phrase flow. The local report contains two extension-triggered synthetic submit events, 39 seconds apart, and two page result events. This confirms the connected path reaches the local result handler; it does not by itself establish one submit per armed grant or rejection of `yes` and near-phrases.
+- HO-8 Gate/Executor integration landed in core, including tracked speech and exact-phrase gate handling.
+- The team-owned Microsoft Form was identified by Blip. Its required empty fields were reported in order: Employment type, Department, Leave type, Leave date, and Return date.
+- Profile fill reported the form fields it skipped; no clear autocomplete profile matches were available, so leaving the form unchanged was expected.
+- On the seeded injection page, Blip warned before describing the page; the user repeated the fresh check and confirmed no gate appeared.
+- The user reported the remaining Phase 3 checks worked. Individual command and privacy sub-check transcripts were not captured, so the UAT record keeps that evidence limit explicit.
+- On the separate I2 local survey run, both `yes` and `submit form` left the BLOCKED prompt active with no submission. Exact `submit survey` submitted once. The local result was `Local submit observed. No data was sent.`
 
-## Blocking precondition
+## Result
 
-Before Plan 03-04 can be completed, record the remaining connected-gate I2 checks: `yes` and a near-phrase such as `submit form` leave the confirmation blocked with no submission, then the exact spoken phrase submits once and Blip reads the actual page result. The local success-result path is now observed; the exact-only refusal checks and one-submit-per-grant evidence remain pending.
-
-Until that evidence is recorded, leave Phase 2's human-needed status intact and do not create a completed `03-04-SUMMARY.md` or mark Phase 3 complete.
+The Plan 03-04 precondition is satisfied. Phase 2's exact-phrase criterion is separately verified against the connected local Gate/Executor path. The result is a local synthetic submit only; no external form data was sent.

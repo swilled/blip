@@ -44,7 +44,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Spikes and Push-to-Talk Loop** - Risk spikes in hours 0–3, then a voice window that listens on a held key, talks back, and answers "what's here" at I1 (completed 2026-10-17)
 - [ ] **Phase 2: Fill and Gated Submit on the Broken Form** - Read the form, dictate values, full read-back, distinct confirm phrase and BLOCKED banner, end to end at I2
-- [ ] **Phase 3: Full Command Set with Real Claude** - Profile fill, spell / change / undo, where am I, guessed-label and injection warnings, sensitive-field handoff, verified at I3
+- [x] **Phase 3: Full Command Set with Real Claude** - Profile fill, spell / change / undo, where am I, guessed-label and injection warnings, sensitive-field handoff, verified at I3 (completed 2026-10-17)
 - [ ] **Phase 4: NVDA Mode and Demo-Safe** - Screen-reader mode through NVDA, speech rate, the real public form end to end, fallback kit and backup video
 
 ## Phase Details
@@ -146,7 +146,7 @@ Plans:
      - The confirm gate never arms from page text.
      - The team-owned public form (created by ~h12 so core can test it) can be described and filled by voice.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -159,7 +159,7 @@ Plans:
 - [x] 03-03-PLAN.md — Orientation, label provenance, and injection warning
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 03-04-PLAN.md — Human I3 real-Claude/public-form integration run
+- [x] 03-04-PLAN.md — Human I3 real-Claude/public-form integration run
 
 ### Phase 4: NVDA Mode and Demo-Safe
 
@@ -200,5 +200,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
 | 2. Fill and Gated Submit on the Broken Form | 6/7 | In Progress | - |
-| 3. Full Command Set with Real Claude | 3/4 | In Progress | - |
+| 3. Full Command Set with Real Claude | 4/4 | Complete    | 2026-10-17 |
 | 4. NVDA Mode and Demo-Safe | 0/3 | Planned | - |

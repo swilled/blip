@@ -1,9 +1,9 @@
 ---
 phase: 02-fill-and-gated-submit-on-the-broken-form
 workstream: voice
-verified: 2026-10-17T18:56:51Z
-status: human_needed
-score: 44/45 truths verified; production submit pending core HO-8
+verified: 2026-10-18T01:56:42Z
+status: passed
+score: 45/45 truths verified
 covered_files:
   - .gitignore
   - .planning/workstreams/voice/phases/02-fill-and-gated-submit-on-the-broken-form/02-01-PLAN.md
@@ -60,43 +60,45 @@ covered_files:
   - packages/dialogue/src/read.test.ts
   - packages/dialogue/src/reduce.test.ts
   - packages/dialogue/src/reduce.ts
+  - packages/dialogue/src/sensitive.ts
   - packages/dialogue/src/state.ts
   - packages/dialogue/src/submit.test.ts
   - packages/dialogue/src/submit.ts
   - packages/dialogue/src/templates.test.ts
   - packages/dialogue/src/templates.ts
   - scripts/gen-survey-form-model.ts
-covered_digest: "v3:sha256:97445af790f58f73db0dcf77a672902c9fc98f71ee4c62eb39c2db7afafc0d7e"
+covered_digest: "v3:sha256:5f14ded4b2c4df3a795929989ede82bcf4637b700ca9636b7d72b31cad12ce01"
 behavior_unverified: 0
 overrides_applied: 0
+decision_coverage:
+  honored: 9
+  total: 9
+  not_honored: []
 deferred:
-  - truth: "A successful survey submission is accepted only after the exact spoken phrase."
-    addressed_in: "Core Phase 3: Gated Submit and Result Reading"
-    evidence: "Core ROADMAP.md Phase 3 success criterion 5 requires the I2 flow to submit after the exact phrase and read back the page result; voice HO-8 records the pending Gate/Executor integration."
-human_verification:
-  - test: "After core HO-8 lands, run I2 with the grant-bound Gate/Executor on the local survey. Complete an uninterrupted read-back, wait for Blip to finish, then say 'submit survey'; also try 'yes' and near-phrases."
-    expected: "Only the exact phrase from the voice channel authorizes one submission; generic confirmations remain refused, and Blip reports the page's actual result."
-    why_human: "This workstream's wired GatePort is deliberately fail-closed and has no success path. The cross-workstream production Executor and real page submission are not present in the Phase 2 code."
+  - truth: "Blip reads the page result after submission."
+    addressed_in: "Phase 4"
+    evidence: "Voice ROADMAP Phase 4 depends on RES-01 and requires the confirmation to be read aloud. This is outside Phase 2's success criteria."
 ---
 
 # Phase 2: Fill and Gated Submit on the Broken Form — Verification Report
 
 **Phase goal:** As a person completing the self-hosted survey, I want to hear its fields, fill them by dictation, review my answers, and have submission accepted only after I say submit survey, so that a generic confirmation like yes can never submit the form.
-**Verified:** 2026-10-17T18:56:51Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Verified:** 2026-10-18T01:56:42Z
+**Status:** passed
+**Verification pass:** Fresh goal-backward refresh after shared Phase 3 privacy changes. All seven Phase 2 plans' artifact and key-link checks passed again (20/20 artifacts; 11/11 links). The exact-phrase timing boundary and seven shared privacy regressions were rerun. The connected I2 observation below remains the human evidence for successful exact-phrase submission; the tracked local runner still defaults to the refusal-only stub.
 
 ## User Flow Coverage
 
 | Step | Expected | Evidence | Status |
 |---|---|---|---|
-| Open and reset | The local broken survey opens empty with a fresh session and fictional profile. | `dev/mock-server/src/reset.ts` restores the template and restarts the owned demo process; the user confirmed the latest reset opened the survey and that reload, Back, and tab restore leave fields empty. Reset lifecycle test passed. | ✓ VERIFIED |
-| Hear the fields | “Read the form” speaks fields in page order, identifies required fields, and numbers non-placeholder select/radio choices. | `packages/dialogue/src/read-fill.ts`; the read/options tests passed; the user confirmed the live Chrome run. | ✓ VERIFIED |
-| Dictate and review | Named/current dictation fills the live field, echo uses the page-observed value, and read-back includes all values and required-empty items with sensitive values masked. | `dev/mock-server/extension/content.js` returns observed DOM values; `apps/server/src/voice/dialogue-runner.ts` feeds them into reducer events; the end-to-end runner test and human run passed. | ✓ VERIFIED |
-| Request submission | Submit triggers a full read-back and distinct prompt; while waiting, the banner and blocked earcon appear; “yes” and near-phrases are refused. | `packages/dialogue/src/submit.ts`, `apps/voice/src/banner.ts`; boundary and invariant tests passed; the user confirmed the live behavior. | ✓ VERIFIED |
-| Say the phrase | The exact phrase alone reaches the gate. The stub then refuses and leaves the page unsubmitted. | `submit.ts` emits redeem only after exact text and the quiet window; `apps/server/src/voice/gate-port.ts` always returns `gate-not-connected`; human run confirmed the refusal and unchanged page. | ✓ VERIFIED for the fail-closed I2 path |
-| See a successful result | A production submission succeeds only after the exact phrase and Blip reads the page's result. | Not implemented in this workstream: HO-8's core Gate/Executor is pending. See Deferred Items and Human Verification. | ⚠️ HUMAN NEEDED |
-| Outcome: “yes” never submits | Generic confirmation cannot produce redeem; only exact phrase can request redemption, and the development gate cannot execute it. | `packages/dialogue/src/confirm.invariant.test.ts` passed its 500-seed walk; exact timing boundary test passed; I2 user run confirmed “yes” did not submit. | ✓ VERIFIED |
+| Open and reset | The local survey opens empty with a fresh demo session and fictional profile. | `dev/mock-server/src/reset.ts`, the form's load/history reset handlers, reset command wiring, reset lifecycle test, and earlier manual reset confirmation recorded for Phase 2. | ✓ VERIFIED |
+| Hear the fields | “Read the form” speaks fields in page order, with required status and numbered non-placeholder choices. | `packages/dialogue/src/read-fill.ts`; selected read test passed; the prior Phase 2 human I2 record reports the live read flow. | ✓ VERIFIED |
+| Dictate and review | Named/current dictation uses the page-observed value for its echo; read-back includes values, required empties, and masked sensitive fields. | `dev/mock-server/extension/content.js` returns observed DOM values; `dialogue-runner.ts` dispatches them into the reducer; selected runner and fill tests passed; earlier human I2 record reports live fill/read-back. | ✓ VERIFIED |
+| Request submission | Submit completes its read-back before arming; the BLOCKED prompt stays visible for refusal cases. | `packages/dialogue/src/submit.ts`, `apps/voice/src/banner.ts`, and `main.ts`; read-back ordering, banner transition, and runner tests passed; latest human I2 confirms the BLOCKED prompt remained active for both negative phrases. | ✓ VERIFIED |
+| Say the phrase | Bare “yes” and near-phrase “submit form” remain blocked; exact spoken “submit survey” submits once. | The submit reducer and seeded invariant test enforce the phrase and quiet-window conditions. In the connected local I2 run, the user confirmed both negative phrases stayed blocked with no submission, then exact “submit survey” submitted once. | ✓ VERIFIED |
+| Outcome: “yes” never submits | A generic confirmation cannot authorize the gated action. | The armed-mode test group passed 44 cases; the connected I2 user run also observed “yes” and “submit form” leave the BLOCKED prompt active without submission. | ✓ VERIFIED |
+
+The reported page result was `Local submit observed. No data was sent.` This is human-observed evidence for the local synthetic survey path only. The tracked `fixtures/forms/broken.html` instead reveals `Thank you. Confirmation BLIP-1234`, so the reported text is not source-verified against this fixture. No source or user evidence establishes that Blip spoke or read the result; this report makes no such claim.
 
 ## Goal Achievement
 
@@ -104,153 +106,178 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | The deliberately broken survey loads locally; one reset restores the empty form, fictional profile, and fresh session. | ✓ VERIFIED | `fixtures/forms/broken.html`; `dev/mock-server/src/reset.ts`; reset lifecycle test; human-confirmed reset, reload, Back, and tab restore. |
-| 2 | Read-form speaks page-ordered fields and required status; choices are numbered and selectable by number or name. | ✓ VERIFIED | `packages/dialogue/src/read-fill.ts`; read/options tests passed; user-confirmed in Chrome. |
-| 3 | Dictation fills current or named fields and echoes the value observed from the page. | ✓ VERIFIED | Extension `content.js` returns `observedValue`; runner dispatches action results into reducer; end-to-end test and human run passed. |
-| 4 | Read-back speaks every field, calls out empty required fields, and masks sensitive values. | ✓ VERIFIED | `packages/dialogue/src/templates.ts`, `submit.ts`; read-back/template tests; human-confirmed. |
-| 5 | At I2, only the exact phrase can authorize submission; a bare “yes” never submits. | ? UNCERTAIN — production integration pending | The voice reducer and runner enforce exact phrase, read-back correlation, and timing. Human I2 proves “yes” is refused and the phrase reaches the stub. The only wired GatePort refuses every redemption, so successful submit/result behavior awaits core HO-8. |
-
-**Score:** 44/45 roadmap and plan truths verified; one core-owned integration needs human verification after HO-8.
+| 1 | The deliberately broken survey loads locally; reset restores the empty form, fictional profile, and fresh session. | ✓ VERIFIED | `fixtures/forms/broken.html`, `dev/mock-server/src/reset.ts`, and reset lifecycle test; earlier manual reset confirmation. |
+| 2 | The user can hear page-ordered fields with required status, and choose numbered select/radio options by number or name. | ✓ VERIFIED | `read-fill.ts`, read tests, and prior human I2 record. |
+| 3 | The user can dictate a current or named field and hears the value observed from the page. | ✓ VERIFIED | Extension `content.js` → runner → reducer echo path; selected runner and fill tests passed; prior human I2 record. |
+| 4 | Read-back covers every field, calls out required empties, and masks sensitive values. | ✓ VERIFIED | `packages/dialogue/src/templates.ts`, `submit.ts`, submit/template tests, and prior human I2 record. |
+| 5 | Only the distinct phrase authorizes submission; “yes” and near-phrases do not submit. | ✓ VERIFIED | Reducer refusal/invariant tests plus the current connected local I2 human observation. |
 
 ### Plan-Specific Must-Haves
 
-| Plan | Truth | Status | Evidence |
-|---|---|---|---|
-| 02-01 | A deliberately broken survey exists and is served at the local fixture URL. | ✓ VERIFIED | `fixtures/forms/broken.html`; static fixture root configured by `dev/mock-server/src/run-real.ts`; generated model and form tests. |
-| 02-01 | Six controls cover placeholder-only, adjacent-text, unlabeled, select, radio, and div-button cases. | ✓ VERIFIED | `broken.html`, `broken.snapshot.json`, and `broken-form.test.ts`. |
-| 02-01 | Errors use border color only, without per-field error text. | ✓ VERIFIED | `broken.html` form validation styles/alert and structural test. |
-| 02-01 | Form values reset on load/history restoration. | ✓ VERIFIED | DOMContentLoaded/pageshow reset in `broken.html`; live reload, Back, and tab-restore human checks passed. |
-| 02-01 | Survey FormModel is generated by the baseline builder, not hand-typed. | ✓ VERIFIED | `scripts/gen-survey-form-model.ts` imports `buildBaselineFormModel`; generated JSON is schema-tested. Final generator run had no fixture diff per supplied run evidence. |
-| 02-02 | Spoken email normalization accepts valid forms and rejects invalid values before fill. | ✓ VERIFIED | `normalize.ts` and `normalize.test.ts`; end-to-end named dictation passed. |
-| 02-02 | Field resolution chooses a unique longest label or numbered unlabeled field; ambiguity is not guessed. | ✓ VERIFIED | `fields.ts`, `fields.test.ts`, `read-fill.ts`; reducer tests. |
-| 02-02 | Confirmation matching is exact token-sequence text; “yes” and near-phrases do not match. | ✓ VERIFIED | `confirm.ts`, phrase table tests, and 500-seed invariant test. |
-| 02-02 | Templates never speak values for sensitive fields. | ✓ VERIFIED | `templates.ts` and sensitive-marker assertions in template/read-back tests. |
-| 02-02 | Page-controlled labels, choices, and title are sanitized before speech. | ✓ VERIFIED | `normalize.ts`, `fields.ts`, and template sanitizer tests. |
-| 02-03 | Armed confirmation displays a prominent BLOCKED phrase banner in the reserved slot. | ✓ VERIFIED | `banner.ts`, `styles.css`, renderer tests, and human run. |
-| 02-03 | Banner clears on matching clear, socket close, or state leaving awaiting-confirm. | ✓ VERIFIED | `banner.ts` model tests and `main.ts` socket wiring; user confirmed cancel clears it. |
-| 02-03 | Voice window displays the server phrase but never decides whether it matches. | ✓ VERIFIED | `main.ts` only forwards confirm payload to `banner.ts`; no phrase matcher in voice UI. |
-| 02-03 | Blocked earcon comes only from the server earcon frame. | ✓ VERIFIED | `main.ts` message handling; banner test/source check confirms no extra armed-event earcon. |
-| 02-03 | Banner uses textContent and is not an assertive live region. | ✓ VERIFIED | `banner.ts` renderer and DOM test. |
-| 02-04 | Read-form speaks fields in order, three at a time, with required/optional status. | ✓ VERIFIED | `read-fill.ts`; read tests; human-confirmed all six fields. |
-| 02-04 | Select/radio choices are numbered and selectable by number or name. | ✓ VERIFIED | `read-fill.ts`, option tests, and human run. |
-| 02-04 | Named and current-field dictation fill the intended field. | ✓ VERIFIED | `read-fill.ts`, fill tests, runner test, and human run. |
-| 02-04 | Fill echo is derived from `act.result.observedValue`. | ✓ VERIFIED | `read-fill.ts` consumes event observed value; fake-extension integration asserts parity; human-confirmed. |
-| 02-04 | Sensitive fields produce no fill effect and instead focus the field with a type-it-yourself message. | ✓ VERIFIED | `read-fill.ts` and sensitive marker assertions in `fill.test.ts`. |
-| 02-04 | “What’s here” remains byte-identical to the existing description reply. | ✓ VERIFIED | `packages/dialogue/src/reduce.test.ts` and `dev/mock-server/src/run-real.test.ts` parity checks. |
-| 02-05 | Read-back lists every field in order, calls out empties/required, masks sensitive values, and counts missing required fields. | ✓ VERIFIED | `templates.ts`, `submit.test.ts`, template privacy tests; human-confirmed full read-back. |
-| 02-05 | Submit with required fields empty reports missing fields and does not arm. | ✓ VERIFIED | Named `submit.test.ts` case and human-confirmed no early banner. |
-| 02-05 | Confirmation arms only after correlated uninterrupted read-back completion. | ✓ VERIFIED | `submit.ts`, named correlation/interruption tests, and invariant suite. |
-| 02-05 | Bare yes, near-phrases, or phrase during the quiet window are refused with blocked earcon. | ✓ VERIFIED | Refusal table, 999/1000 ms boundary test, 500-seed invariant, and human run. |
-| 02-05 | Exact phrase requests redeem only with no outstanding speech and at least 1000 ms quiet. | ✓ VERIFIED | `confirm.ts`, `submit.ts`, named boundary test and seeded invariant. |
-| 02-05 | Armed mode never calls the model; cancel and named edits end the wait. | ✓ VERIFIED | `submit.ts`, refusal table/model assertions; human confirmed cancel/edit clears banner. |
-| 02-05 | Seeded random walk proves redeem invariant. | ✓ VERIFIED | `confirm.invariant.test.ts`: 500 seeds × 60 steps; named test passed. |
-| 02-05 | Every speak/cancel in reducer state is tracked. | ✓ VERIFIED | `state.ts`, `submit.ts`, reducer invariant assertions. |
-| 02-06 | Real mock-server path reads, fills, and reads back with page-observed echo. | ✓ VERIFIED | `dialogue-runner.ts`, `run-real.ts`, named end-to-end runner test, and human bridge run. |
-| 02-06 | Missing required fields never arm confirmation. | ✓ VERIFIED | `dialogue-runner.test.ts` and `submit.test.ts`. |
-| 02-06 | Only uninterrupted read-back completion produces the armed frame and blocked earcon. | ✓ VERIFIED | Named submit/runner tests and human run. |
-| 02-06 | Bare yes is refused; runner emits no click or gate-bearing act request. | ✓ VERIFIED | End-to-end runner test asserts no click; user confirmed refusal. |
-| 02-06 | Development gate refuses exact phrase and performs no submit. | ✓ VERIFIED | `gate-port.ts` unconditionally returns `gate-not-connected`; runner test and human run confirm page remains unsubmitted. |
-| 02-06 | Only voice-role utterances reach confirmation handling. | ✓ VERIFIED | `dialogue-runner.ts` role checks and named role-guard integration test. |
-| 02-06 | HO-8 is recorded and core-owned files are outside this voice implementation. | ✓ VERIFIED | `02-HANDOFFS.md` identifies owner and files; security/review artifacts record the ownership boundary. |
-| 02-07 | One reset restores form/profile/session and opens the survey in the profile with the installed bridge. | ✓ VERIFIED | `reset.ts`, `extension-id.ts`, reset test; human confirmed the latest reset opened the form. |
-| 02-07 | Reset adds no network endpoint. | ✓ VERIFIED | `reset.ts` has no listener/server creation; reset tests use injected process and readiness dependencies. |
-| 02-07 | Demo profile is fictional and working copy is gitignored. | ✓ VERIFIED | `profile.template.json` uses fictional example.com/555 data; `.gitignore` excludes working profile. |
-| 02-07 | Human ran I2 and recorded production submission as human-needed while Executor is absent. | ✓ VERIFIED | Human results supplied for this verification; `02-07-SUMMARY.md` and HO-8 handoff describe the same limitation. |
+| Plan | # | Truth | Status | Evidence |
+|---|---:|---|---|---|
+| 02-01 | 6 | The broken survey exists at the fixture URL and is served from the local static root. | ✓ VERIFIED | `fixtures/forms/broken.html`; `dev/mock-server/src/run-real.ts` registers the forms static root; artifact/link queries passed. |
+| 02-01 | 7 | The page contains the six intended control types and labeling defects. | ✓ VERIFIED | Live fixture markup and `broken-form.test.ts`. |
+| 02-01 | 8 | Validation uses border color without per-field error text. | ✓ VERIFIED | Fixture styles and validation handler; `broken-form.test.ts`. |
+| 02-01 | 9 | Values reset on load and history restoration. | ✓ VERIFIED | `DOMContentLoaded` and `pageshow` handlers call `resetForm()`; prior manual reload/Back/tab-restore check. |
+| 02-01 | 10 | The reducer FormModel fixture is generated by the baseline builder. | ✓ VERIFIED | `scripts/gen-survey-form-model.ts` imports `buildBaselineFormModel`; artifact and key-link queries passed. |
+| 02-02 | 11 | Spoken email normalization accepts valid forms and rejects invalid values before fill. | ✓ VERIFIED | `packages/dialogue/src/normalize.ts` and `normalize.test.ts`. |
+| 02-02 | 12 | Field lookup uses a unique longest label or field number; ambiguity is not guessed. | ✓ VERIFIED | `fields.ts`, `read-fill.ts`, and `fields.test.ts`. |
+| 02-02 | 13 | Confirmation text matches an exact token sequence; generic and near-phrases do not match. | ✓ VERIFIED | `confirm.ts`, `confirm.test.ts`, and submit refusal tests. |
+| 02-02 | 14 | Template output never includes sensitive field values. | ✓ VERIFIED | `templates.ts` masks sensitive values; template/read-back assertions. |
+| 02-02 | 15 | Page-controlled labels, options, and titles are sanitized before speech. | ✓ VERIFIED | Normalization and spoken-label helpers plus sanitizer tests. |
+| 02-03 | 16 | An armed confirmation shows a prominent BLOCKED banner in the reserved slot. | ✓ VERIFIED | `banner.ts`, `styles.css`, selected banner test, and the human I2 observation. |
+| 02-03 | 17 | The banner clears on matching clear, socket close, or state leaving awaiting-confirm. | ✓ VERIFIED | Banner state tests for armed, state-change, and socket-close transitions passed. |
+| 02-03 | 18 | The voice window displays the server phrase and does not match utterances itself. | ✓ VERIFIED | `main.ts` forwards confirm frames to `banner.ts`; banner model accepts no utterance input. |
+| 02-03 | 19 | The blocked earcon is played from the server earcon frame only. | ✓ VERIFIED | `main.ts` message routing and banner tests; no armed-event earcon branch. |
+| 02-03 | 20 | Banner rendering uses `textContent` and is not an assertive live region. | ✓ VERIFIED | `banner.ts` renderer and selected DOM-free renderer test. |
+| 02-04 | 21 | “Read the form” reads three fields at a time in page order with required/optional status. | ✓ VERIFIED | `read-fill.ts`; selected test verified the three-field cursor and current field; prior human I2 record. |
+| 02-04 | 22 | Select/radio options are numbered and selectable by number or name. | ✓ VERIFIED | Option rendering and selection in `read-fill.ts`; option tests. |
+| 02-04 | 23 | Named and current-field dictation fills the intended field. | ✓ VERIFIED | Field resolver and fill handler; fill/runner tests. |
+| 02-04 | 24 | Fill echo comes from `act.result.observedValue`, not the utterance. | ✓ VERIFIED | Runner dispatches `observedValue`; selected fill and runner tests passed. |
+| 02-04 | 25 | Sensitive fields are focused for user entry and never receive a fill effect. | ✓ VERIFIED | Sensitive branch in `read-fill.ts`; fill tests assert no sensitive fill/value retention. |
+| 02-04 | 26 | “What’s here” remains byte-identical to the established response. | ✓ VERIFIED | Reducer and `run-real` parity tests. |
+| 02-05 | 27 | Read-back lists fields in order, marks empties/required, masks sensitive values, and counts required empties. | ✓ VERIFIED | `templates.ts`, `submit.ts`, and submit/template tests. |
+| 02-05 | 28 | Submit with required fields empty reports them and never arms confirmation. | ✓ VERIFIED | `submit.ts` required-empty branch and the named submit tests. |
+| 02-05 | 29 | Confirmation arms only after the correlated read-back completes uninterrupted. | ✓ VERIFIED | Named `submit waits for the uninterrupted read-back before arming` test passed; source checks the matching speak ID and interruption flag. |
+| 02-05 | 30 | “Yes”, near-phrases, and phrases inside the half-duplex window are refused while awaiting-confirm. | ✓ VERIFIED | 44 armed-mode tests passed; randomized invariant test passed; direct human I2 negative cases. |
+| 02-05 | 31 | Exact utterance text redeems only when no speech is outstanding and the quiet window has elapsed. | ✓ VERIFIED | Boundary test and 500-seed invariant test passed; direct exact-phrase I2 result. |
+| 02-05 | 32 | Armed mode never emits parseIntent; cancel and named edits end the wait. | ✓ VERIFIED | Armed-mode tests passed; `submit.ts` handles cancellation/edit and keeps parsing guarded. |
+| 02-05 | 33 | The seeded walk proves the redeem invariant. | ✓ VERIFIED | `confirm.invariant.test.ts` named 500-seed, 60-step test passed. |
+| 02-05 | 34 | All reducer speech and cancellation effects have tracked IDs. | ✓ VERIFIED | Invariant assertions and runner `sendSpeakEffect` checks; named invariant test passed. |
+| 02-06 | 35 | The real mock-server/fake-extension path reads, fills, and echoes observed values. | ✓ VERIFIED | `run-real.ts`, `dialogue-runner.ts`, extension `content.js`, and named runner test passed. |
+| 02-06 | 36 | Missing required fields never produce confirm.armed. | ✓ VERIFIED | Runner and submit test cases; required-empty branch precedes arm. |
+| 02-06 | 37 | A completed read-back produces armed and blocked frames only after speak.done. | ✓ VERIFIED | Named runner test and submit read-back ordering test passed. |
+| 02-06 | 38 | Bare “yes” is refused and no click or gate-bearing ActRequest is sent by the voice runner. | ✓ VERIFIED | Armed-mode tests and named runner test passed; user confirmed the connected path remained blocked for “yes”. |
+| 02-06 | 39 | The voice stub refuses an exact phrase and performs no click. | ✓ VERIFIED | `createStubGate()` always returns `gate-not-connected`; gate-port tests and runner test confirm refusal. |
+| 02-06 | 40 | Only voice-role utterances reach confirmation handling. | ✓ VERIFIED | `dialogue-runner.ts` role guard and runner integration test. |
+| 02-06 | 41 | HO-8 is documented and Phase 2 voice-owned code does not implement the core Executor. | ✓ VERIFIED | `02-HANDOFFS.md` separates voice GatePort work from core-owned Executor wiring; source contains only the voice port/stub. |
+| 02-07 | 42 | One reset restores the form/profile/session and opens the Chrome profile with the installed bridge. | ✓ VERIFIED | Reset command/package wiring, lifecycle test (1 named test passed), and prior manual reset confirmation. |
+| 02-07 | 43 | Reset restarts the demo stack without adding a network endpoint. | ✓ VERIFIED | `reset.ts` process lifecycle and reset tests; no new listener/server creation. |
+| 02-07 | 44 | The demo profile is fictional, committed as a template, and its working copy is gitignored. | ✓ VERIFIED | `profile.template.json` uses fictional values; `.gitignore` excludes `fixtures/demo/profile.json`. |
+| 02-07 | 45 | A human ran the broken-form demo end to end and confirmed the I2 beats; the earlier run recorded real-submit as `human_needed` while core's Executor was absent. | ✓ VERIFIED (updated outcome) | The earlier run records the original fail-closed outcome. The connected I2 user result supersedes its pending status: “yes” and “submit form” did not submit; exact “submit survey” submitted once. |
+
+**Score:** 45/45 truths verified (0 present, behavior-unverified).
 
 ### Deferred Items
 
+Blip reading the post-submit page result is outside Phase 2's success criteria. The voice roadmap assigns confirmation-page reading to Phase 4 through RES-01, so it is retained as a later-phase item rather than a Phase 2 gap. The user-observed local result is not evidence that Blip spoke it.
+
 | Item | Addressed In | Evidence |
 |---|---|---|
-| Successful exact-phrase survey submission through a grant-bound policy gate and Executor, followed by reading the result. | Core Phase 3: Gated Submit and Result Reading | Core roadmap Phase 3 success criterion 5 explicitly covers I2 phrase submission and result read-back. Voice HO-8 names the GatePort/Executor, `survey` phrase table, and tracked speech integration. |
+| Blip reads the page result after submission. | Phase 4 | Voice ROADMAP Phase 4 depends on RES-01 and requires the confirmation to be read aloud. |
 
 ### Required Artifacts
 
 | Plan | Artifacts | Status | Details |
 |---|---|---|---|
-| 02-01 | `broken.html`, `survey-form.model.json`, `gen-survey-form-model.ts` | ✓ VERIFIED | GSD artifact query: 3/3 exist with no stub issues; builder import link verified; structural test covers form breaks. |
-| 02-02 | `normalize.ts`, `fields.ts`, `confirm.ts`, `templates.ts` | ✓ VERIFIED | 4/4 substantive; template-to-fields import verified; co-located tests cover outputs and edge cases. |
-| 02-03 | `banner.ts`, `banner.test.ts` | ✓ VERIFIED | 2/2 substantive; main-to-banner link verified; renderer uses textContent. |
-| 02-04 | `state.ts`, `read-fill.ts`, `submit.ts` | ✓ VERIFIED | 3/3 substantive; reducer dispatch and server reducer context links verified. |
-| 02-05 | `submit.ts`, `confirm.invariant.test.ts` | ✓ VERIFIED | 2/2 substantive; confirmation and armed-mode links verified. |
-| 02-06 | `gate-port.ts`, `dialogue-runner.ts`, `02-HANDOFFS.md` | ✓ VERIFIED | 3/3 substantive; run-real wiring into the server and reducer link verified. GatePort is intentionally refusal-only. |
-| 02-07 | `reset.ts`, `extension-id.ts`, `profile.template.json` | ✓ VERIFIED | 3/3 substantive; package reset script and runner PID lifecycle links verified. |
+| 02-01 | `broken.html`, `survey-form.model.json`, `gen-survey-form-model.ts` | ✓ VERIFIED | Artifact query 3/3; generator-to-builder link verified. |
+| 02-02 | `normalize.ts`, `fields.ts`, `confirm.ts`, `templates.ts` | ✓ VERIFIED | Artifact query 4/4; template-to-fields link verified. |
+| 02-03 | `banner.ts`, `banner.test.ts` | ✓ VERIFIED | Artifact query 2/2; main-to-banner link verified. |
+| 02-04 | `state.ts`, `read-fill.ts`, `submit.ts` | ✓ VERIFIED | Artifact query 3/3; reducer and server-state links verified. |
+| 02-05 | `submit.ts`, `confirm.invariant.test.ts` | ✓ VERIFIED | Artifact query 2/2; confirm matcher and reducer guard links verified. |
+| 02-06 | `gate-port.ts`, `dialogue-runner.ts`, `02-HANDOFFS.md` | ✓ VERIFIED | Artifact query 3/3; run-real and runner-to-reducer links verified. The local runner defaults to the intentionally refusal-only stub. |
+| 02-07 | `reset.ts`, `extension-id.ts`, `profile.template.json` | ✓ VERIFIED | Artifact query 3/3; reset command and managed-run PID links verified. |
+
+All 20 declared artifacts passed existence/substance checks. Plan key-link queries passed all 11 links.
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |---|---|---|---|---|
-| `scripts/gen-survey-form-model.ts` | `apps/server/src/baseline/index.ts` | `buildBaselineFormModel` import | ✓ WIRED | Validated snapshot is passed to the builder and output is parsed as FormModel. |
-| `packages/dialogue/src/templates.ts` | `fields.ts` | `spokenLabel` / `optionList` imports | ✓ WIRED | GSD key-link query verified. |
-| `apps/voice/src/main.ts` | `banner.ts` | armed/cleared/state socket events | ✓ WIRED | GSD key-link query verified; close/replacement paths are also handled. |
-| `packages/dialogue/src/reduce.ts` | `read-fill.ts` | grammar dispatch after armed-mode guard | ✓ WIRED | GSD key-link query verified. |
-| `dev/mock-server/src/server.ts` | `packages/dialogue/src/state.ts` | initial state and reducer context | ✓ WIRED | GSD key-link query verified. |
-| `submit.ts` | `confirm.ts` | exact phrase and timing checks | ✓ WIRED | GSD key-link query verified; only one redeem construction exists. |
-| `reduce.ts` | `submit.ts` | guarded modes before normal grammar | ✓ WIRED | GSD key-link query verified. |
-| `dev/mock-server/src/run-real.ts` | `dialogue-runner.ts` | server handler injection | ✓ WIRED | GSD key-link query verified. |
-| `dialogue-runner.ts` | reducer | serialized `reduce(state, event, { form, now })` path | ✓ WIRED | GSD key-link query verified; effects dispatch back to page and voice socket. |
-| `dev/mock-server/package.json` | `reset.ts` | workspace `reset` script | ✓ WIRED | GSD key-link query verified. |
-| `run-real.ts` | `.demo-pid` | owned PID record at startup and cleanup | ✓ WIRED | GSD key-link query verified; reset validates identity before stopping a process. |
+| `scripts/gen-survey-form-model.ts` | `apps/server/src/baseline/index.ts` | `buildBaselineFormModel` import | ✓ WIRED | Generator passes the snapshot to the baseline builder. |
+| `packages/dialogue/src/templates.ts` | `fields.ts` | `spokenLabel` / `optionList` imports | ✓ WIRED | Key-link query found the import. |
+| `apps/voice/src/main.ts` | `banner.ts` | armed/cleared/state socket events | ✓ WIRED | Socket handlers update the banner model; close path clears it. |
+| `packages/dialogue/src/reduce.ts` | `read-fill.ts` | grammar dispatch after armed guard | ✓ WIRED | Key-link query found the dispatch. |
+| `dev/mock-server/src/server.ts` | `packages/dialogue/src/state.ts` | initial state and reducer context | ✓ WIRED | State is created and passed to reducer. |
+| `packages/dialogue/src/submit.ts` | `confirm.ts` | phrase matcher/window check | ✓ WIRED | Armed-mode handler uses both confirmation helpers. |
+| `packages/dialogue/src/reduce.ts` | `submit.ts` | armed-mode guard before grammar | ✓ WIRED | Reducer dispatch checks submit guard before general grammar. |
+| `dev/mock-server/src/run-real.ts` | `dialogue-runner.ts` | server handler injection | ✓ WIRED | `startReal` passes `createDialogueHandlers` to `startServer`. |
+| `dialogue-runner.ts` | `packages/dialogue/src/reduce.ts` | `reduce(state, event, { form, now })` | ✓ WIRED | Runner dispatch calls the reducer. |
+| `dev/mock-server/package.json` | `dev/mock-server/src/reset.ts` | reset script | ✓ WIRED | Package script invokes the reset entry point. |
+| `dev/mock-server/src/run-real.ts` | `.demo-pid` | startup/shutdown run record | ✓ WIRED | Managed runner writes and removes its own marker. |
+
+These links cover the voice runner. The connected core Gate/Executor adapter used in the latest human I2 run is outside the source visible in this voice worktree; `run-real.ts` here defaults to `createStubGate()` and therefore refuses redemption.
 
 ### Data-Flow Trace (Level 4)
 
-| Artifact | Data variable | Source | Produces real data | Status |
+| Artifact | Data Variable | Source | Produces Real Data | Status |
 |---|---|---|---|---|
-| Generated survey model | `FormModel.fields/actions` | Voice snapshot parsed and passed to core baseline builder | Yes; output is schema-validated and generator rerun had no diff per supplied verification evidence. | ✓ FLOWING |
-| Live form dialogue | runner `form` / reducer context | Chrome content script snapshots live DOM; extension bridge sends snapshot to server | Yes; user exercised the installed local bridge; integration test exercises the runner with fake extension. | ✓ FLOWING |
-| Fill echo | `act.result.observedValue` | Value read from target DOM after fill/select | Yes; content script returns actual DOM value, reducer echo uses that event value, and e2e test compares them. | ✓ FLOWING |
-| Confirmation banner | banner model `text` | Server `confirm.armed` phrase | Yes; model renders the server-supplied phrase through `textContent`; user saw the live banner. | ✓ FLOWING |
+| Read/fill dialogue | snapshot fields and `observedValue` | Local form DOM through extension `content.js`, then runner act result | Yes; values come from the live page | ✓ FLOWING |
+| Read-back | field values and sensitivity markers | Current form snapshot passed to reducer/templates | Yes for non-sensitive values; sensitive values are masked | ✓ FLOWING |
+| Confirmation banner | phrase and grant in `confirm.armed` | GatePort arm response forwarded by server | Yes for the connected run; current voice runner default is the refusal-only stub | ✓ FLOWING in human I2; source adapter not present in this checkout |
+| Post-submit page result | visible result text | User reported `Local submit observed. No data was sent.` | Human-observed local result; exact text is not in the tracked fixture/source | Observed only; not source-traced or attributed to Blip speech |
+
+The tracked fixture's click handler hides the form and shows its own canned result. The exact connected I2 result was observed by the user, but this checkout does not contain the successful core Gate/Executor adapter that produced it.
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
-| Exact phrase rejected while speech is outstanding and opens at the 1000 ms boundary | `npx.cmd vitest run packages/dialogue/src/confirm.invariant.test.ts -t "refuses at 999 ms and redeems at 1000 ms"` | 1 named test passed | ✓ PASS |
-| 500 seeded walks preserve confirm invariants | `npx.cmd vitest run packages/dialogue/src/confirm.invariant.test.ts -t "preserves the gate invariants across 500 seeded 60-step walks"` | 1 named test passed | ✓ PASS |
-| Live runner read/fill/read-back path and no-click gate | `npx.cmd vitest run dev/mock-server/src/dialogue-runner.test.ts -t "reads, fills from observed page values, gates submission, and never sends a click"` | 1 named test passed | ✓ PASS |
-| Reset lifecycle and safe browser launch | `npx.cmd vitest run dev/mock-server/src/reset.test.ts -t "restores the profile, replaces the previous stack, waits for readiness, then opens Chrome safely"` | 1 named test passed | ✓ PASS |
-| Banner safe rendering | `npx.cmd vitest run apps/voice/src/banner.test.ts -t "renders one textContent-only blocked child and leaves the hidden slot empty"` | 1 named test passed | ✓ PASS |
-| Field reading and options | `npx.cmd vitest run packages/dialogue/src/read.test.ts -t "dialogue read and option picks"` | 16 tests passed | ✓ PASS |
-| Repository typecheck | `npm.cmd run typecheck` | TypeScript exited 0 | ✓ PASS |
-| Full suite | Reported run: `npm.cmd test` | 57 files / 769 tests passed, supplied as latest I2 verification evidence | ✓ PASS (reported) |
+| Read, observed-value echo, confirmation boundary, random-walk invariant, banner rendering, and mock-server flow | `npm.cmd exec -- vitest run packages/dialogue/src/read.test.ts packages/dialogue/src/fill.test.ts packages/dialogue/src/submit.test.ts packages/dialogue/src/confirm.invariant.test.ts apps/voice/src/banner.test.ts dev/mock-server/src/dialogue-runner.test.ts -t 'reads exactly three fields|echoes only the observed page value|refuses an exact phrase at 999 ms|preserves the gate invariants across 500 seeded 60-step walks|renders one textContent-only blocked child|reads, fills from observed page values, gates submission, and never sends a click|refuses %j without model routing or redeem'` | 6 selected tests passed; 131 other cases were deselected by the name filter | ✓ PASS |
+| Armed-mode negative and timing cases | `npm.cmd exec -- vitest run packages/dialogue/src/submit.test.ts -t 'armed-mode utterance gate'` | 44 tests passed; 21 excluded by filter | ✓ PASS |
+| Reset lifecycle | `npm.cmd exec -- vitest run dev/mock-server/src/reset.test.ts -t 'restores the profile, replaces the previous stack, waits for readiness, then opens Chrome safely'` | 1 named test passed | ✓ PASS |
+| Read-back ordering before arming | `npm.cmd exec -- vitest run packages/dialogue/src/submit.test.ts -t 'submit waits for the uninterrupted read-back before arming'` | 1 named test passed | ✓ PASS |
+| Banner show/clear transitions | `npm.cmd exec -- vitest run apps/voice/src/banner.test.ts -t 'shows the banner when a confirmation is armed|clears on state changes away from awaiting-confirm|clears on socket close'` | 3 named tests passed | ✓ PASS |
+| Phase 2 read-back, exact-phrase boundary, and armed-mode refusal regression | `npm.cmd exec -- vitest run packages/dialogue/src/submit.test.ts -t "armed-mode utterance gate|submit waits for the uninterrupted read-back before arming|refuses an exact phrase at 999 ms and redeems at the 1000 ms boundary"` | 45 tests passed; 20 excluded by filter | ✓ PASS |
+| Exact-phrase timing boundary rerun for this refresh | `npm.cmd exec -- vitest run packages/dialogue/src/submit.test.ts -t 'refuses an exact phrase at 999 ms and redeems at the 1000 ms boundary'` | 1 test passed; 64 excluded by filter | ✓ PASS |
+| Shared runner privacy regression after Phase 3 hardening | `npm.cmd exec -- vitest run dev/mock-server/src/dialogue-runner.test.ts packages/dialogue/src/read.test.ts -t 'short sensitive|opaque short|sensitive dictation|long utterances|sensitive field loses|punctuation variants|sensitive-field handoff commands'` | 7 tests passed; 37 excluded by filter | ✓ PASS |
+| Connected I2 exact-phrase gate | User-run local I2 after core HO-8 Gate/Executor integration | User observed both negative phrases remain blocked and exact phrase submit once | ✓ PASS (human evidence) |
+
+No full workspace suite was run during this verification.
 
 ### Probe Execution
 
-No phase-declared or conventional `scripts/*/tests/probe-*.sh` files were found. Phase 2 is not a migration/probe phase; probe execution is not applicable.
+Not applicable: Phase 2 is not a migration/tooling phase and its plans or success criteria declare no probe.
 
 ### Requirements Coverage
 
-| Requirement | Source | Status | Evidence |
-|---|---|---|---|
-| DLG-02 | Voice REQUIREMENTS.md, Phase 2 plans | ✓ SATISFIED | Page-ordered read speech, required status, and human-run form reading. |
-| DLG-03 | Voice REQUIREMENTS.md, Phase 2 plans | ✓ SATISFIED | Named/current fill and page-observed echo tests plus human live bridge run. |
-| DLG-07 | Voice REQUIREMENTS.md, Phase 2 plans | ✓ SATISFIED | Numbered select/radio options; pick-by-number/name tests and human confirmation. |
-| DLG-08 | Voice REQUIREMENTS.md, Phase 2 plans | ✓ SATISFIED | Full read-back, missing required fields, and sensitive masking tests/human run. |
-| DLG-09 | Voice REQUIREMENTS.md, Phase 2 plans | ✓ SATISFIED for voice gate behavior | Exact phrase prompt and refusal of bare “yes” verified; successful production redemption remains HO-8. |
-| VIS-02 | Voice REQUIREMENTS.md, Phase 2 plans | ✓ SATISFIED | Banner model/render/socket wiring tests and human check. |
-| DEMO-01 | Voice REQUIREMENTS.md, Phase 2 plans | ✓ SATISFIED | Local broken survey, six-control model, generated fixture, and human reset launch. |
-| DEMO-02 | Voice REQUIREMENTS.md, Phase 2 plan 07 | ✓ SATISFIED | Fictional template, reset script and launch wiring, lifecycle tests, user-confirmed reset. |
+| Requirement | Source Plan | Description | Status | Evidence |
+|---|---|---|---|---|
+| DLG-02 | 02-02, 02-04, 02-06 | Read fields in order with labels and required status | ✓ SATISFIED | Read reducer/source, tests, and prior user I2 record. |
+| DLG-03 | 02-02, 02-04, 02-06 | Dictate into current/named field and echo page value | ✓ SATISFIED | Extension-to-reducer `observedValue` flow and selected tests. |
+| DLG-07 | 02-02, 02-04, 02-06 | Numbered select/radio choices selectable by number or name | ✓ SATISFIED | `read-fill.ts` and option tests. |
+| DLG-08 | 02-02, 02-05, 02-06 | Full read-back with required empties and sensitive masking | ✓ SATISFIED | Templates/submit implementation and test assertions. |
+| DLG-09 | 02-02, 02-05, 02-06 | Full read-back, distinct phrase, reject generic “yes” | ✓ SATISFIED | Reducer tests plus latest connected I2 human evidence; the prior human-needed exact-submit item is resolved. |
+| VIS-02 | 02-03, 02-06 | Prominent BLOCKED banner while gated action awaits confirmation | ✓ SATISFIED | Banner/socket source, transition tests, and user-observed BLOCKED prompt. |
+| DEMO-01 | 02-01, 02-07 | Local deliberately broken self-hosted form | ✓ SATISFIED | Fixture markup, model, and structural test. |
+| DEMO-02 | 02-07 | Fictional profile and one-command reset | ✓ SATISFIED | Reset/profile source, artifact wiring, and reset test. The voice requirement tracker checkbox remains pending; implementation evidence satisfies this phase requirement. |
 
-All eight requested IDs appear in the Phase 2 plan set; no additional voice-owned Phase 2 requirement is orphaned. The master requirements tracker still reflects the core/voice workstream split, while the voice requirement detail is the source used here.
+All eight voice-owned Phase 2 requirements declared by the plans are covered. Core-owned requirements mapped to Phase 2 in the master tracker belong to the separate core workstream and are not orphaned voice requirements.
 
 ### Test Quality Audit
 
-Requirement-linked tests are active; the targeted test files contain no skipped or todo cases. Expected values are asserted against fixtures or explicit safety contracts, not generated from the system under test. The generated-model test validates builder output and is distinct from the generator's output-writing command. No circular test pattern was found.
+| Test File | Linked Req | Active | Skipped | Circular | Assertion Level | Verdict |
+|---|---|---:|---:|---|---|---|
+| `packages/dialogue/src/normalize.test.ts`, `fields.test.ts`, `confirm.test.ts`, `templates.test.ts` | DLG-02/03/07/08/09 | Yes | 0 disabled/todo found | No | Value/behavior | PASS |
+| `packages/dialogue/src/read.test.ts`, `fill.test.ts`, `submit.test.ts`, `confirm.invariant.test.ts` | DLG-02/03/07/08/09 | Yes | 0 disabled/todo found | No | Value/behavior/invariant | PASS |
+| `apps/voice/src/banner.test.ts` | VIS-02 | Yes | 0 disabled/todo found | No | Behavior/DOM contract | PASS |
+| `dev/mock-server/src/broken-form.test.ts`, `dialogue-runner.test.ts`, `run-real.test.ts`, `reset.test.ts`, `apps/server/src/voice/gate-port.test.ts` | DEMO-01/02, DLG-02/03/08/09, VIS-02 | Yes | 0 disabled/todo found | No | Structural/integration/value | PASS |
+
+The only test-side file write found is `run-real.test.ts` creating a temporary static-root fixture; it does not generate expected output by invoking the system under test. No circular expected-value generation or requirement-linked disabled tests were found.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |---|---:|---|---|---|
-| — | — | None in scanned Phase 2 implementation files | — | No unresolved TBD/FIXME/XXX markers or user-visible placeholder stubs found. `createStubGate` is an explicit fail-closed hand-off, covered by HO-8 and tested to refuse redemption. |
+| `apps/server/src/voice/gate-port.ts` | — | `createStubGate()` is refusal-only | Info | Intentional fail-closed local default from Plan 02-06. It cannot produce a successful submit; the latest human run used the connected core Gate/Executor path, which is not present in this checkout. |
+| Phase 2 implementation files | — | No unreferenced TBD/FIXME/XXX markers or user-visible placeholder implementation found | — | No debt-marker blocker. |
 
-### Human Verification Required
+### Decision Coverage
 
-After core implements HO-8, repeat the local I2 flow using the production grant-bound Gate/Executor. Verify that a completed read-back plus the exact voice phrase authorizes one submission and that Blip reads the page's actual result. Also verify “yes” and near-phrases still refuse. The current user-run verification confirms the stub gate refuses and the page remains unsubmitted; it does not establish a successful production submit.
+All trackable CONTEXT.md decisions are honored by shipped artifacts. The gate found 9/9 honored and no unhonored decisions.
 
-### Gaps Summary
+### Human Verification Completed
 
-No voice-owned implementation gaps were found. The Phase 2 voice UI, broken form, reset, read/fill/read-back flow, exact-phrase reducer guard, BLOCKED banner, and fail-closed runner are present, substantive, connected, and exercised by targeted tests and the supplied human I2 results. Production submission and result reading remain deferred to core Phase 3 / HO-8, so the end-to-end production outcome needs human verification after that integration lands. The current report therefore remains `human_needed`.
+The user-reported connected I2 run resolves the earlier `human_needed` entry for exact-phrase submission: “yes” and “submit form” left the BLOCKED prompt active with no submission, then exact “submit survey” submitted once. The page result was reported as `Local submit observed. No data was sent.` This is a local synthetic outcome only.
+
+The previous human-needed wording also requested that Blip report the page result. No source or direct evidence shows Blip speaking it, and Phase 2's roadmap criteria do not require result reading. That work remains assigned to Phase 4 / RES-01; it is recorded as deferred above, not as an unresolved Phase 2 verification item.
+
+## Gaps Summary
+
+No Phase 2 must-have gaps remain. All 45 roadmap and plan truths were verified through current source, artifact/key-link queries, focused tests, and the completed human I2 run. The exact successful Gate/Executor adapter is outside this voice checkout and the default `run-real` path remains intentionally fail-closed, so the successful submit evidence is human-observed rather than reproducible from this repository alone. No external form data was sent, and this report does not claim that Blip spoke or read the local page result.
 
 ---
 
-_Verified: 2026-10-17T18:56:51Z_  
+_Verified: 2026-10-18T01:56:42Z_
 _Verifier: the agent (gsd-verifier)_
