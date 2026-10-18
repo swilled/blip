@@ -329,6 +329,72 @@ describe("real voice dialogue runner", () => {
     expect(sent.some((frame) => frame.type === "speak" && (frame.payload as { text: string }).text.includes("entered, hidden"))).toBe(true);
   });
 
+  it("fails closed and redacts long utterances when a fresh page snapshot is unavailable", async () => {
+    let clock = 0;
+    const sentinel = "private-sentinel-51927";
+    const { hub, sent } = recordingHub();
+    const session = new Session("fake");
+    session.model = form;
+    session.extensionConnected = true;
+    session.stale = true;
+    let intentCalls = 0;
+    const handlers = createDialogueHandlers({
+      gate: createStubGate(() => clock),
+      now: () => clock,
+      parseIntent: async () => { intentCalls += 1; },
+    });
+    const ctx = voiceContext(hub, session, message("utterance", {
+      utteranceId: "stale-sensitive-0",
+      text: `change field to ${sentinel}${"x".repeat(205)}`,
+      source: "typed",
+    }));
+
+    await handlers.utterance?.(ctx);
+
+    const transcript = sent.find((frame) => frame.type === "transcript");
+    expect(transcript?.payload).toEqual({
+      utteranceId: "stale-sensitive-0",
+      heardAs: "[sensitive entry withheld]",
+      routedTo: "grammar",
+    });
+    expect(JSON.stringify(sent)).not.toContain(sentinel);
+    expect(intentCalls).toBe(0);
+    expect(sent.some((frame) => frame.type === "speak"
+      && (frame.payload as { text: string }).text.includes("until the page is available"))).toBe(true);
+  });
+
+  it("normalizes punctuation variants of sensitive terms before model routing", async () => {
+    let clock = 0;
+    const sentinel = "private-sentinel-91357";
+    const { hub, sent } = recordingHub();
+    const session = new Session("fake");
+    session.model = form;
+    session.extensionConnected = true;
+    session.stale = false;
+    let intentCalls = 0;
+    const handlers = createDialogueHandlers({
+      gate: createStubGate(() => clock),
+      now: () => clock,
+      parseIntent: async () => { intentCalls += 1; },
+    });
+    const ctx = voiceContext(hub, session, message("utterance", {
+      utteranceId: "punctuated-sensitive-0",
+      text: `here is my one-time code ${sentinel}${"x".repeat(205)}`,
+      source: "typed",
+    }));
+
+    await handlers.utterance?.(ctx);
+
+    const transcript = sent.find((frame) => frame.type === "transcript");
+    expect(transcript?.payload).toEqual({
+      utteranceId: "punctuated-sensitive-0",
+      heardAs: "[sensitive entry withheld]",
+      routedTo: "grammar",
+    });
+    expect(JSON.stringify(sent)).not.toContain(sentinel);
+    expect(intentCalls).toBe(0);
+  });
+
   it("fills the exact email profile match locally and echoes the page observation", async () => {
     let clock = 2_000;
     const requests: ActRequest[] = [];
