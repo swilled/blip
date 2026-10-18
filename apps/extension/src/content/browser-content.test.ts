@@ -26,6 +26,20 @@ function addText(tag: string, text: string, parent: Element = document.body): HT
   return element;
 }
 
+function addArticle(title: string, visibleDate?: string, datetime = visibleDate): HTMLElement {
+  const article = document.createElement("article");
+  addText("h2", title, article);
+  if (visibleDate !== undefined) {
+    const time = document.createElement("time");
+    if (datetime !== undefined) time.setAttribute("datetime", datetime);
+    time.textContent = visibleDate;
+    article.append(time);
+  }
+  addText("p", `${title} article text`, article);
+  document.body.append(article);
+  return article;
+}
+
 function captureWithFixedClock(pageIdentity: BrowserPageIdentity = identity) {
   return captureVisibleContent(document, pageIdentity, { now: () => 0 });
 }
@@ -120,6 +134,63 @@ describe("bounded visible browser content", () => {
     expect(result.blocks.reduce((sum, block) => sum + Array.from(block.text).length, 0)).toBeLessThanOrEqual(4000);
     expect(result.truncated).toBe(true);
     expect(result.blocks[0]?.text).toBe("😀".repeat(400));
+  });
+
+  it("captures generic article and list items with only corroborated visible semantic dates", () => {
+    addArticle("Unique item", "2026-10-18T12:30:00Z");
+    addArticle("Tied item one", "2026-10-17T09:00:00Z");
+    addArticle("Tied item two", "2026-10-17T09:00:00Z");
+    addArticle("Missing date");
+    addArticle("Malformed date", "yesterday", "2026-10-15T09:00:00Z");
+    const roleItem = document.createElement("div");
+    roleItem.setAttribute("role", "listitem");
+    roleItem.textContent = "Generic list row";
+    document.body.append(roleItem);
+
+    const capture = captureWithFixedClock();
+    expect(capture.items?.map(({ text, visibleDate }) => ({ text, visibleDate }))).toEqual([
+      { text: "Unique item 2026-10-18T12:30:00Z Unique item article text", visibleDate: "2026-10-18T12:30:00Z" },
+      { text: "Tied item one 2026-10-17T09:00:00Z Tied item one article text", visibleDate: "2026-10-17T09:00:00Z" },
+      { text: "Tied item two 2026-10-17T09:00:00Z Tied item two article text", visibleDate: "2026-10-17T09:00:00Z" },
+      { text: "Missing date Missing date article text", visibleDate: null },
+      { text: "Malformed date yesterday Malformed date article text", visibleDate: null },
+      { text: "Generic list row", visibleDate: null },
+    ]);
+    expect(new Set(capture.items?.map((item) => item.itemId)).size).toBe(capture.items?.length);
+    expect(capture.items?.every((item) => item.identity === identity && item.frameId === 0)).toBe(true);
+  });
+
+  it("omits hidden and nested item duplicates and bounds captured item text", () => {
+    const outer = document.createElement("article");
+    outer.append(document.createTextNode("Outer record"));
+    const nested = document.createElement("div");
+    nested.setAttribute("role", "listitem");
+    nested.textContent = "Nested duplicate";
+    outer.append(nested);
+    document.body.append(outer);
+    const hidden = addArticle("Hidden record", "2026-10-18T12:30:00Z");
+    hidden.setAttribute("hidden", "");
+    const inert = document.createElement("article");
+    inert.setAttribute("inert", "");
+    inert.textContent = "Inert record";
+    document.body.append(inert);
+    const form = document.createElement("article");
+    form.innerHTML = "<p>Article form</p><input value='SECRET-CONTROL-VALUE'><textarea>SECRET-TEXTAREA-VALUE</textarea>";
+    const wrapper = document.createElement("form");
+    wrapper.append(form);
+    document.body.append(wrapper);
+    for (let index = 0; index < 21; index += 1) addArticle(`Bounded ${index}`, "2026-10-18T12:30:00Z");
+
+    const capture = captureWithFixedClock();
+    expect(capture.items?.[0]?.text).toBe("Outer record");
+    expect(capture.items?.some((item) => item.text.includes("Nested duplicate"))).toBe(false);
+    expect(capture.items?.some((item) => item.text.includes("Hidden record"))).toBe(false);
+    expect(capture.items?.some((item) => item.text.includes("Inert record"))).toBe(false);
+    expect(JSON.stringify(capture.items)).not.toContain("SECRET-");
+    expect(capture.items?.length).toBeLessThanOrEqual(20);
+    expect(capture.items?.every((item) => Array.from(item.text).length <= 400)).toBe(true);
+    expect(capture.items?.reduce((sum, item) => sum + Array.from(item.text).length, 0)).toBeLessThanOrEqual(4000);
+    expect(capture.truncated).toBe(true);
   });
 
   it("returns distinct empty, restricted, and elapsed-budget outcomes", () => {

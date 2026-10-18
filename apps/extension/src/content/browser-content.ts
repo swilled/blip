@@ -1,6 +1,8 @@
 import {
+  BrowserContentItem,
   BrowserPageUrl,
   type BrowserContentBlock,
+  type BrowserContentItem as BrowserContentItemType,
   type BrowserContentResult,
   type BrowserLinkListResult,
   type BrowserPageIdentity,
@@ -19,7 +21,11 @@ const INTERACTIVE_ROLES = new Set([
   "button", "checkbox", "combobox", "listbox", "menuitem", "option", "radio", "searchbox",
   "slider", "spinbutton", "switch", "tab", "textbox",
 ]);
+const TEXT_BLOCK_TAGS = new Set([
+  "article", "blockquote", "div", "footer", "h1", "h2", "h3", "h4", "h5", "h6", "header", "li", "main", "p", "section", "time",
+]);
 const MAX_BLOCKS = 20;
+const MAX_ITEMS = 20;
 const MAX_BLOCK_CODE_POINTS = 400;
 const MAX_TOTAL_CODE_POINTS = 4000;
 const MAX_LINKS = 100;
@@ -27,11 +33,13 @@ const DEFAULT_TIME_BUDGET_MS = 100;
 
 type CaptureOptions = { now?: () => number; timeBudgetMs?: number };
 type ElementEntry = { contentId: string; kind: "heading" | "paragraph"; element: Element };
+type ItemEntry = { itemId: string; element: Element };
 type LinkEntry = { linkId: string; element: HTMLAnchorElement; href: string; rawHref: string; target: string; label: string };
 type CaptureState = {
   identity: BrowserPageIdentity;
   frameId: number;
   blocks: Map<string, ElementEntry>;
+  items: Map<string, ItemEntry>;
   links: Map<string, LinkEntry>;
   linksTruncated: boolean;
 };
@@ -56,6 +64,42 @@ function childCandidateKind(element: Element): "heading" | "paragraph" | null {
   return element.localName === "p" ? "paragraph" : null;
 }
 
+function itemCandidate(element: Element): boolean {
+  return element.localName === "article" || (element.getAttribute("role") ?? "").trim().toLocaleLowerCase() === "listitem";
+}
+
+function hasItemAncestor(element: Element): boolean {
+  let parent = element.parentElement;
+  while (parent && parent.localName !== "body" && parent.localName !== "html") {
+    if (itemCandidate(parent)) return true;
+    parent = parent.parentElement;
+  }
+  return false;
+}
+
+function hasNestedItemAncestor(element: Element, root: Element): boolean {
+  let parent = element.parentElement;
+  while (parent && parent !== root) {
+    if (itemCandidate(parent)) return true;
+    parent = parent.parentElement;
+  }
+  return false;
+}
+
+function textBlockAncestor(element: Element, root: Element): Element | null {
+  let current: Element | null = element;
+  while (current) {
+    if (TEXT_BLOCK_TAGS.has(current.localName)) return current;
+    if (current === root) return null;
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function containsElement(ancestor: Element, descendant: Element): boolean {
+  return ancestor === descendant || ancestor.contains(descendant);
+}
+
 function hasContentAncestor(element: Element): boolean {
   let parent = element.parentElement;
   while (parent && parent.localName !== "body" && parent.localName !== "html") {
@@ -73,19 +117,35 @@ function excluded(element: Element): boolean {
 }
 
 /** Collect bounded, normalized text while skipping hidden descendants and never reading controls. */
-function visibleText(element: Element, maxCodePoints: number, now: () => number, deadline: number): { text: string; truncated: boolean; timedOut: boolean } {
+function visibleText(
+  element: Element,
+  maxCodePoints: number,
+  now: () => number,
+  deadline: number,
+  options: { skipNestedContentCandidates?: boolean; skipNestedItems?: boolean } = {},
+): { text: string; truncated: boolean; timedOut: boolean } {
   const document = element.ownerDocument;
   const walker = document.createTreeWalker(element, 4 /* NodeFilter.SHOW_TEXT */);
   let output = "";
   let points = 0;
   let pendingSpace = false;
+  let previousBlock: Element | null = null;
   let timedOut = false;
   let node: Node | null;
 
   while ((node = walker.nextNode())) {
     if (now() > deadline) { timedOut = true; break; }
     const parent = node.parentElement;
-    if (!parent || excluded(parent) || !isVisible(parent) || (parent !== element && childCandidateKind(parent) !== null)) continue;
+    if (!parent || excluded(parent) || !isVisible(parent) ||
+        (options.skipNestedContentCandidates !== false && parent !== element && childCandidateKind(parent) !== null) ||
+        (options.skipNestedItems === true && parent !== element &&
+          (itemCandidate(parent) || hasNestedItemAncestor(parent, element)))) continue;
+    const currentBlock = textBlockAncestor(parent, element);
+    if (currentBlock && previousBlock && currentBlock !== previousBlock &&
+        !containsElement(currentBlock, previousBlock) && !containsElement(previousBlock, currentBlock)) {
+      pendingSpace = output.length > 0;
+    }
+    if (currentBlock) previousBlock = currentBlock;
     const raw = node.nodeValue ?? "";
     for (const point of raw) {
       if (now() > deadline) { timedOut = true; break; }
@@ -109,6 +169,37 @@ function visibleText(element: Element, maxCodePoints: number, now: () => number,
   return { text: output.trim(), truncated: false, timedOut };
 }
 
+function visibleDateEvidence(
+  element: Element,
+  now: () => number,
+  deadline: number,
+): { value: string | null; timedOut: boolean } {
+  const stack = Array.from(element.children).reverse();
+  let evidence: string | null = null;
+  let sawTime = false;
+  while (stack.length > 0) {
+    if (now() > deadline) return { value: null, timedOut: true };
+    const current = stack.pop()!;
+    if (itemCandidate(current) || excluded(current)) continue;
+    if (!isVisible(current)) continue;
+    if (current.localName === "time") {
+      sawTime = true;
+      const visibleTextResult = visibleText(current, 100, now, deadline, { skipNestedContentCandidates: false });
+      if (visibleTextResult.timedOut) return { value: null, timedOut: true };
+      const visibleDate = visibleTextResult.text;
+      const datetime = current.getAttribute("datetime") ?? "";
+      if (visibleTextResult.truncated || !BrowserContentItem.shape.visibleDate.safeParse(visibleDate).success ||
+          !BrowserContentItem.shape.visibleDate.safeParse(datetime).success || Date.parse(visibleDate) !== Date.parse(datetime)) {
+        return { value: null, timedOut: false };
+      }
+      if (evidence !== null && Date.parse(evidence) !== Date.parse(datetime)) return { value: null, timedOut: false };
+      evidence = datetime;
+    }
+    for (let child = current.lastElementChild; child; child = child.previousElementSibling) stack.push(child);
+  }
+  return { value: sawTime ? evidence : null, timedOut: false };
+}
+
 function currentState(document: Document, identity: BrowserPageIdentity, frameId: number): CaptureState | null {
   const state = captureByDocument.get(document);
   return state !== undefined && state.frameId === frameId && identityMatches(state.identity, identity) ? state : null;
@@ -119,7 +210,7 @@ function failure(request: BrowserContentRequest, code: "stale-capture" | "stale-
 }
 
 /**
- * Capture only visible headings, paragraphs, and anchor labels from the top document.
+ * Capture visible headings, paragraphs, generic semantic items, and anchor labels from the top document.
  * The capture ID is generated by the extension background and is intentionally not derived
  * from page text. The same identity is attached to every block and link.
  */
@@ -132,7 +223,7 @@ export function captureVisibleContent(
   const startedAt = now();
   const deadline = startedAt + (options.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS);
   const frameId = 0;
-  const state: CaptureState = { identity, frameId, blocks: new Map(), links: new Map(), linksTruncated: false };
+  const state: CaptureState = { identity, frameId, blocks: new Map(), items: new Map(), links: new Map(), linksTruncated: false };
   captureByDocument.set(document, state);
 
   if (!BrowserPageUrl.safeParse(identity.pageUrl).success || !/^https?:/i.test(identity.pageUrl)) {
@@ -144,8 +235,10 @@ export function captureVisibleContent(
 
   const stack: Array<{ element: Element; next: Element | null }> = [{ element: root, next: root.firstElementChild }];
   const rawBlocks: Array<{ kind: "heading" | "paragraph"; element: Element; text: string; truncated: boolean }> = [];
+  const rawItems: Array<{ element: Element; text: string; truncated: boolean; visibleDate: string | null }> = [];
   const rawLinks: Array<{ element: HTMLAnchorElement; href: string; rawHref: string; target: string; label: string }> = [];
   let blocksTruncated = false;
+  let itemsTruncated = false;
   let linksTruncated = false;
   let timedOut = false;
 
@@ -191,6 +284,28 @@ export function captureVisibleContent(
         else blocksTruncated = true;
       }
     }
+
+    if (itemCandidate(element) && !hasItemAncestor(element)) {
+      const textResult = visibleText(element, MAX_BLOCK_CODE_POINTS + 1, now, deadline, {
+        skipNestedContentCandidates: false,
+        skipNestedItems: true,
+      });
+      if (textResult.timedOut) { timedOut = true; break; }
+      if (textResult.text !== "") {
+        const dateResult = visibleDateEvidence(element, now, deadline);
+        if (dateResult.timedOut) { timedOut = true; break; }
+        if (rawItems.length < MAX_ITEMS) {
+          rawItems.push({
+            element,
+            text: boundedText(textResult.text, MAX_BLOCK_CODE_POINTS + 1, (MAX_BLOCK_CODE_POINTS + 1) * 2),
+            truncated: textResult.truncated || Array.from(textResult.text).length > MAX_BLOCK_CODE_POINTS,
+            visibleDate: dateResult.value,
+          });
+        } else {
+          itemsTruncated = true;
+        }
+      }
+    }
   }
 
   if (timedOut || now() > deadline) {
@@ -200,16 +315,16 @@ export function captureVisibleContent(
 
   const blocks: BrowserContentBlock[] = [];
   let total = 0;
-  let truncated = blocksTruncated;
+  let blockTruncated = blocksTruncated;
   for (const raw of rawBlocks) {
-    if (blocks.length >= MAX_BLOCKS) { truncated = true; break; }
+    if (blocks.length >= MAX_BLOCKS) { blockTruncated = true; break; }
     let text = raw.text;
     const count = Array.from(text).length;
-    if (raw.truncated || count > MAX_BLOCK_CODE_POINTS) truncated = true;
+    if (raw.truncated || count > MAX_BLOCK_CODE_POINTS) blockTruncated = true;
     if (total + count > MAX_TOTAL_CODE_POINTS) {
       const remaining = MAX_TOTAL_CODE_POINTS - total;
       text = boundedText(text, remaining, remaining * 2);
-      truncated = true;
+      blockTruncated = true;
     }
     if (text === "") continue;
     const contentId = `${identity.captureId}.b${blocks.length}`.slice(0, 64);
@@ -217,7 +332,32 @@ export function captureVisibleContent(
     state.blocks.set(contentId, { contentId, kind: raw.kind, element: raw.element });
     total += Array.from(text).length;
     if (total >= MAX_TOTAL_CODE_POINTS) {
-      if (rawBlocks.length > blocks.length) truncated = true;
+      if (rawBlocks.length > blocks.length) blockTruncated = true;
+      break;
+    }
+  }
+
+  const items: BrowserContentItemType[] = [];
+  let itemTotal = 0;
+  let truncated = blockTruncated || itemsTruncated;
+  for (const raw of rawItems) {
+    if (items.length >= MAX_ITEMS) { truncated = true; break; }
+    let text = raw.text;
+    const count = Array.from(text).length;
+    if (raw.truncated || count > MAX_BLOCK_CODE_POINTS) truncated = true;
+    if (itemTotal + count > MAX_TOTAL_CODE_POINTS) {
+      const remaining = MAX_TOTAL_CODE_POINTS - itemTotal;
+      text = boundedText(text, remaining, remaining * 2);
+      truncated = true;
+    }
+    if (text === "") continue;
+    const itemId = `${identity.captureId.slice(0, 56)}.i${items.length}`;
+    const item: BrowserContentItemType = { itemId, text, visibleDate: raw.visibleDate, identity, frameId };
+    items.push(item);
+    state.items.set(itemId, { itemId, element: raw.element });
+    itemTotal += Array.from(text).length;
+    if (itemTotal >= MAX_TOTAL_CODE_POINTS) {
+      if (rawItems.length > items.length) truncated = true;
       break;
     }
   }
@@ -231,8 +371,9 @@ export function captureVisibleContent(
   captureByDocument.set(document, state);
   return {
     ...identity,
-    status: blocks.length === 0 && rawLinks.length === 0 ? "empty" : "supported",
+    status: blocks.length === 0 && items.length === 0 && rawLinks.length === 0 ? "empty" : "supported",
     blocks,
+    items,
     truncated,
   };
 }
