@@ -201,6 +201,12 @@ None yet.
 - [Phase 6/7] Written voice-owner approval of the exact browser-control contract, safe-GET policy, and additive link mode fields is required before shared protocol or live-policy changes merge or push.
 - [Phase 7] The safe-GET and `navigationSafety`/`authorizationMode` changes are implemented and verified locally. A real-browser synthetic-fixture exercise remains before integration.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Voice window Design D: dock snapping and smooth motion | 2026-10-18 | 6cedfd8 | [261018-99x-voice-window-design-d-dock-snapping-and-](./quick/261018-99x-voice-window-design-d-dock-snapping-and-/) |
+
 ### Roadmap Evolution
 
 - Phase 6 added: Browser control contract and policy proposal.
