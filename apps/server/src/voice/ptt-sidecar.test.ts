@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer } from "node:http";
 import { WebSocket } from "ws";
-import { SIDECAR_ALLOWED_ORIGIN, startPttSidecar, type PttSidecar } from "./ptt-sidecar";
+import { SIDECAR_ALLOWED_ORIGIN, parseWindowRequest, startPttSidecar, type PttSidecar } from "./ptt-sidecar";
 
 let sc: PttSidecar | null = null;
 const clients: WebSocket[] = [];
@@ -61,6 +61,40 @@ describe("ptt sidecar", () => {
     const src = readFileSync(new URL("./ptt-sidecar.ts", import.meta.url), "utf8");
     expect(src).toContain('"127.0.0.1"');
     expect(src).not.toContain("console.log");
+  });
+
+  it("closes on any inbound message when no window handler is wired", async () => {
+    const port = await boot();
+    const c = await connect(port, SIDECAR_ALLOWED_ORIGIN);
+    const closed = new Promise<number>((r) => c.ws.on("close", (code) => r(code)));
+    c.ws.send(JSON.stringify({ dock: "left" }));
+    expect(await closed).toBe(1008);
+  });
+
+  it("passes strict dock and drag requests to the window handler, greets, and broadcasts events", async () => {
+    const seen: unknown[] = [];
+    sc = startPttSidecar({ port: 0, onWindowRequest: (r) => seen.push(r), windowHello: () => ({ docked: "right" }) });
+    const port = await sc.listening;
+    const c = await connect(port, SIDECAR_ALLOWED_ORIGIN);
+    c.ws.send(JSON.stringify({ dock: "top" }));
+    c.ws.send(JSON.stringify({ drag: "start" }));
+    await new Promise((r) => setTimeout(r, 100));
+    sc.broadcastWindow({ zone: "left" });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(seen).toEqual([{ dock: "top" }, { drag: "start" }]);
+    expect(c.msgs.map((m) => JSON.parse(m))).toEqual([{ docked: "right" }, { zone: "left" }]);
+    const closed = new Promise<number>((r) => c.ws.on("close", (code) => r(code)));
+    c.ws.send(JSON.stringify({ dock: "bottom" }));
+    expect(await closed).toBe(1008);
+  });
+
+  it("parseWindowRequest rejects extra keys, bad values and long frames", () => {
+    expect(parseWindowRequest('{"dock":"left"}')).toEqual({ dock: "left" });
+    expect(parseWindowRequest('{"dock":"left","x":1}')).toBeNull();
+    expect(parseWindowRequest('{"drag":"fling"}')).toBeNull();
+    expect(parseWindowRequest('{"hold":"start"}')).toBeNull();
+    expect(parseWindowRequest(`{"dock":"left"${" ".repeat(80)}}`)).toBeNull();
+    expect(parseWindowRequest("nope")).toBeNull();
   });
 
   it("reports a busy port as unavailable and closes cleanly", async () => {

@@ -22,9 +22,33 @@
 
     <div id="app" inert>
       <header class="topbar">
+        <button id="dock-grip" class="grip" type="button" aria-label="Move Blip. Drag to an edge." aria-describedby="drag-hint">
+          <svg aria-hidden="true" width="10" height="18" viewBox="0 0 12 20"><circle cx="3" cy="4" r="1.6" /><circle cx="9" cy="4" r="1.6" /><circle cx="3" cy="10" r="1.6" /><circle cx="9" cy="10" r="1.6" /><circle cx="3" cy="16" r="1.6" /><circle cx="9" cy="16" r="1.6" /></svg>
+        </button>
         <h1 class="visually-hidden">Blip</h1>
         <span class="wordmark" aria-hidden="true">bl<span class="wm-i"><span class="wm-dot"></span></span>p</span>
-        <p id="connection" class="connection">Not connected</p>
+        <p id="connection" class="connection visually-hidden">Not connected</p>
+        <p id="drag-hint" class="drag-hint" aria-live="polite">Drop on an edge. Esc cancels.</p>
+
+        <div class="dock-menu" id="dock-menu">
+          <button id="dock-button" class="icon-button" type="button" aria-expanded="false" aria-controls="dock-options" aria-label="Dock Blip: right. Change">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="5" width="18" height="14" rx="2.5" /><rect class="dock-fill" x="15" y="5" width="6" height="14" rx="2.5" /></svg>
+          </button>
+          <div id="dock-options" class="dock-options" role="group" aria-label="Dock Blip" hidden>
+            <button type="button" data-dock="left" aria-pressed="false">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="5" width="18" height="14" rx="2.5" /><rect class="dock-fill" x="3" y="5" width="6" height="14" rx="2.5" /></svg>
+              <span>Sidebar, left</span>
+            </button>
+            <button type="button" data-dock="right" aria-pressed="true">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="5" width="18" height="14" rx="2.5" /><rect class="dock-fill" x="15" y="5" width="6" height="14" rx="2.5" /></svg>
+              <span>Sidebar, right</span>
+            </button>
+            <button type="button" data-dock="top" aria-pressed="false">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="5" width="18" height="14" rx="2.5" /><rect class="dock-fill" x="3" y="5" width="18" height="5" rx="2.5" /></svg>
+              <span>Strip, top</span>
+            </button>
+          </div>
+        </div>
 
         <details class="settings" id="settings">
           <summary aria-label="Settings">
@@ -86,37 +110,37 @@
 
       <section id="status" role="status" aria-live="polite" aria-labelledby="status-label" data-state="offline">
         <span class="status-shape" aria-hidden="true">
-          <svg data-shape="idle" viewBox="0 0 24 24" hidden>
+          <svg data-shape="idle" viewBox="0 0 24 24">
             <circle class="s-ring" cx="12" cy="12" r="9" stroke-dasharray="42 14.5" transform="rotate(-70 12 12)" />
             <circle class="s-line" cx="12" cy="12" r="3.6" />
           </svg>
-          <svg data-shape="starting" viewBox="0 0 24 24" hidden>
+          <svg data-shape="starting" viewBox="0 0 24 24">
             <circle class="s-ring s-accent-line faint" cx="12" cy="12" r="8" />
             <circle class="s-accent" cx="12" cy="12" r="4" />
           </svg>
-          <svg data-shape="listening" viewBox="0 0 24 24" hidden>
+          <svg data-shape="listening" viewBox="0 0 24 24">
             <circle class="s-ripple r2" cx="12" cy="12" r="11" />
             <circle class="s-ripple r1" cx="12" cy="12" r="8" />
             <circle class="s-accent" cx="12" cy="12" r="4.6" />
           </svg>
-          <svg data-shape="recovering" viewBox="0 0 24 24" hidden>
+          <svg data-shape="recovering" viewBox="0 0 24 24">
             <circle class="s-ring s-accent-line s-spin" cx="12" cy="12" r="9" stroke-dasharray="4 3" />
             <circle class="s-accent" cx="12" cy="12" r="4" />
           </svg>
-          <svg data-shape="finalizing" viewBox="0 0 24 24" hidden>
+          <svg data-shape="finalizing" viewBox="0 0 24 24">
             <circle class="s-ring s-spin" cx="12" cy="12" r="9" stroke-dasharray="2 4.2" />
             <circle class="s-fill" cx="12" cy="12" r="3.6" />
           </svg>
-          <svg data-shape="thinking" viewBox="0 0 24 24" hidden>
+          <svg data-shape="thinking" viewBox="0 0 24 24">
             <circle class="s-ring s-spin" cx="12" cy="12" r="9" stroke-dasharray="2 4.2" />
             <circle class="s-fill" cx="12" cy="12" r="3.6" />
           </svg>
-          <svg data-shape="speaking" viewBox="0 0 24 24" hidden>
+          <svg data-shape="speaking" viewBox="0 0 24 24">
             <circle class="s-fill" cx="9" cy="12" r="3.6" />
             <path class="s-line s-wave w1" d="M15 8.5a5 5 0 0 1 0 7" />
             <path class="s-line s-wave w2" d="M18 6a8.5 8.5 0 0 1 0 12" />
           </svg>
-          <svg data-shape="offline" viewBox="0 0 24 24">
+          <svg data-shape="offline" viewBox="0 0 24 24" data-on="">
             <circle class="s-line muted-line" cx="12" cy="12" r="9" />
             <path class="s-line muted-line" d="M6 18L18 6" />
           </svg>

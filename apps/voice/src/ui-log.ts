@@ -85,11 +85,22 @@ export function appendExchange(ex: Exchange): void {
 
 export function setStatus(state: UiStatus): void {
   const status = byId("status");
+  const changed = status.dataset.state !== state;
   status.dataset.state = state;
-  byId("status-label").textContent = STATUS_LABEL[state];
+  const label = byId("status-label");
+  label.textContent = STATUS_LABEL[state];
   byId("status-hint").textContent = STATUS_HINT[state];
   byId("connection").textContent = state === "offline" ? "Not connected" : "Connected";
+  // Every shape stays in the layout so CSS can crossfade between them; data-on marks the current one.
   for (const svg of status.querySelectorAll<SVGElement>("svg[data-shape]")) {
-    svg.toggleAttribute("hidden", svg.dataset.shape !== state);
+    svg.toggleAttribute("data-on", svg.dataset.shape === state);
   }
+  if (changed) replay(label, "swap");
+}
+
+/** Restart a CSS entrance animation on an element that stays in the DOM. */
+function replay(el: HTMLElement, className: string): void {
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
 }

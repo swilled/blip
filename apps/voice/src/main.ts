@@ -6,6 +6,7 @@ import { applyArmed, applyCleared, applyClose, applyState, createBannerModel, re
 import { createEarcons } from "./earcons";
 import { createHoldClient } from "./hold-client";
 import { createHoldOwner } from "./hold-owner";
+import { createDockClient, type DockEdge } from "./dock-client";
 import {
   createOutputModeController,
   statusAriaLive,
@@ -492,6 +493,142 @@ holdButton.addEventListener("keyup", (ev) => {
 window.addEventListener("blur", () => setManualHold(false, "The Blip window lost focus. Nothing was sent."));
 window.addEventListener("pagehide", () => { rateCommands.cancel(); holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); voiceStt?.close(); tts.cancel(); speechSynth.dispose(); window.speechSynthesis.removeEventListener("voiceschanged", renderVoices); navigator.mediaDevices.removeEventListener("devicechange", refreshMicrophones); });
 
+// ---------- Layout and docking (Design D) ----------
+
+const app = el("app");
+const PILL_MAX_HEIGHT = 140;
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+// The window shape picks the layout: a short window is the strip or the drag puck.
+function applyLayout(): void {
+  const next = window.innerHeight <= PILL_MAX_HEIGHT ? "pill" : "sidebar";
+  if (app.dataset.layout === next) return;
+  const swap = () => { app.dataset.layout = next; };
+  if (app.dataset.layout && document.startViewTransition && !reducedMotion.matches) document.startViewTransition(swap);
+  else swap();
+}
+applyLayout();
+window.addEventListener("resize", applyLayout);
+
+const DOCK_LABEL: Record<DockEdge, string> = { left: "left", right: "right", top: "top strip" };
+const DOCK_FILL: Record<DockEdge, [number, number, number, number]> = { left: [3, 5, 6, 14], right: [15, 5, 6, 14], top: [3, 5, 18, 5] };
+const dockButton = el<HTMLButtonElement>("dock-button");
+const dockOptions = el("dock-options");
+const grip = el<HTMLButtonElement>("dock-grip");
+const dragHint = el("drag-hint");
+let dockEdge: DockEdge = "right";
+let dragging = false;
+
+function readSavedDock(): DockEdge {
+  try {
+    const saved = localStorage.getItem("blip.dock");
+    return saved === "left" || saved === "top" ? saved : "right";
+  } catch {
+    return "right";
+  }
+}
+
+function renderDock(edge: DockEdge): void {
+  dockEdge = edge;
+  try { localStorage.setItem("blip.dock", edge); } catch { /* per-window convenience only */ }
+  dockButton.setAttribute("aria-label", `Dock Blip: ${DOCK_LABEL[edge]}. Change`);
+  const [x, y, w, h] = DOCK_FILL[edge];
+  const fill = dockButton.querySelector(".dock-fill")!;
+  fill.setAttribute("x", String(x)); fill.setAttribute("y", String(y));
+  fill.setAttribute("width", String(w)); fill.setAttribute("height", String(h));
+  for (const b of dockOptions.querySelectorAll<HTMLButtonElement>("[data-dock]")) b.setAttribute("aria-pressed", String(b.dataset.dock === edge));
+}
+
+function setDockOptionsOpen(open: boolean): void {
+  dockOptions.hidden = !open;
+  dockButton.setAttribute("aria-expanded", String(open));
+  if (open) {
+    el<HTMLDetailsElement>("settings").open = false;
+    dockOptions.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus();
+  }
+}
+
+function setDockAvailable(available: boolean): void {
+  grip.disabled = !available;
+  dockButton.disabled = !available;
+  dockButton.title = available ? "" : "Docking needs the Blip server on Windows";
+  if (!available) { setDockOptionsOpen(false); endDrag("cancel"); }
+}
+setDockAvailable(false);
+
+function setZone(zone: DockEdge | null): void {
+  if (zone) app.dataset.zone = zone;
+  else delete app.dataset.zone;
+  dragHint.textContent = zone ? `Let go to dock ${DOCK_LABEL[zone]}` : "Drop on an edge. Esc cancels.";
+}
+
+function endDrag(phase: "end" | "cancel"): void {
+  if (!dragging) return;
+  dragging = false;
+  delete app.dataset.dragging;
+  setZone(null);
+  dock.drag(phase);
+}
+
+let dockGreeted = false;
+const dock = createDockClient({
+  makeWebSocket: (url) => new WebSocket(url) as never,
+  onConnection: (connected) => { if (!connected) { dockGreeted = false; setDockAvailable(false); } },
+  onEvent: (event) => {
+    if (event.kind === "available") setDockAvailable(event.available);
+    else if (event.kind === "zone") { if (dragging) setZone(event.zone); }
+    else {
+      setDockAvailable(true);
+      if (dockGreeted) {
+        renderDock(event.edge);
+        return;
+      }
+      // First contact (the greeting): put Blip where the user left it last time, once started.
+      dockGreeted = true;
+      const saved = readSavedDock();
+      renderDock(saved);
+      if (activated) dock.dock(saved);
+    }
+  },
+  setTimer: (fn, ms) => setTimeout(fn, ms),
+});
+
+dockButton.addEventListener("click", () => setDockOptionsOpen(dockOptions.hasAttribute("hidden")));
+dockOptions.addEventListener("click", (ev) => {
+  const target = (ev.target as HTMLElement).closest<HTMLButtonElement>("[data-dock]");
+  const edge = target?.dataset.dock;
+  if (edge !== "left" && edge !== "right" && edge !== "top") return;
+  setDockOptionsOpen(false);
+  dockButton.focus();
+  if (edge !== dockEdge) dock.dock(edge);
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape") return;
+  if (dragging) { ev.preventDefault(); endDrag("cancel"); }
+  else if (!dockOptions.hidden) { setDockOptionsOpen(false); dockButton.focus(); }
+});
+document.addEventListener("pointerdown", (ev) => {
+  if (!dockOptions.hidden && !el("dock-menu").contains(ev.target as Node)) setDockOptionsOpen(false);
+});
+
+// Drag the grip: the server folds Blip into a puck that follows the cursor, then snaps on release.
+grip.addEventListener("pointerdown", (ev) => {
+  if (!ev.isPrimary || ev.button !== 0 || grip.disabled) return;
+  ev.preventDefault();
+  grip.setPointerCapture(ev.pointerId);
+  if (!dock.drag("start")) return;
+  dragging = true;
+  app.dataset.dragging = "";
+  setDockOptionsOpen(false);
+  setZone(null);
+});
+grip.addEventListener("pointerup", () => endDrag("end"));
+grip.addEventListener("pointercancel", () => endDrag("cancel"));
+grip.addEventListener("lostpointercapture", () => endDrag("end"));
+// No mouse: the grip opens the same dock picker.
+grip.addEventListener("click", (ev) => { if (ev.detail === 0) setDockOptionsOpen(true); });
+window.addEventListener("pagehide", () => dock.close());
+
 // Typed input.
 const input = el<HTMLInputElement>("typed-input");
 const form = el<HTMLFormElement>("typed");
@@ -537,6 +674,7 @@ function activate(): void {
   el("app").removeAttribute("inert");
   earcons.init();
   input.focus();
+  if (dockGreeted) dock.dock(readSavedDock());
 }
 
 window.addEventListener("keydown", (ev) => {

@@ -95,7 +95,7 @@ describe("blocked confirmation banner", () => {
   it("shows the exact confirmation phrase from the armed payload", () => {
     const model = applyArmed(createBannerModel(), armed("grant-1", "submit survey"));
 
-    expect(model.text).toBe("BLOCKED - say 'submit survey'");
+    expect(model.text).toBe("Locked · say “submit survey”");
     expect(model.visible).toBe(true);
     expect(model.grantId).toBe("grant-1");
     expect(model.phrase).toBe("submit survey");
@@ -107,7 +107,7 @@ describe("blocked confirmation banner", () => {
 
     expect(second.grantId).toBe("grant-2");
     expect(second.phrase).toBe("send report");
-    expect(second.text).toBe("BLOCKED - say 'send report'");
+    expect(second.text).toBe("Locked · say “send report”");
   });
 
   it("ignores a cleared event for a different grant", () => {
@@ -145,8 +145,8 @@ describe("blocked confirmation banner", () => {
     expect(slot.children).toHaveLength(1);
     expect(slot.children[0]?.tagName).toBe("p");
     expect(slot.children[0]?.dataset.blocked).toBe("true");
-    expect(slot.children[0]?.textContent).toBe("BLOCKED - say 'submit survey'");
-    expect(slot.children[0]?.textContentAssignments).toEqual(["BLOCKED - say 'submit survey'"]);
+    expect(slot.children[0]?.textContent).toBe("Locked · say “submit survey”");
+    expect(slot.children[0]?.textContentAssignments).toEqual(["Locked · say “submit survey”"]);
     expect(slot.children[0]?.attributes.get("aria-label")).toBe("Blocked, waiting for confirmation phrase");
     expect(slot.children[0]?.attributes.has("aria-live")).toBe(false);
     expect(slot.children[0]?.attributes.has("role")).toBe(false);

@@ -1,6 +1,18 @@
 import { LOOPBACK_HOST } from "@blip/protocol";
 import type { PttSidecar } from "../../../apps/server/src/voice/ptt-sidecar";
 
+type WindowDock = import("../../../apps/server/src/voice/window-dock").WindowDock;
+
+/** Design D docking moves real windows through user32, so it exists only on Windows. */
+async function loadWindowDock(): Promise<WindowDock | null> {
+  if (process.platform !== "win32") return null;
+  try {
+    return (await import("../../../apps/server/src/voice/window-dock")).createWindowDock();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * PTT_DELIVERY B: global Right Ctrl + Space hold -> loopback sidecar -> voice window.
  * If uiohook cannot load, typed input still works. Returns a stop function.
@@ -13,7 +25,19 @@ export async function startPttWire(port: number): Promise<() => Promise<void>> {
     const hook = await import("../../../apps/server/src/voice/ptt-hook");
     stopPttHook = hook.stopPttHook;
     const { startPttSidecar } = await import("../../../apps/server/src/voice/ptt-sidecar");
-    sidecar = startPttSidecar({ allowedOrigin: `http://${LOOPBACK_HOST}:${port}` });
+    const windowDock = await loadWindowDock();
+    sidecar = startPttSidecar({
+      allowedOrigin: `http://${LOOPBACK_HOST}:${port}`,
+      windowHello: () => (windowDock ? { docked: windowDock.edge } : { dockAvailable: false }),
+      onWindowRequest: (request) => {
+        if (!windowDock) return;
+        const report = (edge: "left" | "right" | "top" | null) => { if (edge) sidecar?.broadcastWindow({ docked: edge }); };
+        const failed = () => sidecar?.broadcastWindow({ dockAvailable: false });
+        if ("dock" in request) void windowDock.dock(request.dock).then((ok) => (ok ? report(request.dock) : failed()), failed);
+        else if (request.drag === "start") void windowDock.dragStart((zone) => sidecar?.broadcastWindow({ zone })).catch(failed);
+        else void (request.drag === "end" ? windowDock.dragEnd() : windowDock.dragCancel()).then(report, failed);
+      },
+    });
     const listeningPort = await sidecar.listening;
     if (listeningPort < 0) throw new Error("PTT sidecar could not bind its loopback port");
     sidecarReady = true;

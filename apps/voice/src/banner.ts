@@ -23,7 +23,7 @@ export function applyArmed(
     visible: true,
     phrase: payload.phrase,
     grantId: payload.grantId,
-    text: `BLOCKED - say '${payload.phrase}'`,
+    text: `Locked · say “${payload.phrase}”`,
   };
 }
 
