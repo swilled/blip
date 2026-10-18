@@ -209,4 +209,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
 | 2. Fill and Gated Submit on the Broken Form | 6/7 | In Progress | - |
 | 3. Full Command Set with Real Claude | 4/4 | Complete    | 2026-10-17 |
-| 4. NVDA Mode and Demo-Safe | 3/8 | In Progress | - |
+| 4. NVDA Mode and Demo-Safe | 7/8 | Device checkpoint pending | - |

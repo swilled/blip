@@ -5,7 +5,7 @@ current_phase: 4
 current_phase_name: NVDA Mode and Demo-Safe
 status: verifying
 stopped_at: Plans 04-04 through 04-07 executed; 04-08 device checkpoint pending
-last_updated: "2026-10-18T05:02:14Z"
+last_updated: "2026-10-18T05:26:00Z"
 last_activity: 2026-10-18
 last_activity_desc: Capture, synthesis, rate and confirmation repairs implemented and regression checked
 state_head: 9b323c6b56063dbc074fa00cf199e1cec85d5516
@@ -126,9 +126,9 @@ Recent decisions affecting the voice track:
 
 ## Session Continuity
 
-Last session: 2026-10-18T05:02:14Z
-Stopped at: Five researched repair plans ready; 04-04 next and device evidence pending
-Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-REPAIR-OVERVIEW.md
+Last session: 2026-10-18T05:26:00Z
+Stopped at: 04-08 task 1 committed; task 2 microphone/speaker checkpoint awaiting user result
+Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-REPAIR-ACCEPTANCE.md
 
 ### Voice repair planning, 2026-10-18
 
@@ -136,5 +136,13 @@ Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-RE
 - Official browser and seven existing code repositories informed the repair; sources and revision identifiers are in 04-REPAIR-RESEARCH.md.
 - VOX-01, VOX-02, VOX-04, and VOX-07 reopened from the user's live regression reports.
 - Static planning checks do not establish microphone or audible speech success. No application test suite or live audio check ran during planning.
-- The interrupted stt.ts implementation draft remains unverified for reconciliation in 04-05.
+- The interrupted stt.ts draft was reconciled in 04-05; capture and synthesis implementation is committed and automated checks passed.
 - Next command: `$gsd-execute-phase 4 --ws voice --gaps-only`.
+
+### Voice repair execution, 2026-10-18
+
+- Plans 04-04 through 04-07 complete; 04-08 task 1 complete in 4b07bc4. Human task 2 and evidence closure task 3 remain pending.
+- Full root regression: 123 files / 1,298 tests passed; 16 files / 28 tests skipped. Root typecheck and voice build passed. Prior-phase regression coverage is included in this root run; opt-in E2Es were not run.
+- Old repository demo PID 45444 was identified and stopped. Updated fake-brain demo launched with global hook ready and both extension/voice connected. Runtime and disk identities agree: 8151ed9-2026-10-18T05:23:13.854Z.
+- Demo process is running through tool session 9366. Actual microphone/audio checks have not passed. First requested check: Check microphone, then hold button and complete read the form.
+- No connected browser automation surfaces are available; request content-free diagnostic trace copies for native timing measurements. No public form submitted, no push, and no demo-safe tag created.
