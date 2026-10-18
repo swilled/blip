@@ -302,24 +302,38 @@ talk = createTalkController({
   spokenText: () => replyParts.join(" "),
 });
 
+let manualHoldActive = false;
+let globalHoldActive = false;
+const holdButton = el<HTMLButtonElement>("hold-to-talk");
+function renderHoldButton(): void {
+  const active = manualHoldActive || globalHoldActive;
+  holdButton.setAttribute("aria-pressed", String(active));
+  holdButton.textContent = manualHoldActive
+    ? "Listening — release to send"
+    : globalHoldActive
+      ? "Listening — release both keys to send"
+      : "Hold to talk";
+}
+
+function setManualHold(active: boolean): void {
+  if (manualHoldActive === active) return;
+  manualHoldActive = active;
+  if (active) globalHoldActive = false;
+  renderHoldButton();
+  talk.onHold(active ? "start" : "end");
+}
+
 // Global hold (PTT_DELIVERY B): loopback sidecar next to the hub connection.
 createHoldClient({
   makeWebSocket: (url) => new WebSocket(url) as never,
   onHold: (h) => {
-    if (!manualHoldActive) talk.onHold(h);
+    if (manualHoldActive) return;
+    globalHoldActive = h === "start";
+    renderHoldButton();
+    talk.onHold(h);
   },
   setTimer: (fn, ms) => setTimeout(fn, ms),
 });
-
-let manualHoldActive = false;
-const holdButton = el<HTMLButtonElement>("hold-to-talk");
-function setManualHold(active: boolean): void {
-  if (manualHoldActive === active) return;
-  manualHoldActive = active;
-  holdButton.setAttribute("aria-pressed", String(active));
-  holdButton.textContent = active ? "Listening — release to send" : "Hold to talk";
-  talk.onHold(active ? "start" : "end");
-}
 
 holdButton.addEventListener("pointerdown", (ev) => {
   if (!ev.isPrimary || ev.button !== 0) return;

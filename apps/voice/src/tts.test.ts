@@ -83,6 +83,17 @@ describe("tts", () => {
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 
+  it("allows slower speech enough time before the completion watchdog fires", () => {
+    const { tts, done, cancel, setRate } = setup();
+    setRate(0.5);
+    tts.speak("one two three", { speakId: "slow" }); // 3 words at 0.5x = 2400 ms + slack
+    vi.advanceTimersByTime(3399);
+    expect(done).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(done).toEqual([{ speakId: "slow", interrupted: true }]);
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
   it("waits the 400 ms tail after onend before reporting done", () => {
     const { tts, handlers, done } = setup();
     tts.speak("hello.", { speakId: "s1" });

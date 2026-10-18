@@ -51,9 +51,9 @@ function splitSentences(text: string): string[] {
   return parts.map((p) => p.trim()).filter((p) => p.length > 0);
 }
 
-function estimateMs(sentence: string): number {
+function estimateMs(sentence: string, rate: number): number {
   const words = sentence.split(/\s+/).filter(Boolean).length;
-  return words * MS_PER_WORD;
+  return Math.ceil((words * MS_PER_WORD) / Math.max(0.1, rate));
 }
 
 export function createTts(deps: TtsDeps): Tts {
@@ -123,11 +123,11 @@ export function createTts(deps: TtsDeps): Tts {
     const text = item.sentences[sentenceIdx];
     generation += 1;
     const gen = generation;
+    const rate = getRate();
     gateTimer = setTimer(() => {
       gateTimer = null;
       sentenceEnded(gen, true);
-    }, estimateMs(text) + GATE_SLACK_MS);
-    const rate = getRate();
+    }, estimateMs(text, rate) + GATE_SLACK_MS);
     synth.speak(text, {
       onend: () => sentenceEnded(gen),
       // Chrome reports canceled/interrupted utterances as errors, not successful ends.

@@ -22,12 +22,14 @@ function setup() {
 }
 
 describe("ptt-state", () => {
-  it("emits one start on Right Ctrl + Space and one end on release", () => {
+  it("stays active until both Right Ctrl and Space are released", () => {
     const { ptt, events } = setup();
     ptt.handle("down", RCTRL);
     ptt.handle("down", SPACE);
     expect(events).toEqual(["start"]);
     ptt.handle("up", SPACE);
+    expect(events).toEqual(["start"]);
+    ptt.handle("up", RCTRL);
     expect(events).toEqual(["start", "end"]);
   });
 
@@ -41,11 +43,12 @@ describe("ptt-state", () => {
     expect(events).toEqual(["start"]);
   });
 
-  it("ends once when Right Ctrl is released first, then restarts on a new hold", () => {
+  it("ends once after releasing both keys, then restarts on a new hold", () => {
     const { ptt, events } = setup();
     ptt.handle("down", RCTRL);
     ptt.handle("down", SPACE);
     ptt.handle("up", RCTRL);
+    expect(events).toEqual(["start"]);
     ptt.handle("up", SPACE);
     expect(events).toEqual(["start", "end"]);
     ptt.handle("down", RCTRL);
@@ -89,6 +92,8 @@ describe("ptt-state", () => {
     b.ptt.handle("down", RCTRL);
     b.ptt.handle("down", SPACE);
     b.ptt.handle("up", SPACE);
+    expect(b.hasTimer()).toBe(true);
+    b.ptt.handle("up", RCTRL);
     expect(b.hasTimer()).toBe(false);
     expect(b.events).toEqual(["start", "end"]);
   });

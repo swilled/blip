@@ -68,7 +68,7 @@ describe("stt", () => {
     stt.press();
     stt.press();
     expect(f.calls.start).toBe(1);
-    expect(f.rec.continuous).toBe(false);
+    expect(f.rec.continuous).toBe(true);
     expect(f.rec.maxAlternatives).toBe(3);
     expect(f.rec.lang).toBe("en-US");
     expect(f.rec.interimResults).toBe(true);

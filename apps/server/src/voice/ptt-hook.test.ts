@@ -44,7 +44,7 @@ describe("ptt-hook", () => {
     f.down(57);
     expect(seen).toEqual(["start"]);
     f.up(57);
-    expect(seen).toEqual(["start", "end"]);
+    expect(seen).toEqual(["start"]);
     f.up(3613);
     expect(seen).toEqual(["start", "end"]);
   });

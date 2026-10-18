@@ -1,5 +1,5 @@
 // One webkitSpeechRecognition start() per push-to-talk press (VOX-02).
-// continuous is always false and the session is never restarted on `end`.
+// Keep continuous recognition active until the user releases the hold; never auto-restart.
 // The recognition factory is injected so tests need no browser.
 
 export const MAX_ALTERNATIVES = 3;
@@ -136,7 +136,7 @@ export function createStt(opts: SttOptions): Stt {
         return;
       }
       r.lang = "en-US";
-      r.continuous = false;
+      r.continuous = true;
       r.interimResults = true;
       r.maxAlternatives = MAX_ALTERNATIVES;
       let latestResult: SttResultEvent | null = null;

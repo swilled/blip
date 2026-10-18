@@ -42,7 +42,8 @@ export function createPttState(opts: PttStateOptions): PttState {
   }
 
   function evaluate(): void {
-    if (!ctrlDown && !spaceDown) latched = false;
+    const bothReleased = !ctrlDown && !spaceDown;
+    if (bothReleased) latched = false;
     const both = ctrlDown && spaceDown;
     if (both && !active && !latched) {
       active = true;
@@ -55,7 +56,7 @@ export function createPttState(opts: PttStateOptions): PttState {
           end();
         }
       }, watchdogMs);
-    } else if (!both && active) {
+    } else if (bothReleased && active) {
       end();
     }
   }
