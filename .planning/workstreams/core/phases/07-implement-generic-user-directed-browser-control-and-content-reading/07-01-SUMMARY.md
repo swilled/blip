@@ -82,6 +82,8 @@ completed: 2026-10-18
 2. **Task 2: Register browser messages and document the review boundary** — `b81869c` (`feat`)
 3. **Task 2 follow-up: State exact browser authorization requirements** — `74fb354` (`fix`)
 
+**Plan metadata:** `502c69b` (`docs(07-01): complete browser protocol plan`)
+
 ## Files Created/Modified
 
 - `packages/protocol/src/payloads-browser.ts` — typed operations, bounded results, and page identity validation.
@@ -151,3 +153,4 @@ None.
 
 - Summary and key created files exist.
 - Task commits `b34b204`, `b81869c`, and `74fb354` exist in git history.
+- Plan metadata commit `502c69b` exists in git history.
