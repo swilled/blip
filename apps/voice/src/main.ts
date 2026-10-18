@@ -18,7 +18,8 @@ import { createVoiceState } from "./state";
 import { createStt, type RecognitionLike } from "./stt";
 import { createTalkController } from "./talk-controller";
 import { checkMicrophone, createSpeechDiagnostics, observeRecognition } from "./speech-diagnostics";
-import { createTts, type Synth } from "./tts";
+import { createTts } from "./tts";
+import { createNativeSynth } from "./native-synth";
 import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log";
 
 const CLIENT_VERSION = "0.0.0";
@@ -56,24 +57,7 @@ function el<T extends HTMLElement>(id: string): T {
   return e as T;
 }
 
-function makeSynth(): Synth {
-  const ss = window.speechSynthesis;
-  return {
-    speak(text, handlers, rate) {
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = rate;
-      const voices = ss.getVoices();
-      const v = voices.find((x) => x.localService && /^Microsoft/.test(x.name) && x.lang.startsWith("en"));
-      if (v) u.voice = v;
-      u.onend = () => handlers.onend();
-      u.onerror = (ev) => handlers.onerror(ev.error);
-      ss.speak(u);
-    },
-    cancel() {
-      ss.cancel();
-    },
-  };
-}
+const nativeSynth = createNativeSynth({ synthesis: window.speechSynthesis, makeUtterance: text => new SpeechSynthesisUtterance(text), record: recordSpeechEvent, warn: message => { el("output-mode-status").textContent = message; } });
 
 const earcons = createEarcons();
 let connectionExtra = "";
@@ -139,7 +123,8 @@ function commitExchange(): void {
 }
 
 const tts = createTts({
-  synth: makeSynth(),
+  synth: nativeSynth,
+  onFailure: message => { el("output-mode-status").textContent = message; },
   getRate: () => speechRate,
   now: () => Date.now(),
   setTimer: (fn, ms) => setTimeout(fn, ms),
@@ -252,10 +237,10 @@ const outputMode = createOutputModeController({
 function rateAcknowledgement(direction: SpeechRateDirection): string {
   const result = adjustSpeechRate(speechRate, direction);
   speechRate = result.rate;
-  el<HTMLOutputElement>("speech-rate-value").value = `${speechRate.toFixed(1)}×`;
+  el<HTMLOutputElement>("speech-rate-value").value = `${speechRate.toFixed(2)}×`;
   if (result.limit === "fastest") return "Already at the fastest rate.";
   if (result.limit === "slowest") return "Already at the slowest rate.";
-  return `Speech rate is now ${speechRate.toFixed(1)}.`;
+  return direction === "faster" ? "Speaking faster." : "Speaking slower.";
 }
 
 function handleLocalRateUtterance(text: string): boolean {
@@ -396,7 +381,7 @@ holdButton.addEventListener("keyup", (ev) => {
   }
 });
 window.addEventListener("blur", () => setManualHold(false, "The Blip window lost focus. Nothing was sent."));
-window.addEventListener("pagehide", () => { holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); });
+window.addEventListener("pagehide", () => { holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); tts.cancel(); nativeSynth.dispose(); });
 
 // Typed input.
 const input = el<HTMLInputElement>("typed-input");

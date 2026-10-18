@@ -3,6 +3,7 @@
 // is injected (production passes a thin wrapper around window.speechSynthesis).
 
 export interface SynthHandlers {
+  onstart?: () => void;
   onend: () => void;
   // Called on any synth error, including "interrupted" and "canceled".
   onerror: (reason?: string) => void;
@@ -25,6 +26,7 @@ export interface TtsDeps {
   setTimer: (fn: () => void, ms: number) => unknown;
   clearTimer: (handle: unknown) => void;
   onDone: (d: TtsDone) => void;
+  onFailure?: (message: string) => void;
 }
 
 export interface Tts {
@@ -44,11 +46,21 @@ const GATE_SLACK_MS = 1000;
 interface Item {
   speakId?: string;
   sentences: string[];
+  rate?: number;
 }
 
 function splitSentences(text: string): string[] {
-  const parts = text.match(/[^.!?]+[.!?]*/g) ?? [];
-  return parts.map((p) => p.trim()).filter((p) => p.length > 0);
+  const abbreviations = new Set(["dr", "mr", "mrs", "ms", "prof", "sr", "jr", "st", "vs", "e.g", "i.e", "etc", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec"]);
+  const parts: string[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (!/[.!?]/.test(text[i]!) || (i + 1 < text.length && !/\s/.test(text[i + 1]!))) continue;
+    const word = text.slice(start, i).match(/([\w.]+)$/)?.[1]?.toLowerCase() ?? "";
+    if (text[i] === "." && abbreviations.has(word)) continue;
+    parts.push(text.slice(start, i + 1).trim()); start = i + 1;
+  }
+  parts.push(text.slice(start).trim());
+  return parts.filter(Boolean);
 }
 
 function estimateMs(sentence: string, rate: number): number {
@@ -100,6 +112,7 @@ export function createTts(deps: TtsDeps): Tts {
     if (interrupted) {
       clearTail();
       synth.cancel();
+      deps.onFailure?.("Speech stopped before it finished. Try the command again.");
       finishItem(true);
       return;
     }
@@ -123,16 +136,23 @@ export function createTts(deps: TtsDeps): Tts {
     const text = item.sentences[sentenceIdx];
     generation += 1;
     const gen = generation;
-    const rate = getRate();
+    const rate = item.rate ?? 1;
     gateTimer = setTimer(() => {
       gateTimer = null;
       sentenceEnded(gen, true);
-    }, estimateMs(text, rate) + GATE_SLACK_MS);
-    synth.speak(text, {
+    }, 8000);
+    let started = false;
+    const handlers: SynthHandlers = {
+      onstart: () => {
+        if (gen !== generation || started) return;
+        started = true; clearGate();
+        gateTimer = setTimer(() => { gateTimer = null; sentenceEnded(gen, true); }, Math.min(120000, Math.max(5000, estimateMs(text, rate) * 2 + GATE_SLACK_MS * 2)));
+      },
       onend: () => sentenceEnded(gen),
       // Chrome reports canceled/interrupted utterances as errors, not successful ends.
       onerror: () => sentenceEnded(gen, true),
-    }, rate);
+    };
+    try { synth.speak(text, handlers, rate); } catch { sentenceEnded(gen, true); }
   }
 
   function pump(): void {
@@ -140,6 +160,7 @@ export function createTts(deps: TtsDeps): Tts {
     const next = queue.shift();
     if (!next) return;
     active = next;
+    active.rate = getRate();
     sentenceIdx = 0;
     speakSentence();
   }
@@ -156,6 +177,7 @@ export function createTts(deps: TtsDeps): Tts {
       pump();
     },
     cancel() {
+      clearOneMoment();
       const pending: Item[] = [];
       if (active) pending.push(active);
       pending.push(...queue);

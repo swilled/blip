@@ -11,9 +11,7 @@ export interface SpeechRateAdjustment {
 }
 
 const DEFAULT_RATE = 1.0;
-const MIN_RATE = 0.5;
-const MAX_RATE = 2.0;
-const RATE_STEP = 0.2;
+export const SPEECH_RATES = [0.50, 0.63, 0.79, 1.00, 1.26, 1.59, 2.00] as const;
 
 export function createSpeechRate(): number {
   return DEFAULT_RATE;
@@ -23,12 +21,33 @@ export function adjustSpeechRate(
   rate: number,
   direction: SpeechRateDirection,
 ): SpeechRateAdjustment {
-  const atLimit = direction === "faster" ? rate >= MAX_RATE : rate <= MIN_RATE;
+  const index = SPEECH_RATES.reduce((best, value, i) => Math.abs(value - rate) < Math.abs(SPEECH_RATES[best]! - rate) ? i : best, 0);
+  const atLimit = direction === "faster" ? index === SPEECH_RATES.length - 1 : index === 0;
   if (atLimit) {
     return { rate, limit: direction === "faster" ? "fastest" : "slowest" };
   }
 
-  const delta = direction === "faster" ? RATE_STEP : -RATE_STEP;
-  const next = Math.round((rate + delta) * 10) / 10;
-  return { rate: Math.min(MAX_RATE, Math.max(MIN_RATE, next)), limit: null };
+  return { rate: SPEECH_RATES[index + (direction === "faster" ? 1 : -1)]!, limit: null };
+}
+
+/** Rapid adjustments change the display immediately but acknowledge only the latest selection. */
+export function createRateCommandController(deps: {
+  changed(rate: number, acknowledgement: string): void;
+  acknowledge(message: string): void;
+}) {
+  let rate = createSpeechRate();
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  return {
+    get: () => rate,
+    adjust(direction: SpeechRateDirection) {
+      const next = adjustSpeechRate(rate, direction);
+      rate = next.rate;
+      const message = next.limit === "fastest" ? "Already at the fastest rate." : next.limit === "slowest" ? "Already at the slowest rate."
+        : direction === "faster" ? "Speaking faster." : "Speaking slower.";
+      deps.changed(rate, message);
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(() => { pending = null; deps.acknowledge(message); }, 200);
+    },
+    cancel() { if (pending) clearTimeout(pending); pending = null; },
+  };
 }

@@ -31,6 +31,33 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe("tts", () => {
+  it("keeps decimals, abbreviations, dates, emails and URLs intact", () => {
+    const t = setup();
+    t.tts.speak("Dr. Smith has 1.2 points. Email ada@example.com on Oct. 18. Visit https://example.com.");
+    expect(t.spoken).toEqual(["Dr. Smith has 1.2 points."]);
+    t.handlers[0].onend();
+    expect(t.spoken[1]).toBe("Email ada@example.com on Oct. 18.");
+    t.handlers[1].onend();
+    expect(t.spoken[2]).toBe("Visit https://example.com.");
+  });
+  it("captures one rate for an entire item and permits a delayed native start", () => {
+    const t = setup();
+    t.tts.speak("First sentence. Second sentence."); vi.advanceTimersByTime(7000);
+    expect(t.done).toEqual([]); t.handlers[0].onstart?.();
+    t.setRate(2); t.handlers[0].onend();
+    expect(t.spokenRates).toEqual([1, 1]);
+    t.handlers[1].onend(); vi.advanceTimersByTime(400); t.tts.speak("Next.");
+    expect(t.spokenRates).toEqual([1, 1, 2]);
+  });
+  it("recovers a missing start without false completion or blocking later speech", () => {
+    const t = setup();
+    t.tts.speak("Lost speech.", { speakId: "lost" }); vi.advanceTimersByTime(8000);
+    expect(t.done).toEqual([{ speakId: "lost", interrupted: true }]);
+    t.tts.speak("Next speech.", { speakId: "next" });
+    t.handlers[1].onstart?.(); t.handlers[1].onend(); vi.advanceTimersByTime(400);
+    expect(t.done.at(-1)).toEqual({ speakId: "next", interrupted: false });
+    t.handlers[0].onend(); expect(t.done).toHaveLength(2);
+  });
   it("captures rate when each utterance starts without restarting active speech", () => {
     const harness = setup();
     const { tts, handlers, spokenRates, cancel, setRate } = harness;
@@ -74,9 +101,10 @@ describe("tts", () => {
   });
 
   it("fails closed as interrupted when the completion watchdog expires", () => {
-    const { tts, done, cancel } = setup();
+    const { tts, done, cancel, handlers } = setup();
     tts.speak("one two three", { speakId: "s1" }); // 3 words = 1200 ms estimate
-    vi.advanceTimersByTime(2199);
+    handlers[0].onstart?.();
+    vi.advanceTimersByTime(4999);
     expect(done).toEqual([]);
     vi.advanceTimersByTime(1);
     expect(done).toEqual([{ speakId: "s1", interrupted: true }]);
@@ -84,10 +112,11 @@ describe("tts", () => {
   });
 
   it("allows slower speech enough time before the completion watchdog fires", () => {
-    const { tts, done, cancel, setRate } = setup();
+    const { tts, done, cancel, setRate, handlers } = setup();
     setRate(0.5);
     tts.speak("one two three", { speakId: "slow" }); // 3 words at 0.5x = 2400 ms + slack
-    vi.advanceTimersByTime(3399);
+    handlers[0].onstart?.();
+    vi.advanceTimersByTime(6799);
     expect(done).toEqual([]);
     vi.advanceTimersByTime(1);
     expect(done).toEqual([{ speakId: "slow", interrupted: true }]);
