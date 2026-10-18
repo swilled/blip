@@ -97,6 +97,17 @@ describe("socket", () => {
     expect(a.ok && a.message.payload).toEqual({ state: "start" });
     expect(b.ok && b.message.payload).toEqual({ speakId: "s1", interrupted: true });
   });
+  it("sends only the supported exclusive speech output settings", () => {
+    const { s, socks } = setup();
+    socks[0].open();
+    socks[0].recv(welcome());
+    s.sendSettings("screen-reader");
+
+    const sent = parseFrame(socks[0].sent[1]);
+    expect(sent.ok && sent.message.type === "settings" && sent.message.payload).toEqual({
+      outputMode: "screen-reader",
+    });
+  });
   it("drops invalid inbound, delivers valid", () => {
     const { socks, messages } = setup();
     socks[0].open();

@@ -1,4 +1,6 @@
 // NVDA Controller Client bridge (Spike C1). Calls speakText / cancelSpeech via koffi.
+// speakText's return value only confirms dispatch; this API exposes no per-utterance completion
+// callback, so the hub must keep screen-reader output unavailable until a safe signal exists.
 // DLL path: env NVDA_DLL_PATH, default tools/nvda-client/nvdaControllerClient64.dll (LGPL, not committed).
 import koffi from "koffi";
 import { existsSync } from "node:fs";
@@ -40,7 +42,7 @@ export function nvdaLastError(): string {
   return lastError;
 }
 
-/** Returns the DLL result code (0 = ok), or -1 if the DLL is unavailable (see nvdaLastError). */
+/** Returns the DLL dispatch result (0 = accepted), or -1 if unavailable; never use it as completion. */
 export function nvdaSpeak(text: string): number {
   const a = load();
   if (!a) return -1;
