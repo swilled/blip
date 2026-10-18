@@ -15,7 +15,7 @@ Implement core-owned, generic browser controls from the Phase 6 proposal. A user
 
 ### User-directed browser actions
 - **D-01:** Browser controls are generic and derived from the user's words and current live page state. No page instruction or model output may invent a URL, query, link, tab, or action target.
-- **D-02:** Support starting from a new/blank tab and opening a user-named site. Resolve destinations from the user's words, speak the resolved host, and wait for explicit confirmation before navigating.
+- **D-02:** Support starting from a new/blank tab and opening a user-named site. Resolve destinations from the user's words, speak the resolved host, and ask for an exact destination-specific phrase such as “open [host]” before navigating. A bare “yes” does not authorize navigation.
 - **D-03:** Search route may be selected from the request and page context. The query itself comes only from the user's words. Site search keeps the gated submit path; browser-default search uses its own exact-query, one-use authorization and cannot authorize result links.
 - **D-04:** A link can be opened only when the user's words uniquely select a visible current link. Code resolves and rechecks its live destination. Unknown, hidden, ambiguous, or stale targets clarify or fail closed.
 - **D-05:** Implement the Phase 6 browser primitive scope: location, bounded content reads, link listing/opening, named-site navigation, back/forward/reload where destination safety can be established, search, tabs, scrolling, and find-on-page. Unsupported or restricted pages are reported clearly.
@@ -28,7 +28,7 @@ Implement core-owned, generic browser controls from the Phase 6 proposal. A user
 ### Safety and ownership
 - **D-09:** Every dispatched browser action passes through deterministic validation and the existing Executor. Page/tab/URL/capture changes, stop, cancellation, and timeout invalidate stale IDs and grants.
 - **D-10:** The core owner has authorized local implementation on the core branch. Keep voice-owned implementation files unchanged. Shared protocol/live-policy changes remain unmerged until the voice owner reviews the exact changes in writing.
-- **D-11:** Important actions use an exact context-specific spoken phrase. A bare “yes” never authorizes navigation, submit, send, or another gated action. Phrase design for composed messages is handled in Phase 8.
+- **D-11:** Important or gated actions use a deterministic, exact spoken phrase suited to the operation and target. A bare “yes” never authorizes navigation, submit, send, or another gated action. Phrase design for composed messages is handled in Phase 8.
 
 ### the agent's Discretion
 - Choose additive protocol shapes, bounded capture limits, supported-page checks, and safe fallback wording consistent with Phase 6.
