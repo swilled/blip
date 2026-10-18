@@ -1,5 +1,7 @@
 // Voice window wiring: start gate, typed input, log, earcons, socket, tts.
 // The window never matches a confirm phrase; that lives in server code.
+import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/hanken-grotesk";
 import { applyArmed, applyCleared, applyClose, applyState, createBannerModel, renderBanner } from "./banner";
 import { createEarcons } from "./earcons";
 import { createHoldClient } from "./hold-client";

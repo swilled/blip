@@ -6,6 +6,8 @@
   "dependencies": {
     "@blip/dialogue": "*",
     "@blip/protocol": "*",
+    "@fontsource-variable/bricolage-grotesque": "5.3.0",
+    "@fontsource-variable/hanken-grotesk": "5.3.0",
     "@moonshine-ai/moonshine-wasm": "^0.1.5",
     "kokoro-js": "^1.2.1"
   },
