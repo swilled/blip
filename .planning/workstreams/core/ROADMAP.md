@@ -218,11 +218,11 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 **Requirements**: TBD
 **Planning note:** Proposal-only phase; no v1 requirement IDs change. AGENT-01 remains deferred for a separate later phase.
 **Depends on:** Phase 5 technical acceptance (passed); written v1 release gates remain independent.
-**Plans:** 0/2 plans executed
+**Plans:** 2/2 plans executed
 
 Plans:
-- [ ] 06-01-PLAN.md — Draft the additive contract and policy proposal
-- [ ] 06-02-PLAN.md — Create the evidence matrix, adversarial cases, and approval gates
+- [x] 06-01-PLAN.md — Draft the additive contract and policy proposal
+- [x] 06-02-PLAN.md — Create the evidence matrix, adversarial cases, and approval gates
 
 ---
 *Roadmap created: 2026-10-16*
