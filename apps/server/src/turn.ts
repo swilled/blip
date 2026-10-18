@@ -229,7 +229,6 @@ async function answerExplicitPageContent(
   }
 
   ctx.hub.send("voice", "earcon", { name: "thinking" });
-  speak(ctx.hub, ctx.session, MSG_FILLER, "filler");
   let timer: unknown;
   let settled = false;
   let rejectTimeout!: (error: Error) => void;

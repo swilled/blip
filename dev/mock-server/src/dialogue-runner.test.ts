@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import {
   buildFrame,
@@ -92,6 +92,7 @@ describe("real voice dialogue runner", () => {
       now: () => clock,
       onActRequest: (request) => actRequests.push(request),
     });
+    const requestSpy = vi.spyOn(real.server.hub, "request");
     closers.push(() => real.close());
 
     const ws = new WebSocket(`ws://127.0.0.1:${real.server.port}/ws`, {

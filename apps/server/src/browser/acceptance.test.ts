@@ -797,7 +797,7 @@ describe("Phase 7 generic browser-control acceptance", () => {
       hub, gatePort: createGatePort(hub, session.grants), session, refresher, clock: () => now,
       schedule: (callback, delay) => schedule.push({ callback, delay }),
     };
-    const handlers = createDialogueHandlers({ gate: createCoreDialogueGatePort(gatedContext), now: () => now });
+    const handlers = createDialogueHandlers({ gate: createCoreDialogueGatePort(gatedContext), refresher, now: () => now });
     function frame<T extends MessageType>(type: T, payload: PayloadOf<T>): Message {
       const parsed = parseFrame(JSON.stringify(buildFrame(type, payload)));
       if (!parsed.ok) throw new Error(`Could not build ${type} frame.`);
