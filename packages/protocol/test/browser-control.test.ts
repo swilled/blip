@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BrowserContentResult,
+  BrowserReadItemResult,
   BrowserLinkListResult,
   BrowserOperation,
   BrowserRequestPayload,
@@ -20,6 +21,14 @@ const contentBlock = (kind: "heading" | "paragraph", text: string, contentId = "
   kind,
   text,
   identity,
+  frameId: 0,
+});
+
+const contentItem = (itemId: string, text: string, visibleDate: string | null = null, itemIdentity = identity) => ({
+  itemId,
+  text,
+  visibleDate,
+  identity: itemIdentity,
   frameId: 0,
 });
 
@@ -44,6 +53,7 @@ const validOperations: BrowserOperationType[] = [
   { op: "tabs", action: "open-blank" },
   { op: "list-links" },
   { op: "read-content", kind: "heading", contentId: "content-1", identity },
+  { op: "read-item", itemId: "item-1", identity },
   { op: "open-link", linkId: "link-1", identity, authorizationId: "auth-3" },
   { op: "scroll", direction: "down", pixels: 500, identity },
   { op: "scroll", contentId: "content-1", kind: "paragraph", identity },
@@ -60,6 +70,7 @@ const validSuccessResults = [
   { ok: true, requestId: "request-1", operation: "tabs", result: { activeTabId: 7, tabs: [{ tabId: 7, title: "Article", hostHint: "example.test" }], truncated: false } },
   { ok: true, requestId: "request-1", operation: "list-links", result: { ...identity, status: "supported", links: [linkRecord("link-1", "More", "example.test")], truncated: false } },
   { ok: true, requestId: "request-1", operation: "read-content", result: { ...identity, status: "supported", blocks: [contentBlock("paragraph", "A bounded excerpt.")], truncated: false } },
+  { ok: true, requestId: "request-1", operation: "read-item", result: contentItem("item-1", "A visible item.", "2026-10-18T12:30:00Z") },
   { ok: true, requestId: "request-1", operation: "open-link", result: { tabId: 7, status: "dispatched" } },
   { ok: true, requestId: "request-1", operation: "scroll", result: { identity, moved: true } },
   { ok: true, requestId: "request-1", operation: "find", result: { identity, found: true, matchCount: 1, truncated: false } },
@@ -70,10 +81,10 @@ describe("BrowserOperation", () => {
     expect(BrowserOperation.safeParse(operation).success).toBe(true);
   });
 
-  it("contains exactly the 12 closed operation discriminants", () => {
+  it("contains exactly the 13 closed operation discriminants", () => {
     expect(BrowserOperation.options.map((option) => option.shape.op.value)).toEqual([
       "location", "capture", "navigate", "history", "reload", "search", "tabs",
-      "list-links", "read-content", "open-link", "scroll", "find",
+      "list-links", "read-content", "read-item", "open-link", "scroll", "find",
     ]);
     expect(BrowserOperation.safeParse({ op: "script", script: "location.href='https://evil.test'" }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "confirm" }).success).toBe(false);
@@ -109,6 +120,11 @@ describe("BrowserOperation", () => {
     expect(BrowserRequestPayload.safeParse({
       requestId: "request-1",
       tabId: 8,
+      operation: { op: "read-item", itemId: "item-1", identity },
+    }).success).toBe(false);
+    expect(BrowserRequestPayload.safeParse({
+      requestId: "request-1",
+      tabId: 8,
       operation: { op: "scroll", contentId: "content-1", kind: "paragraph", identity },
     }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "scroll", identity, direction: "down" }).success).toBe(false);
@@ -136,6 +152,48 @@ describe("browser content and link bounds", () => {
     expect(BrowserContentResult.safeParse({
       ...capture,
       blocks: Array.from({ length: 21 }, (_, index) => contentBlock("paragraph", "x", `content-${index}`)),
+    }).success).toBe(false);
+  });
+
+  it("accepts legacy content captures and bounds generic visible items", () => {
+    const legacy = { ...identity, status: "supported", blocks: [], truncated: false };
+    expect(BrowserContentResult.safeParse(legacy).success).toBe(true);
+
+    const valid = { ...legacy, items: [contentItem("item-1", "😀".repeat(400), "2026-10-18T12:30:00Z")] };
+    expect(BrowserContentResult.safeParse(valid).success).toBe(true);
+    expect(BrowserReadItemResult.safeParse(contentItem("item-1", "Visible.", null)).success).toBe(true);
+    expect(BrowserContentResult.safeParse({
+      ...legacy,
+      items: Array.from({ length: 20 }, (_, index) => contentItem(`item-${index}`, "x".repeat(200))),
+    }).success).toBe(true);
+    expect(BrowserContentResult.safeParse({ ...legacy, items: [contentItem("item-1", "😀".repeat(401))] }).success).toBe(false);
+    expect(BrowserContentResult.safeParse({
+      ...legacy,
+      items: Array.from({ length: 11 }, (_, index) => contentItem(`item-${index}`, "x".repeat(400))),
+    }).success).toBe(false);
+    expect(BrowserContentResult.safeParse({
+      ...legacy,
+      items: Array.from({ length: 21 }, (_, index) => contentItem(`item-${index}`, "x")),
+    }).success).toBe(false);
+    expect(BrowserContentResult.safeParse({
+      ...legacy,
+      items: [contentItem("item-1", "One"), contentItem("item-1", "Duplicate")],
+    }).success).toBe(false);
+  });
+
+  it("rejects malformed or mismatched visible item evidence", () => {
+    const base = { ...identity, status: "supported", blocks: [], truncated: false };
+    expect(BrowserContentResult.safeParse({
+      ...base,
+      items: [contentItem("item-1", "Visible item", "yesterday")],
+    }).success).toBe(false);
+    expect(BrowserContentResult.safeParse({
+      ...base,
+      items: [contentItem("item-1", "Visible item", "2026-02-30T12:00:00Z")],
+    }).success).toBe(false);
+    expect(BrowserContentResult.safeParse({
+      ...base,
+      items: [contentItem("item-1", "Visible item", null, { ...identity, captureRevision: 2 })],
     }).success).toBe(false);
   });
 

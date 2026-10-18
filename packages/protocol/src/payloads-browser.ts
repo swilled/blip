@@ -87,6 +87,17 @@ export const BrowserContentBlock = z.object({
 });
 export type BrowserContentBlock = z.infer<typeof BrowserContentBlock>;
 
+/** A generic visible semantic item, with recency evidence only when its visible time is explicit. */
+export const BrowserContentItem = z.object({
+  itemId: BrowserId,
+  text: boundedText(400).min(1),
+  /** Strict ISO-8601 evidence from a visible semantic time element; null means unknown. */
+  visibleDate: z.iso.datetime({ offset: true }).nullable(),
+  identity: BrowserPageIdentity,
+  frameId: z.number().int().min(0).max(100_000),
+});
+export type BrowserContentItem = z.infer<typeof BrowserContentItem>;
+
 const BrowserContentBlocks = z.array(BrowserContentBlock).max(20).superRefine((blocks, ctx) => {
   const total = blocks.reduce((sum, block) => sum + codePoints(block.text), 0);
   if (total > 4000) {
@@ -94,19 +105,38 @@ const BrowserContentBlocks = z.array(BrowserContentBlock).max(20).superRefine((b
   }
 });
 
+const BrowserContentItems = z.array(BrowserContentItem).max(20).superRefine((items, ctx) => {
+  const total = items.reduce((sum, item) => sum + codePoints(item.text), 0);
+  if (total > 4000) {
+    ctx.addIssue({ code: "custom", message: "items must be at most 4,000 Unicode code points total" });
+  }
+  if (new Set(items.map((item) => item.itemId)).size !== items.length) {
+    ctx.addIssue({ code: "custom", message: "item IDs must be unique within a capture" });
+  }
+});
+
 export const BrowserContentResult = BrowserPageIdentity.extend({
   status: z.enum(["supported", "restricted", "empty", "timeout", "capture-failed"]),
   blocks: BrowserContentBlocks,
+  /** Optional for compatibility with captures from peers that predate semantic item records. */
+  items: BrowserContentItems.optional(),
   /** This marks only the bounded content excerpt; it is independent of Snapshot.truncated. */
   truncated: z.boolean(),
 }).superRefine((value, ctx) => {
-  if (value.status !== "supported" && (value.blocks.length !== 0 || value.truncated)) {
+  if (value.status !== "supported" &&
+      (value.blocks.length !== 0 || (value.items?.length ?? 0) !== 0 || value.truncated)) {
     ctx.addIssue({ code: "custom", message: "non-supported content results cannot return blocks" });
   }
   for (const block of value.blocks) {
     if (block.identity.captureId !== value.captureId || block.identity.captureRevision !== value.captureRevision ||
         block.identity.tabId !== value.tabId || block.identity.pageUrl !== value.pageUrl) {
       ctx.addIssue({ code: "custom", message: "content blocks must match their capture identity" });
+    }
+  }
+  for (const item of value.items ?? []) {
+    if (item.identity.captureId !== value.captureId || item.identity.captureRevision !== value.captureRevision ||
+        item.identity.tabId !== value.tabId || item.identity.pageUrl !== value.pageUrl) {
+      ctx.addIssue({ code: "custom", message: "content items must match their capture identity" });
     }
   }
 });
@@ -167,6 +197,11 @@ export const BrowserOperation = z.discriminatedUnion("op", [
     identity: BrowserPageIdentity,
   }),
   z.object({
+    op: z.literal("read-item"),
+    itemId: BrowserId,
+    identity: BrowserPageIdentity,
+  }),
+  z.object({
     op: z.literal("open-link"),
     linkId: BrowserId,
     identity: BrowserPageIdentity,
@@ -192,6 +227,10 @@ export const BrowserOperation = z.discriminatedUnion("op", [
 ]);
 export type BrowserOperation = z.infer<typeof BrowserOperation>;
 
+/** Live read result for one item, still bound to the exact capture that supplied its ID. */
+export const BrowserReadItemResult = BrowserContentItem;
+export type BrowserReadItemResult = z.infer<typeof BrowserReadItemResult>;
+
 export const BrowserRequestPayload = z.object({
   requestId: BrowserId,
   /** Omitted only when the deterministic caller is asking the extension to create/select a tab. */
@@ -199,7 +238,7 @@ export const BrowserRequestPayload = z.object({
   operation: BrowserOperation,
 }).superRefine((request, ctx) => {
   const operation = request.operation;
-  if ((operation.op === "read-content" || operation.op === "open-link" || operation.op === "scroll" || operation.op === "find") &&
+  if ((operation.op === "read-content" || operation.op === "read-item" || operation.op === "open-link" || operation.op === "scroll" || operation.op === "find") &&
       request.tabId !== undefined && request.tabId !== operation.identity.tabId) {
     ctx.addIssue({ code: "custom", path: ["tabId"], message: "must match the captured page identity" });
   }
@@ -208,7 +247,7 @@ export type BrowserRequestPayload = z.infer<typeof BrowserRequestPayload>;
 
 export const BrowserOperationName = z.enum([
   "location", "capture", "navigate", "history", "reload", "search", "tabs",
-  "list-links", "read-content", "open-link", "scroll", "find", "unknown",
+  "list-links", "read-content", "read-item", "open-link", "scroll", "find", "unknown",
 ]);
 
 const BrowserCommandResult = z.object({
@@ -266,6 +305,7 @@ const BrowserSuccess = z.discriminatedUnion("operation", [
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("tabs"), result: BrowserTabsResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("list-links"), result: BrowserLinkListResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("read-content"), result: BrowserContentResult }),
+  z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("read-item"), result: BrowserReadItemResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("open-link"), result: BrowserCommandResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("scroll"), result: BrowserScrollResult }),
   z.object({ ok: z.literal(true), requestId: BrowserId, operation: z.literal("find"), result: BrowserFindResult }),
