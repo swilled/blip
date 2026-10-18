@@ -8,7 +8,7 @@ import {
   type BrowserPageIdentity,
   type BrowserReadItemResult,
 } from "@blip/protocol";
-import { classifyAction } from "@blip/policy/classify";
+import { classifyBrowserLink } from "@blip/policy/classify";
 import { boundedText } from "./text.js";
 import { isVisible } from "./visibility.js";
 import type { BrowserContentRequest, BrowserContentResponse } from "../shared/messages.js";
@@ -206,7 +206,7 @@ function currentState(document: Document, identity: BrowserPageIdentity, frameId
   return state !== undefined && state.frameId === frameId && identityMatches(state.identity, identity) ? state : null;
 }
 
-function failure(request: BrowserContentRequest, code: "stale-capture" | "stale-page" | "unsupported-frame" | "not-found" | "ambiguous" | "invalid-target" | "unsupported-destination-check" | "timeout" | "exception", message: string): BrowserContentResponse {
+function failure(request: BrowserContentRequest, code: "stale-capture" | "stale-page" | "unsupported-frame" | "not-found" | "ambiguous" | "invalid-target" | "unauthorized" | "unsupported-destination-check" | "timeout" | "exception", message: string): BrowserContentResponse {
   return { t: "browser-content.error", operation: request.operation, code, message };
 }
 
@@ -383,7 +383,7 @@ function hostHint(href: string): string | null {
   try {
     const parsed = new URL(href);
     return (parsed.protocol === "http:" || parsed.protocol === "https:") && parsed.username === "" && parsed.password === ""
-      ? parsed.hostname.toLocaleLowerCase()
+      ? parsed.host.toLocaleLowerCase()
       : null;
   } catch {
     return null;
@@ -395,6 +395,13 @@ function listLinks(state: CaptureState): BrowserLinkListResult {
     linkId: entry.linkId,
     label: entry.label,
     hostHint: hostHint(entry.href),
+    navigationSafety: classifyBrowserLink({
+      tag: "a",
+      href: entry.href,
+      target: entry.target,
+      origin: state.identity.pageUrl,
+      text: entry.label,
+    }),
     identity: state.identity,
     frameId: state.frameId,
   }));
@@ -488,16 +495,18 @@ function openLink(document: Document, request: Extract<BrowserContentRequest, { 
   if ((destination.protocol !== "http:" && destination.protocol !== "https:") || destination.username !== "" || destination.password !== "") {
     return failure(request, "invalid-target", "The selected link destination is not a safe web address.");
   }
-  if (destination.origin !== new URL(state.identity.pageUrl).origin) {
-    return failure(request, "unsupported-destination-check", "The current link policy does not permit this destination.");
-  }
   const liveLabelResult = visibleText(anchor, 200, () => document.defaultView?.performance.now() ?? performance.now(),
     (document.defaultView?.performance.now() ?? performance.now()) + DEFAULT_TIME_BUDGET_MS);
   if (liveLabelResult.timedOut) return failure(request, "timeout", "The selected link took too long to validate.");
   const liveLabel = boundedText(liveLabelResult.text || anchor.getAttribute("aria-label"), 200, 400);
-  const policy = classifyAction({ tag: "a", href: liveHref, target: rawTarget, origin: state.identity.pageUrl, text: liveLabel });
-  if (policy.kind !== "click-safe") {
+  const navigationSafety = classifyBrowserLink({
+    tag: "a", href: liveHref, target: rawTarget, origin: state.identity.pageUrl, text: liveLabel,
+  });
+  if (navigationSafety === "unsupported") {
     return failure(request, "unsupported-destination-check", "The current link policy does not permit this link.");
+  }
+  if (navigationSafety === "confirmation-required" && request.authorizationMode !== "spoken") {
+    return failure(request, "unauthorized", "This link needs a spoken confirmation before it can open.");
   }
   return {
     t: "browser-content.result",

@@ -60,11 +60,11 @@ const HostHint = z
     if (value !== value.toLowerCase() || /[\s/@?#]/.test(value)) return false;
     try {
       const url = new URL(`https://${value}/`);
-      return url.hostname === value && url.port.length === 0 && url.username.length === 0 && url.password.length === 0;
+      return url.host === value && url.username.length === 0 && url.password.length === 0;
     } catch {
       return false;
     }
-  }, { message: "must be a host name without a port or path" });
+  }, { message: "must be a canonical host with an optional port and no path" });
 
 const NonEmptyQuery = boundedText(500).refine((value) => value.trim().length > 0, {
   message: "must not be empty",
@@ -148,6 +148,8 @@ export const BrowserLinkRecord = z.object({
     message: "must not be empty",
   }),
   hostHint: HostHint.nullable(),
+  /** Extension classification hint; live eligibility is recomputed before dispatch. */
+  navigationSafety: z.enum(["same-origin-safe-get", "confirmation-required", "unsupported"]).optional(),
   identity: BrowserPageIdentity,
   frameId: z.number().int().min(0).max(100_000),
 });
@@ -206,6 +208,8 @@ export const BrowserOperation = z.discriminatedUnion("op", [
     linkId: BrowserId,
     identity: BrowserPageIdentity,
     authorizationId: BrowserId,
+    /** Explicit user selection is enough for ordinary same-origin GETs; all other links need spoken approval. */
+    authorizationMode: z.enum(["user-command", "spoken"]).optional(),
   }),
   z.object({
     op: z.literal("scroll"),

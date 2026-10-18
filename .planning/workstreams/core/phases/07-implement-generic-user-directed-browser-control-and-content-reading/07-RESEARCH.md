@@ -38,6 +38,8 @@
 
 ## Summary
 
+**Later decision supersedes the original link-gating recommendation:** Phase 7 decision D-12 permits direct navigation for ordinary same-origin HTTP(S) GET links after unique explicit user selection. Cross-origin and action-like links remain behind an exact spoken phrase. The implementation and evidence are in plan 07-07. Written voice-owner review of the exact shared diff remains required before merge or push.
+
 Add browser operations as additive typed protocol messages routed through existing server validation and the Executor. Keep article content in a separate bounded capture model; do not overload form Snapshot, ActRequest, or ordinary intent projection. Chrome tab/search operations belong in the extension background, while content capture and live link checks supply only current visible page data. URL, query, and link targets must come from the user's utterance and current live page; model output and page text may not supply targets.
 
 Chrome's search.query() is available at the extension's MV3 minimum (Chrome 116), but requires the manifest search permission and uses the user's configured default provider. It returns no provider URL. tabs.goBack()/goForward() exist, but do not reveal the next destination; dispatch only when safety is independently established. Main planning risk: shared protocol, manifest, and live-policy changes remain subject to the Phase 6 owner-review boundary.

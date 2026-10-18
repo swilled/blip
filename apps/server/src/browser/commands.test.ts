@@ -43,7 +43,10 @@ describe("parseBrowserCommand", () => {
     ["where am I", { type: "location" }],
     ["read this page", { type: "read-page", identity: capture.identity }],
     ["list links", { type: "list-links" }],
-    ["open link help center", { type: "open-link", linkId: "link-a", identity: capture.identity, label: "Help center", hostHint: "help.example" }],
+    ["open link help center", {
+      type: "open-link", linkId: "link-a", identity: capture.identity, label: "Help center", hostHint: "help.example",
+      navigationSafety: "confirmation-required",
+    }],
     ["open https://EXAMPLE.com/a", { type: "navigate", url: "https://example.com/a", host: "example.com" }],
     ["open example.org/path", { type: "navigate", url: "https://example.org/path", host: "example.org" }],
     ["open Gmail", { type: "search", query: "Gmail", route: "browser-default" }],

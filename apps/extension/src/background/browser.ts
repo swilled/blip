@@ -455,6 +455,7 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
         identity: operation.identity,
         linkId: operation.linkId,
         authorizationId: operation.authorizationId,
+        authorizationMode: operation.authorizationMode ?? "spoken",
       };
       const sent = await sendContent(dependencies, current.id, request);
       if (!sent.ok) return failure(requestId, "open-link", sent.code, sent.code === "timeout"
@@ -468,8 +469,12 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
         return failure(requestId, "open-link", "stale-capture", "The selected link no longer matches the current capture.");
       }
       const destination = BrowserDestinationUrl.safeParse(typed.result.href);
-      if (!destination.success || new URL(destination.data).origin !== new URL(operation.identity.pageUrl).origin) {
+      if (!destination.success) {
         return failure(requestId, "open-link", "unsupported-destination-check", "The current link policy does not permit this destination.");
+      }
+      const crossOrigin = new URL(destination.data).origin !== new URL(operation.identity.pageUrl).origin;
+      if (crossOrigin && (operation.authorizationMode ?? "spoken") !== "spoken") {
+        return failure(requestId, "open-link", "unauthorized", "A cross-site link requires spoken core authorization.");
       }
       const rechecked = await liveCurrentTab(api, dependencies, current.id, operation.identity.pageUrl);
       if (!rechecked) return failure(requestId, "open-link", "stale-page", "The page changed before the selected link could open.");

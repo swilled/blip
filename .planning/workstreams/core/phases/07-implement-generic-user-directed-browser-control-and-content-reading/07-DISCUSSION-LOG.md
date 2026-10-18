@@ -32,3 +32,7 @@
 ## Deferred Ideas
 
 - Multi-step reading, summarizing, drafting, editing, and sending is tracked in Phase 8.
+
+## Link policy follow-up
+
+After Phase 7 implementation, the user selected the same-origin safe-GET route and reported that their teammate was comfortable with it. Ordinary same-origin HTTP(S) GET links are now direct after a unique explicit user selection. Cross-origin and action-like links still need a target-specific spoken phrase. This choice applies only to browser link navigation and does not change button or form-action classification. The exact code and additive protocol diff remain unmerged pending written voice-owner review.

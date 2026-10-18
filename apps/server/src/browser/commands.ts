@@ -21,7 +21,14 @@ export type BrowserCommand =
   | { type: "location" }
   | { type: "read-page"; identity?: BrowserPageIdentity; kind?: "heading" | "paragraph"; target?: string }
   | { type: "list-links" }
-  | { type: "open-link"; linkId: string; identity: BrowserPageIdentity; label: string; hostHint: string | null }
+  | {
+      type: "open-link";
+      linkId: string;
+      identity: BrowserPageIdentity;
+      label: string;
+      hostHint: string | null;
+      navigationSafety: "same-origin-safe-get" | "confirmation-required" | "unsupported";
+    }
   | { type: "navigate"; url: string; host: string }
   | { type: "search"; query: string; route: "site" | "browser-default" | "auto" }
   | { type: "list-tabs" }
@@ -130,6 +137,7 @@ function resolveLink(selector: string, capture: BrowserCapture | null): BrowserC
     identity: capture.identity,
     label: link.label,
     hostHint: link.hostHint,
+    navigationSafety: link.navigationSafety ?? "confirmation-required",
   };
 }
 

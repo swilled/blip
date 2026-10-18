@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyAction } from "@blip/policy/classify";
+import { classifyAction, classifyBrowserLink } from "@blip/policy/classify";
 
 const button = (text: string, overrides: Record<string, unknown> = {}) => ({
   tag: "button",
@@ -72,5 +72,36 @@ describe("classifyAction", () => {
 
   it("always explains positive safe classifications", () => {
     expect(classifyAction(button("Add another guest")).reasons.length).toBeGreaterThan(0);
+  });
+});
+
+describe("classifyBrowserLink", () => {
+  const link = (text: string, href: string, extra: Record<string, unknown> = {}) => ({
+    tag: "a", text, href, origin: "https://site.test/article", ...extra,
+  });
+
+  const cases: Array<{ text: string; href: string; expected: string; extra?: Record<string, unknown> }> = [
+    { text: "Read the field guide", href: "https://site.test/guide", expected: "same-origin-safe-get" },
+    { text: "Pay now", href: "https://site.test/pay", expected: "confirmation-required" },
+    { text: "Open", href: "https://site.test/account/delete", expected: "confirmation-required" },
+    { text: "Sign out", href: "https://site.test/session", expected: "confirmation-required" },
+    { text: "Unsubscribe", href: "https://site.test/preferences", expected: "confirmation-required" },
+    { text: "Accept invitation", href: "https://site.test/invitation", expected: "confirmation-required" },
+    { text: "Download report", href: "https://site.test/report", expected: "confirmation-required" },
+    { text: "Read policy", href: "https://outside.test/policy", expected: "confirmation-required" },
+    { text: "Continue", href: "https://site.test/continue", expected: "confirmation-required" },
+    { text: "Jump to details", href: "https://site.test/article#details", expected: "confirmation-required" },
+    { text: "Read policy", href: "javascript:alert(1)", expected: "unsupported" },
+    { text: "Read policy", href: "https://site.test/policy", expected: "unsupported", extra: { target: "_blank" } },
+  ];
+
+  it.each(cases)("classifies $text at $href as $expected", ({ text, href, expected, extra }) => {
+    expect(classifyBrowserLink(link(text, href, extra))).toBe(expected);
+  });
+
+  it("does not loosen form action classification for ordinary same-origin links", () => {
+    const facts = link("Read the field guide", "https://site.test/guide");
+    expect(classifyBrowserLink(facts)).toBe("same-origin-safe-get");
+    expect(classifyAction(facts)).toMatchObject({ kind: "submit" });
   });
 });

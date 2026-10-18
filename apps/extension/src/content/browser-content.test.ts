@@ -49,13 +49,18 @@ function contentResponse(response: BrowserContentResponse): Extract<BrowserConte
   return response;
 }
 
-function openRequest(linkId: string, pageIdentity = identity): BrowserContentRequest {
+function openRequest(
+  linkId: string,
+  pageIdentity = identity,
+  authorizationMode: "user-command" | "spoken" = "user-command",
+): BrowserContentRequest {
   return {
     t: "browser-content",
     operation: "open-link",
     identity: pageIdentity,
     linkId,
     authorizationId: "core-auth-1",
+    authorizationMode,
   };
 }
 
@@ -206,6 +211,7 @@ describe("bounded visible browser content", () => {
   });
 
   it("lists only visible link labels with a host hint and identity, never URL query or fragment", () => {
+    vi.spyOn(document.defaultView!.performance, "now").mockReturnValue(0);
     const anchor = document.createElement("a");
     anchor.href = "https://outside.test/path?token=hidden#secret";
     anchor.append(document.createTextNode("Read article"));
@@ -232,7 +238,7 @@ describe("bounded visible browser content", () => {
     expect(JSON.stringify(response.result)).not.toContain("invisible credential");
   });
 
-  it("re-reads link visibility, connection, href, target, and same-origin policy before opening", () => {
+  it("re-reads link visibility, connection, href, target, and safe-GET eligibility before opening", () => {
     const anchor = document.createElement("a");
     anchor.href = "https://example.test/dismiss";
     anchor.textContent = "Dismiss";
@@ -253,7 +259,7 @@ describe("bounded visible browser content", () => {
     expect(changed).toMatchObject({ t: "browser-content.error", code: "stale-capture" });
   });
 
-  it("refuses disconnected, new-context, external, malformed, and policy-denied links", () => {
+  it("refuses disconnected, new-context, unconfirmed external/action links, and malformed links", () => {
     const anchor = document.createElement("a");
     anchor.href = "https://example.test/dismiss";
     anchor.textContent = "Dismiss";
@@ -285,7 +291,7 @@ describe("bounded visible browser content", () => {
     anchor.href = "https://outside.test/dismiss";
     const external = requestFor(anchor, 0, "external");
     expect(handleBrowserContentRequest(document, openRequest(external.linkId, external.identity), 0))
-      .toMatchObject({ t: "browser-content.error", code: "unsupported-destination-check" });
+      .toMatchObject({ t: "browser-content.error", code: "unauthorized" });
 
     anchor.href = "javascript:alert(1)";
     const malformed = requestFor(anchor, 0, "malformed");
@@ -296,7 +302,11 @@ describe("bounded visible browser content", () => {
     anchor.textContent = "Continue";
     const denied = requestFor(anchor, 0, "policy");
     expect(handleBrowserContentRequest(document, openRequest(denied.linkId, denied.identity), 0))
-      .toMatchObject({ t: "browser-content.error", code: "unsupported-destination-check" });
+      .toMatchObject({ t: "browser-content.error", code: "unauthorized" });
+
+    const confirmed = contentResponse(handleBrowserContentRequest(document,
+      openRequest(denied.linkId, denied.identity, "spoken"), 0));
+    expect(confirmed.operation).toBe("open-link");
     expect(capture.status).toBe("supported");
   });
 
@@ -445,7 +455,7 @@ describe("bounded visible browser content", () => {
     expect(scrollIntoView).toHaveBeenCalledOnce();
   });
 
-  it("opens only authorized live click-safe links through the background tab API", async () => {
+  it("opens an authorized same-origin safe GET through the background tab API", async () => {
     const anchor = document.createElement("a");
     anchor.href = "https://example.test/dismiss";
     anchor.textContent = "Dismiss";
@@ -464,7 +474,10 @@ describe("bounded visible browser content", () => {
 
     const authorized = {
       requestId: "open-authorized", tabId: 7,
-      operation: { op: "open-link", linkId: link.linkId, identity: listed.result, authorizationId: "core-auth-link" },
+      operation: {
+        op: "open-link", linkId: link.linkId, identity: listed.result,
+        authorizationId: "core-auth-link", authorizationMode: "user-command",
+      },
     };
     const opened = await dispatch(authorized);
     expect(opened).toMatchObject({ ok: true, operation: "open-link" });
@@ -475,7 +488,7 @@ describe("bounded visible browser content", () => {
     expect(navigations).toHaveLength(1);
   });
 
-  it("rejects stale page identities and cross-site live link destinations before navigation", async () => {
+  it("rejects stale pages and prevents a user-command grant from opening a cross-site link", async () => {
     const anchor = document.createElement("a");
     anchor.href = "https://outside.test/dismiss";
     anchor.textContent = "Dismiss";
@@ -502,9 +515,26 @@ describe("bounded visible browser content", () => {
         linkId: currentList.result.links[0]!.linkId,
         identity: currentList.result,
         authorizationId: "auth-external",
+        authorizationMode: "user-command",
       },
     });
-    expect(external).toMatchObject({ ok: false, error: { code: "unsupported-destination-check" } });
+    expect(external).toMatchObject({ ok: false, error: { code: "unauthorized" } });
     expect(current.navigations).toEqual([]);
+
+    const spoken = browserDispatcher();
+    const spokenList = await spoken.dispatch({ requestId: "links-external-confirmed", tabId: 7, operation: { op: "list-links" } });
+    if (!spokenList.ok || spokenList.operation !== "list-links") throw new Error("expected link list");
+    const confirmed = await spoken.dispatch({
+      requestId: "open-external-confirmed", tabId: 7,
+      operation: {
+        op: "open-link",
+        linkId: spokenList.result.links[0]!.linkId,
+        identity: spokenList.result,
+        authorizationId: "auth-external-confirmed",
+        authorizationMode: "spoken",
+      },
+    });
+    expect(confirmed).toMatchObject({ ok: true, operation: "open-link" });
+    expect(spoken.navigations).toEqual(["https://outside.test/dismiss"]);
   });
 });

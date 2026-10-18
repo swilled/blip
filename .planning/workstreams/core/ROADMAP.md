@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: AGY Subscription Brain and Label Repair** - Current runtime uses the locked-down Antigravity CLI with Gemini 3.8 Flash; provider checks and live synthetic startup/roundtrip passed (2026-10-17)
 - [ ] **Phase 5: Hostile Pages, Local Synthetic Web and Freeze** - AGY hostile, full I3, and launcher-cache acceptance pass; written M0 sign-off, teammate review, and mainline release gates remain
 - [x] **Phase 6: Browser Control Contract and Policy Proposal** - Proposal complete; core-owner authorized follow-on implementation, with voice-owner review still required before shared protocol or policy changes merge
-- [ ] **Phase 7: Generic Browser Control and Content Reading** - Add user-directed navigation, page reading, links, search, tabs, scrolling and find-on-page on supported sites
+- [x] **Phase 7: Generic Browser Control and Content Reading** - Add user-directed navigation, page reading, links, search, tabs, scrolling and find-on-page on supported sites (completed locally 2026-10-18; review gate remains before integration)
 - [x] **Phase 8: Multi-Step Web Reading and Drafting** - Add generic page-grounded read, summarize, draft, revise and confirmation-gated actions (completed 2026-10-18)
 
 ## Shared Milestones
@@ -233,7 +233,7 @@ Plans:
 **Goal:** Implement core-owned browser primitives from the Phase 6 proposal so users can direct Blip from a new tab to supported sites, navigate, read bounded page content, follow selected links, search, switch tabs, scroll, and find text. Every target must come from the user's words or a user-selected live page item. Page text stays untrusted and actions remain in the Executor.
 **Requirements**: No shared requirement changes in this phase
 **Depends on:** Phase 6 proposal; core owner has authorized local implementation. Written voice-owner review remains required before shared protocol or live policy changes merge.
-**Plans:** 2/6 plans executed
+**Plans:** 7/7 plans executed
 
 Plans:
 - [x] 07-01-PLAN.md — Add closed browser operation and content result schemas
@@ -242,6 +242,7 @@ Plans:
 - [x] 07-04-PLAN.md
 - [x] 07-05-PLAN.md
 - [x] 07-06-PLAN.md
+- [x] 07-07-PLAN.md â€” Close selected-link eligibility gap with explicit same-origin safe-GET route
 
 ### Phase 8: Multi-step web reading and drafting
 

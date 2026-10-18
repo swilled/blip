@@ -29,6 +29,7 @@ Implement core-owned, generic browser controls from the Phase 6 proposal. A user
 - **D-09:** Every dispatched browser action passes through deterministic validation and the existing Executor. Page/tab/URL/capture changes, stop, cancellation, and timeout invalidate stale IDs and grants.
 - **D-10:** The core owner has authorized local implementation on the core branch. Keep voice-owned implementation files unchanged. Shared protocol/live-policy changes remain unmerged until the voice owner reviews the exact changes in writing.
 - **D-11:** Important or gated actions use a deterministic, exact spoken phrase suited to the operation and target. A bare “yes” never authorizes navigation, submit, send, or another gated action. Phrase design for composed messages is handled in Phase 8.
+- **D-12:** The user chose direct opening for a uniquely selected, ordinary same-origin HTTP(S) GET link. Cross-origin, same-document, and action-like links still require the exact spoken phrase after Blip reads back the link and host. Anchors carrying a `download` attribute are refused. The extension rechecks the live anchor and uses `tabs.update`, never a page click handler. This supersedes the earlier local-only constraint in plan 07-04; the exact shared policy diff remains pending written voice-owner review before merge or push.
 
 ### the agent's Discretion
 - Choose additive protocol shapes, bounded capture limits, supported-page checks, and safe fallback wording consistent with Phase 6.

@@ -56,6 +56,10 @@ function contentBlocks(identity: BrowserPageIdentity): BrowserContentBlock[] {
 
 function visibleLinks(identity: BrowserPageIdentity): BrowserLinkRecord[] {
   return [
+    {
+      linkId: "link-local", label: "Read the local field guide", hostHint: "127.0.0.1:8787",
+      navigationSafety: "same-origin-safe-get", identity, frameId: 0,
+    },
     { linkId: "link-regional", label: "Read the regional update", hostHint: "news.example", identity, frameId: 0 },
     { linkId: "link-methods", label: "Read the field methods", hostHint: "news.example", identity, frameId: 0 },
     { linkId: "link-detail-a", label: "More details", hostHint: "news.example", identity, frameId: 0 },
@@ -221,6 +225,10 @@ function makeBrowserRig(options: {
           currentIdentity = pageIdentity(currentIdentity.tabId, currentIdentity.captureRevision + 1, currentIdentity.pageUrl);
           changeCaptureOnNextRead = false;
           return browserFailure(request, "stale-capture");
+        }
+        const selected = visibleLinks(operation.identity).find((link) => link.linkId === operation.linkId);
+        if (!selected || (selected.navigationSafety !== "same-origin-safe-get" && operation.authorizationMode !== "spoken")) {
+          return browserFailure(request, "unauthorized");
         }
         chromeEffects.push({ op: "open-link", linkId: operation.linkId, identity: operation.identity });
         return { ok: true, requestId: request.requestId, operation: "open-link", result: { tabId: currentIdentity.tabId, status: "dispatched" } };
@@ -411,13 +419,32 @@ describe("Phase 7 generic browser-control acceptance", () => {
   });
 
   // D-04: visible unique links are page-bound; duplicate, hidden, stale, or changed live hrefs fail closed.
+  it.each(["voice", "typed"] as const)("D-04 opens a same-origin safe GET directly from a %s command", async (source) => {
+    const rig = makeBrowserRig();
+    await rig.utter("open link Read the local field guide", source);
+
+    expect(rig.session.pendingBrowserAuthorization).toBeNull();
+    expect(rig.browserCalls.map(({ request }) => request.operation.op)).toEqual(["list-links", "open-link"]);
+    expect(rig.browserCalls.at(-1)?.request.operation).toMatchObject({
+      op: "open-link",
+      linkId: "link-local",
+      identity: pageIdentity(),
+      authorizationId: expect.any(String),
+      authorizationMode: "user-command",
+    });
+    expect(rig.sent.filter((frame) => frame.type === "speak" && frame.payload.category === "confirm-prompt")).toHaveLength(0);
+    expect(rig.chromeEffects).toEqual([{ op: "open-link", linkId: "link-local", identity: pageIdentity() }]);
+  });
+
   it("D-04 opens a uniquely selected visible link only after its host phrase and live recheck", async () => {
     const rig = makeBrowserRig();
-    await authorizeBrowserRequest(rig, "open link Read the regional update");
+    const authorization = await authorizeBrowserRequest(rig, "open link Read the regional update");
+    expect(authorization.phrase).toBe("open link Read the regional update at news.example");
 
     const call = protectedCalls(rig).find(({ request }) => request.operation.op === "open-link");
     expect(call?.request.operation).toMatchObject({
-      op: "open-link", linkId: "link-regional", identity: pageIdentity(), authorizationId: expect.any(String),
+      op: "open-link", linkId: "link-regional", identity: pageIdentity(),
+      authorizationId: expect.any(String), authorizationMode: "spoken",
     });
     expect(rig.chromeEffects).toHaveLength(1);
     expect(rig.chromeEffects[0]?.op).toBe("open-link");

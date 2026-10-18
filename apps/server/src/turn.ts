@@ -275,7 +275,8 @@ function authorizedPhrase(target: BrowserAuthorizationTarget, command?: BrowserC
     case "search": return `search for ${target.query} with browser default search`;
     case "open-link": {
       const host = command?.type === "open-link" ? command.hostHint : null;
-      return host === null ? `open link ${command?.type === "open-link" ? command.label : target.linkId}` : `open ${host.toLocaleLowerCase()}`;
+      const label = command?.type === "open-link" ? command.label : target.linkId;
+      return host === null ? `open link ${label}` : `open link ${label} at ${host.toLocaleLowerCase()}`;
     }
   }
 }
@@ -530,7 +531,11 @@ async function executeAuthorizedBrowserCommand(ctx: TurnContext, auth: ReturnTyp
   switch (target.op) {
     case "navigate": operation = { ...target, authorizationId: consumed.authorization.authorizationId }; break;
     case "search": operation = { ...target, authorizationId: consumed.authorization.authorizationId }; break;
-    case "open-link": operation = { ...target, authorizationId: consumed.authorization.authorizationId }; break;
+    case "open-link": operation = {
+      ...target,
+      authorizationId: consumed.authorization.authorizationId,
+      authorizationMode: "spoken",
+    }; break;
   }
   const result = await executor.execute(operation);
   ctx.session.dialogue = idleDialogue(ctx.session);
@@ -540,7 +545,10 @@ async function executeAuthorizedBrowserCommand(ctx: TurnContext, auth: ReturnTyp
     ? { type: "navigate", url: target.url, host: new URL(target.url).host } as const
     : target.op === "search"
       ? { type: "search", query: target.query, route: "browser-default" } as const
-      : { type: "open-link", linkId: target.linkId, identity: target.identity, label: "selected link", hostHint: null } as const;
+      : {
+        type: "open-link", linkId: target.linkId, identity: target.identity, label: "selected link", hostHint: null,
+        navigationSafety: "confirmation-required",
+      } as const;
   if (target.op === "search") {
     const list = await executor.execute({ op: "list-links" });
     if (!list.ok || !list.payload.ok || list.payload.operation !== "list-links") {
@@ -569,6 +577,28 @@ async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, sour
   if (command.type === "open-link") {
     const current = ctx.session.browserCapture?.identity;
     if (current === undefined || !identityMatches(current, command.identity)) return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+    const capture = ctx.session.browserCapture;
+    const selected = capture?.links.find((link) => link.linkId === command.linkId && identityMatches(link.identity, current));
+    if (selected === undefined) return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+    const selectedSafety = selected.navigationSafety ?? "confirmation-required";
+    if (selectedSafety !== command.navigationSafety) return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+    if (command.navigationSafety === "unsupported") {
+      return speak(ctx.hub, ctx.session, "I can't safely open that link. Choose another visible link.", "error");
+    }
+    if (command.navigationSafety === "same-origin-safe-get") {
+      if (ctx.session.pendingGatedAction !== null || ctx.session.pendingBrowserAuthorization !== null) {
+        return speak(ctx.hub, ctx.session, "Please finish or cancel the current confirmation first.", "error");
+      }
+      const result = await createBrowserExecutor({ hub: ctx.hub, session: ctx.session }).execute({
+        op: "open-link",
+        linkId: command.linkId,
+        identity: command.identity,
+        authorizationId: newId(),
+        authorizationMode: "user-command",
+      });
+      if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
+      return speakBrowserResult(ctx, result.payload, command);
+    }
     return beginBrowserAuthorization(ctx, { op: "open-link", linkId: command.linkId, identity: command.identity }, command);
   }
 

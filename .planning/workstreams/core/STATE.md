@@ -1,15 +1,15 @@
----
+﻿---
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 8 complete — Phase 7 remains in progress
-stopped_at: Verified Phase 8; Phase 7 follow-up remains open
-last_updated: "2026-10-18T08:33:36.681Z"
+status: Phases 7 and 8 complete locally; shared review gates remain
+stopped_at: Verified Phase 7 safe-GET closure and Phase 8; waiting on integration review
+last_updated: "2026-10-18T08:49:00Z"
 progress:
   total_phases: 8
-  completed_phases: 7
-  total_plans: 91
-  completed_plans: 76
+  completed_phases: 8
+  total_plans: 92
+  completed_plans: 77
 ---
 
 # Project State
@@ -20,7 +20,7 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 8 is verified complete. Phase 7 remains in progress; written voice-owner review is required before shared browser protocol and policy changes merge.
+**Current focus:** Phase 7 and Phase 8 implementation are locally complete and verified. Written voice-owner review is required before shared browser protocol and policy changes merge or push.
 
 ## Current Position
 
@@ -105,6 +105,7 @@ Plan: 7 of 7 (complete)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 07-07]: Ordinary same-origin HTTP(S) GET links open after explicit unique selection; cross-origin and action-like links require tracked exact spoken confirmation. The extension rechecks live eligibility before tab navigation.
 - [Roadmap]: Intent-as-data. The model gets only tool-less structured-output calls (`repairFormModel`, `parseIntent`); the single Executor + policy gate carries out every page action
 - [Roadmap]: Gate before brain. Phases 1-3 demo without AGY; the subscription provider arrives in Phase 4
 - [Roadmap]: Core owns the fakes (fake extension, `--brain=fake`, REPL, stub dialogue reducer, own extension test pages) so it never blocks on voice or model quota
@@ -197,8 +198,8 @@ None yet.
 - [Phase 1] `PROTOCOL.md` still has `M0 approval: pending`; written approval by the voice owner is a human gate before the protocol freeze can be closed.
 - [Phase 5] Technical AGY acceptance passes. Written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain release gates.
 - [Phase 5] Teammate review and promotion of the integration branch to `main` are required before `demo-safe` tagging.
-- [Phase 6] Written voice-owner approval of the exact browser-control contract is required before shared protocol or live-policy changes merge; no approval artifact exists yet.
-- Phase 07 shared browser protocol addition tabs.open-blank is committed locally only; written voice-owner review is required before merge.
+- [Phase 6/7] Written voice-owner approval of the exact browser-control contract, safe-GET policy, and additive link mode fields is required before shared protocol or live-policy changes merge or push.
+- [Phase 7] The safe-GET and `navigationSafety`/`authorizationMode` changes are implemented and verified locally. A real-browser synthetic-fixture exercise remains before integration.
 
 ### Roadmap Evolution
 
