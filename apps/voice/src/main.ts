@@ -4,7 +4,12 @@ import { STT_ENABLED_WHEN_UNFOCUSED } from "./config";
 import { applyArmed, applyCleared, applyClose, applyState, createBannerModel, renderBanner } from "./banner";
 import { createEarcons } from "./earcons";
 import { createHoldClient } from "./hold-client";
-import { createOutputModeController, type VoiceOutputMode } from "./output-mode";
+import {
+  createOutputModeController,
+  shouldSpeakLocalAcknowledgement,
+  statusAriaLive,
+  type VoiceOutputMode,
+} from "./output-mode";
 import { createSocket, type VoiceSocket } from "./socket";
 import { createSpeakBridge } from "./speak-bridge";
 import { adjustSpeechRate, createSpeechRate, parseSpeechRateCommand, type SpeechRateDirection } from "./speech-rate";
@@ -62,6 +67,8 @@ let captionTimer: ReturnType<typeof setTimeout> | null = null;
 function renderOutputMode(mode: VoiceOutputMode): void {
   const radio = document.querySelector<HTMLInputElement>(`input[name="output-mode"][value="${mode}"]`);
   if (radio) radio.checked = true;
+  const statusRegion = document.getElementById("status");
+  statusRegion?.setAttribute("aria-live", statusAriaLive(mode));
   const status = document.getElementById("output-mode-status");
   if (status && status.textContent !== "NVDA speech completion is unavailable. Using agent voice.") {
     status.textContent = mode === "agent-voice" ? "Using Blip voice." : "Using NVDA screen reader.";
@@ -223,21 +230,23 @@ function rateAcknowledgement(direction: SpeechRateDirection): string {
 function handleLocalRateUtterance(text: string): boolean {
   const direction = parseSpeechRateCommand(text);
   if (!direction) return false;
-  const acknowledgement = rateAcknowledgement(direction);
+  announceRateAcknowledgement(rateAcknowledgement(direction));
+  return true;
+}
+
+function announceRateAcknowledgement(acknowledgement: string): void {
   el("output-mode-status").textContent = acknowledgement;
   state.messageSent();
-  tts.speak(acknowledgement, { speakId: LOCAL_RATE_ACK_ID });
-  return true;
+  if (shouldSpeakLocalAcknowledgement(outputMode.getMode())) {
+    tts.speak(acknowledgement, { speakId: LOCAL_RATE_ACK_ID });
+  }
 }
 
 document.querySelectorAll<HTMLButtonElement>("[data-speech-rate]").forEach((button) => {
   button.addEventListener("click", () => {
     const direction = button.dataset.speechRate;
     if (direction !== "faster" && direction !== "slower") return;
-    const acknowledgement = rateAcknowledgement(direction);
-    el("output-mode-status").textContent = acknowledgement;
-    state.messageSent();
-    tts.speak(acknowledgement, { speakId: LOCAL_RATE_ACK_ID });
+    announceRateAcknowledgement(rateAcknowledgement(direction));
   });
 });
 

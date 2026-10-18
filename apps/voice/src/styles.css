@@ -213,6 +213,7 @@ header {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
+  min-height: var(--space-2xl);
 }
 
 #output-mode input[type="radio"] {
@@ -378,4 +379,67 @@ main {
   border-radius: var(--space-sm);
   font-weight: 600;
   cursor: pointer;
+}
+
+/* At narrow widths or high zoom, let the page scroll and preserve a usable log. */
+@media (max-width: 400px) {
+  body,
+  #app {
+    min-width: 0;
+  }
+
+  #app {
+    height: auto;
+    min-height: 100vh;
+    gap: var(--space-sm);
+    padding: var(--space-sm);
+  }
+
+  header {
+    flex-wrap: wrap;
+  }
+
+  #output-mode label {
+    flex: 1 1 100%;
+  }
+
+  .typed-row {
+    flex-wrap: wrap;
+  }
+
+  #typed-send {
+    width: 100%;
+  }
+
+  main,
+  #log {
+    min-height: 12rem;
+  }
+
+  main {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-height: 760px) {
+  html,
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+  }
+
+  #app {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  main {
+    flex: 0 0 auto;
+    min-height: 12rem;
+  }
+
+  #log {
+    min-height: 12rem;
+  }
 }

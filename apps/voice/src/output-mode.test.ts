@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createOutputModeController } from "./output-mode";
+import {
+  createOutputModeController,
+  shouldSpeakLocalAcknowledgement,
+  statusAriaLive,
+} from "./output-mode";
 
 function createController() {
   const events: string[] = [];
@@ -48,5 +52,15 @@ describe("session output mode", () => {
       "settings:screen-reader",
       "selected:agent-voice",
     ]);
+  });
+
+  it("mutes the global status live region in screen-reader mode and restores it for Blip voice", () => {
+    expect(statusAriaLive("screen-reader")).toBe("off");
+    expect(statusAriaLive("agent-voice")).toBe("polite");
+  });
+
+  it("keeps local rate acknowledgements off browser TTS in screen-reader mode", () => {
+    expect(shouldSpeakLocalAcknowledgement("screen-reader")).toBe(false);
+    expect(shouldSpeakLocalAcknowledgement("agent-voice")).toBe(true);
   });
 });

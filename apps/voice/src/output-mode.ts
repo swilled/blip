@@ -1,5 +1,14 @@
 export type VoiceOutputMode = "agent-voice" | "screen-reader";
 
+export function statusAriaLive(mode: VoiceOutputMode): "polite" | "off" {
+  return mode === "screen-reader" ? "off" : "polite";
+}
+
+/** Local acknowledgements must never escape through browser TTS in screen-reader mode. */
+export function shouldSpeakLocalAcknowledgement(mode: VoiceOutputMode): boolean {
+  return mode === "agent-voice";
+}
+
 export interface OutputModeController {
   getMode(): VoiceOutputMode;
   select(mode: VoiceOutputMode): void;
