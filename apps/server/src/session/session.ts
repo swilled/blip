@@ -3,6 +3,7 @@ import { createGrantStore, type GrantBinding, type GrantStore } from "../act/gra
 import { buildBaselineFormModel, summarizeFormModel } from "../baseline";
 import { createBrowserAuthorizationStore, type BrowserAuthorization, type BrowserAuthorizationStore } from "../browser/authorization";
 import type { BrowserCapture } from "../browser/commands";
+import { createPageTask, pageTaskMatchesCapture, type ActivePageTask, type NewPageTask } from "../browser/task-state";
 
 export const SERVER_VERSION = "0.1.0";
 
@@ -67,7 +68,9 @@ export class Session {
   /** Whether the current voice-role socket is bound to this session. */
   #voiceConnected = false;
   /** Current bounded browser capture and one-use authorization are separate from form submit grants. */
-  browserCapture: BrowserCapture | null = null;
+  #browserCapture: BrowserCapture | null = null;
+  /** One bounded, identity-bound page task; proposed text is never stored as observed draft state. */
+  activePageTask: ActivePageTask | null = null;
   readonly browserAuthorizations: BrowserAuthorizationStore = createBrowserAuthorizationStore();
   #snapshotOrder: { tabId: number; version: number; capturedAt: number } | null = null;
   #snapshotRevision = 0;
@@ -126,6 +129,18 @@ export class Session {
     return this.#extensionConnected;
   }
 
+  get browserCapture(): BrowserCapture | null {
+    return this.#browserCapture;
+  }
+
+  /** Invalidate a task immediately whenever the accepted capture stops proving its source binding. */
+  set browserCapture(value: BrowserCapture | null) {
+    if (this.activePageTask !== null && !pageTaskMatchesCapture(this.activePageTask, value, this.tabId)) {
+      this.clearPageTask();
+    }
+    this.#browserCapture = value;
+  }
+
   /** Monotonic process-local generation for rejecting repair work from replaced accepted snapshots. */
   get snapshotRevision(): number {
     return this.#snapshotRevision;
@@ -160,9 +175,10 @@ export class Session {
   }
 
   set voiceConnected(value: boolean) {
-    if (!value) {
+    if (!value || this.#voiceConnected) {
       this.clearBrowserAuthorization();
       this.browserCapture = null;
+      this.clearPageTask();
     }
     this.#voiceConnected = value;
   }
@@ -198,6 +214,44 @@ export class Session {
     };
   }
 
+  /** Replace the sole active page task after revalidating it against the exact accepted capture. */
+  setActivePageTask(input: NewPageTask): boolean {
+    const task = createPageTask(input);
+    if (task === null || !pageTaskMatchesCapture(task, this.browserCapture, this.tabId)) return false;
+    this.clearPageTask();
+    this.activePageTask = task;
+    return true;
+  }
+
+  /** Bind a later one-use grant to the active task without retaining a model proposal. */
+  associatePageTaskGrant(grantId: string): boolean {
+    const current = this.activePageTask;
+    if (current === null) return false;
+    const updated = createPageTask({ ...current, associatedGrantId: grantId });
+    if (updated === null || !pageTaskMatchesCapture(updated, this.browserCapture, this.tabId)) return false;
+    this.activePageTask = updated;
+    return true;
+  }
+
+  /** Scrub retained text and draft bindings, and revoke a grant created for this task. */
+  clearPageTask(): ActivePageTask | null {
+    const task = this.activePageTask;
+    if (task === null) return null;
+    const grantId = task.associatedGrantId;
+    if (grantId !== null) {
+      this.grants.clear(grantId);
+      if (this.pendingGatedAction?.grantId === grantId) this.clearPendingGatedAction();
+    }
+    task.sourceExcerpt = "";
+    task.draftTargetId = null;
+    task.recipientBinding = null;
+    task.actionTargetBinding = null;
+    task.lastObservedDraftValue = null;
+    task.associatedGrantId = null;
+    this.activePageTask = null;
+    return task;
+  }
+
   /** Drop any pending confirmation and its inaccessible one-use grant. */
   clearPendingGatedAction(): PendingGatedAction | null {
     const pending = this.pendingGatedAction;
@@ -220,6 +274,9 @@ export class Session {
 
     const model = buildBaselineFormModel(snapshot);
     this.clearBrowserAuthorization();
+    if (this.activePageTask !== null && (
+      this.activePageTask.identity.tabId !== snapshot.tabId || this.activePageTask.identity.pageUrl !== model.url
+    )) this.clearPageTask();
     if (this.browserCapture?.identity !== undefined && (
       this.browserCapture.identity.tabId !== snapshot.tabId || this.browserCapture.identity.pageUrl !== model.url
     )) this.browserCapture = null;
