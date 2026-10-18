@@ -5,8 +5,8 @@ titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: fixed
-    title: "Rate acknowledgements bypass the selected output mode"
+    disposition: open
+    title: "Fresh-page read can fall back to stale form data"
   - id: CR-02
     severity: critical
     disposition: fixed
@@ -19,16 +19,16 @@ findings:
     severity: warning
     disposition: fixed
     title: "Offline form controls are below the agreed 48 px target"
-open: 0
+open: 1
 total: 4
-recorded: 2026-10-18T03:42:15Z
+recorded: 2026-10-18T07:51:20Z
 ---
 
 # Phase 04: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | fixed | d65653e — gate rate acknowledgements to agent-voice mode |
+| CR-01 | critical | open | Current review — fresh-page read can fall back to stale form data |
 | CR-02 | critical | fixed | d65653e — set the global status region live mode from output mode |
 | WR-01 | warning | fixed | d65653e — add compact and short-viewport layout fallbacks |
 | WR-02 | warning | fixed | d65653e — set offline form controls to 48 px minimum |
