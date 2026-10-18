@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2) (completed 2026-10-17)
 - [x] **Phase 4: AGY Subscription Brain and Label Repair** - Current runtime uses the locked-down Antigravity CLI with Gemini 3.8 Flash; provider checks and live synthetic startup/roundtrip passed (2026-10-17)
 - [ ] **Phase 5: Hostile Pages, Local Synthetic Web and Freeze** - AGY hostile, full I3, and launcher-cache acceptance pass; written M0 sign-off, teammate review, and mainline release gates remain
-- [ ] **Phase 6: Browser Control Contract and Policy Proposal** - Define an additive, teammate-reviewable contract for user-directed browser control; implementation follows only after written voice-owner review
+- [x] **Phase 6: Browser Control Contract and Policy Proposal** - Proposal complete (2026-10-18); runtime implementation follows only after written voice-owner review
 
 ## Shared Milestones
 
@@ -208,7 +208,7 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. AGY Subscription Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
-| 6. Browser Control Contract and Policy Proposal | 0/2 | Executing proposal and evidence documents | - |
+| 6. Browser Control Contract and Policy Proposal | 2/2 | Proposal complete; written voice-owner review pending before implementation | 2026-10-18 |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 

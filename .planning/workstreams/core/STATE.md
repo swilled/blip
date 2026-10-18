@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 06-browser-control-contract-and-policy-proposal-06-02-PLAN.md
-last_updated: "2026-10-18T04:39:30.411Z"
+status: Ready for review
+stopped_at: Verified Phase 6 browser-control proposal; written voice-owner review pending before implementation
+last_updated: "2026-10-18T04:41:23Z"
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 78
   completed_plans: 63
 ---
@@ -24,7 +24,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 
 ## Current Position
 
-Phase: 6 (Browser control contract and policy proposal) — EXECUTING
+Phase: 6 (Browser control contract and policy proposal) — PROPOSAL COMPLETE; REVIEW PENDING
 Plan: 2 of 2
 
 ## Performance Metrics
@@ -154,6 +154,7 @@ None yet.
 - [Phase 1] `PROTOCOL.md` still has `M0 approval: pending`; written approval by the voice owner is a human gate before the protocol freeze can be closed.
 - [Phase 5] Technical AGY acceptance passes. Written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain release gates.
 - [Phase 5] Teammate review and promotion of the integration branch to `main` are required before `demo-safe` tagging.
+- [Phase 6] Written voice-owner approval of the exact browser-control contract is required before any protocol or live-policy change; no approval artifact exists yet.
 
 ### Roadmap Evolution
 
@@ -169,6 +170,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T04:39:30.406Z
-Stopped at: Completed 06-browser-control-contract-and-policy-proposal-06-02-PLAN.md
+Last session: 2026-10-18T04:41:23Z
+Stopped at: Verified Phase 6 proposal and corrected roadmap status; written voice-owner review remains pending
 Resume file: None
