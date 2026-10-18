@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.0
 current_phase: 4
 current_phase_name: NVDA Mode and Demo-Safe
-status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-10-18T03:16:28.711Z"
+status: verifying
+stopped_at: Prepared 04-03 runbook; human rehearsal evidence pending
+last_updated: "2026-10-18T03:25:03.247Z"
 last_activity: 2026-10-17
 last_activity_desc: Phase 4 execution started
-state_head: 50290738b2ee47311e1d40adbf2a484f6f2ac023
+state_head: 9b323c6b56063dbc074fa00cf199e1cec85d5516
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 25
-  completed_plans: 24
+  completed_plans: 25
 milestone_name: milestone
 ---
 
@@ -31,7 +31,7 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 
 Phase: 4 (NVDA Mode and Demo-Safe) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-10-17 — Phase 4 execution started
 
 Progress: [█████░░░░░] 50%
@@ -77,6 +77,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P03 | 24min | 3 tasks | 22 files |
 | Phase 04 P01 | 3min | 2 tasks | 12 files |
 | Phase 04 P02 | 10min | 3 tasks | 9 files |
+| Phase 04 P03 | 7min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,7 @@ Recent decisions affecting the voice track:
 - [Phase 03]: Batch undo restores only fields still equal to page-observed writes and consumes its one-level record.
 - [Phase 04]: Keep agent-voice rate in memory for the current window session and apply it when each browser utterance starts.
 - [Phase 04]: Intercept exact voice rate commands before barge-in cancellation so rate changes leave active speech running.
+- [Phase 04]: Keep the live Microsoft Form authoritative; disclose the offline practice copy and do not count it as DEMO-03 evidence.
 
 ### Pending Todos
 
@@ -124,6 +126,6 @@ Recent decisions affecting the voice track:
 
 ## Session Continuity
 
-Last session: 2026-10-18T03:16:27.848Z
-Stopped at: Completed 04-02-PLAN.md
-Resume file: None
+Last session: 2026-10-18T03:25:02.676Z
+Stopped at: Prepared 04-03 runbook; human rehearsal evidence pending
+Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-DEMO-RUNBOOK.md

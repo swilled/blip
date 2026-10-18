@@ -17,7 +17,7 @@
 - [ ] **VOX-05** (PARTIAL: interrupt by holding push-to-talk or typed "stop" works; voice barge-in is built but forced off until core merges GATE-08, because Spike F showed Blip hears itself): The user can interrupt Blip by speaking (barge-in). The confirm phrase is never accepted while Blip is speaking or within 1 s after it stops, so Blip's own speech can't confirm a submit. Echo handling is settled by a Phase 1 spike.
 - [x] **VOX-06**: User can say "stop" to cut off speech immediately
 - [x] **VOX-07**: User can say "faster" / "slower" to change Blip's speech rate
-- [ ] **VOX-08**: In screen-reader mode, Blip's replies are spoken through NVDA (controller client DLL) instead of Blip's own voice, without double speech
+- [ ] **VOX-08** (HUMAN NEEDED: audible completion/cancellation and exact speakId matching on the demo workstation): In screen-reader mode, Blip's replies are spoken through NVDA (controller client DLL) instead of Blip's own voice, without double speech
 
 ### Dialogue & Commands
 
@@ -45,8 +45,8 @@
 
 - [x] **DEMO-01**: A self-hosted deliberately broken form (W3C WAI BAD "Survey" style: unlabeled inputs, placeholder-only labels, div buttons, color-only errors) is available locally
 - [ ] **DEMO-02**: A fictional demo profile and a one-command reset script restore the demo state between runs
-- [ ] **DEMO-03**: At least one real public form (e.g. a team-owned Google Form) can be completed end to end by voice
-- [ ] **DEMO-04**: The demo has a fallback kit: offline copies of the demo sites, a phone hotspot plan, a backup video, and a rehearsed plan-B script
+- [ ] **DEMO-03** (HUMAN NEEDED: negative validation check and three consecutive live runs with page-observed results): At least one real public form (e.g. a team-owned Google Form) can be completed end to end by voice
+- [ ] **DEMO-04** (HUMAN NEEDED: hotspot, recorder, video, and fallback rehearsal; local copies are prepared): The demo has a fallback kit: offline copies of the demo sites, a phone hotspot plan, a backup video, and a rehearsed plan-B script
 
 ## Core Dependencies (owned by workstream `core`, referenced only)
 
@@ -91,7 +91,7 @@
 | VOX-05 | voice | Phase 1 | Pending |
 | VOX-06 | voice | Phase 1 | Pending |
 | VOX-07 | voice | Phase 4 | Complete |
-| VOX-08 | voice | Phase 4 | Pending |
+| VOX-08 | voice | Phase 4 | Human needed |
 | DLG-01 | voice | Phase 1 | Pending |
 | DLG-02 | voice | Phase 2 | Complete |
 | DLG-03 | voice | Phase 2 | Complete |
@@ -110,8 +110,8 @@
 | VIS-02 | voice | Phase 2 | Complete |
 | DEMO-01 | voice | Phase 2 | Complete |
 | DEMO-02 | voice | Phase 2 | Pending |
-| DEMO-03 | voice | Phase 4 | Pending |
-| DEMO-04 | voice | Phase 4 | Pending |
+| DEMO-03 | voice | Phase 4 | Human needed |
+| DEMO-04 | voice | Phase 4 | Human needed |
 
 **Coverage:**
 - Voice v1 requirements: 28 total
