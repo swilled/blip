@@ -211,6 +211,12 @@ export async function buildVoiceClientForDemo(): Promise<void> {
   }
 }
 
+export async function readVoiceBuildId(): Promise<string> {
+  const info = JSON.parse(await readFile(path.join(voiceDist, "blip-build.json"), "utf8")) as { id?: unknown };
+  if (typeof info.id !== "string" || !info.id) throw new Error("Build the voice client with npm.cmd run build --workspace @blip/voice.");
+  return info.id;
+}
+
 async function stopChild(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null || child.pid === undefined) return;
   await new Promise<void>((resolve) => {
@@ -251,6 +257,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
   try {
     await buildExtensionForDemo();
     await buildVoiceClientForDemo();
+    const voiceBuildId = await readVoiceBuildId();
     await mkdir(profileDirectory, { recursive: true });
     server = await startServer({
       port: DEFAULT_PORT,
@@ -259,6 +266,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
       dialogueRunner: true,
       repairCacheDirectory: DEMO_REPAIR_CACHE,
       staticRoots: [demoVoiceStaticRoot()],
+      voiceBuildId,
       extraVoiceOrigins: configuredVoiceTarget === undefined ? [] : [configuredVoiceTarget.origin],
     });
     stopPtt = await startPttWire(server.port);
@@ -276,6 +284,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
     process.stdout.write(`Local fixture: ${fixtureUrl}\n`);
     process.stdout.write(`Load unpacked once from: ${extensionDist}\n`);
     process.stdout.write(`Voice client: ${voiceTarget.url}\n`);
+    process.stdout.write(`Voice build: ${voiceBuildId}\n`);
 
     const browserChild = spawn(browser, browserLaunchArgs(profileDirectory, fixtureUrl), {
       stdio: "ignore",

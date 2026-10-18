@@ -17,6 +17,7 @@ import {
   resolveVoiceTarget,
   voiceLaunchArgs,
   waitForExtensionReady,
+  readVoiceBuildId,
 } from "./demo.js";
 
 describe("local demo launcher inputs", () => {
@@ -74,6 +75,9 @@ describe("Phase 4 voice client in the demo", () => {
       expect(html).toContain("id=\"hold-to-talk\"");
       expect(html).toContain("id=\"speech-rate-value\"");
       expect(html).not.toContain("Talk to Blip");
+      const identity = await readVoiceBuildId();
+      expect(html).toContain(identity);
+      expect(await (await fetch(`http://127.0.0.1:${server.port}/voice/blip-build.json`)).json()).toMatchObject({ id: identity });
     } finally {
       await server.close();
     }

@@ -9,6 +9,7 @@
 //                         the fake extension still refuses the final gated click.
 //   --allow-origin <o>    repeatable; requires --dev; loopback http origins; grants voice only
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { DEFAULT_PORT, WS_PATH, LOOPBACK_HOST } from "@blip/protocol";
@@ -71,9 +72,12 @@ async function main(): Promise<void> {
 
   // Static roots only when their directories exist so server-only setups remain lightweight.
   const staticRoots: StaticRoot[] = [];
-  const voicePublic = fileURLToPath(new URL("../../../apps/voice/public", import.meta.url));
+  const voicePublic = fileURLToPath(new URL("../../../apps/voice/dist", import.meta.url));
+  let voiceBuildId: string | undefined;
+  try { voiceBuildId = JSON.parse(await readFile(`${voicePublic}/blip-build.json`, "utf8")).id; }
+  catch { process.stderr.write("Voice client is not built. Run npm.cmd run build --workspace @blip/voice, then restart.\n"); }
   const fixtures = fileURLToPath(new URL("../../../fixtures/forms", import.meta.url));
-  if (existsSync(voicePublic)) staticRoots.push({ urlPrefix: "/voice", dir: voicePublic });
+  if (voiceBuildId && existsSync(voicePublic)) staticRoots.push({ urlPrefix: "/voice", dir: voicePublic });
   if (existsSync(fixtures)) staticRoots.push({ urlPrefix: "/fixtures/forms", dir: fixtures });
 
   let running;
@@ -85,6 +89,7 @@ async function main(): Promise<void> {
       fakeDelayMs,
       extraVoiceOrigins,
       staticRoots,
+      voiceBuildId,
       ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
     });
   } catch (err) {

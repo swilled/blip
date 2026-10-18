@@ -32,6 +32,8 @@ function clearPendingThroughVoiceGate(
 }
 
 export type StartServerOptions = {
+  /** Immutable identity of the client this process was started with. */
+  voiceBuildId?: string;
   /** Default 7777 (D-01). 0 = ephemeral, used by tests. */
   port?: number;
   dev?: boolean;
@@ -131,6 +133,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     }
     // /healthz stays ahead of static roots so a static file can never shadow it.
     if (req.method === "GET" && pathname === "/healthz") return json(res, 200, { ok: true });
+    if (req.method === "GET" && pathname === "/_blip/voice-runtime" && options.voiceBuildId) {
+      return json(res, 200, { buildId: options.voiceBuildId });
+    }
     if (serveStatic === undefined) return json(res, 404, { ok: false });
     serveStatic(req, res)
       .then((served) => {

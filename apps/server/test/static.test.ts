@@ -37,6 +37,12 @@ function get(port: number, path: string, host = `127.0.0.1:${port}`): Promise<{ 
 }
 
 describe("static serving (D-02)", () => {
+  it("keeps the process build identity separate from mutable static files", async () => {
+    srv = await startServer({ port: 0, voiceBuildId: "started-build", staticRoots: [{ urlPrefix: "/", dir: root }] });
+    writeFileSync(join(root, "blip-build.json"), JSON.stringify({ id: "later-build" }));
+    expect(JSON.parse((await get(srv.port, "/_blip/voice-runtime")).body)).toEqual({ buildId: "started-build" });
+    expect((await get(srv.port, "/_blip/voice-runtime", "evil.example")).status).toBe(403);
+  });
   it("serves a file, 404s a missing file and keeps /healthz ahead of static roots", async () => {
     srv = await startServer({ port: 0, staticRoots: [{ urlPrefix: "/", dir: root }] });
     const page = await get(srv.port, "/sub/page.html");
