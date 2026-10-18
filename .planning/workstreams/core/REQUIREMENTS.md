@@ -130,4 +130,4 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 
 ---
 *Requirements defined: 2026-10-16*
-*Last updated: 2026-10-17 after the AGY migration and isolated Edge voice-path check. PROT-03 and GATE-07 are complete; PROT-01 remains pending written M0 sign-off; public-form DEMO-03 is deferred by core-owner decision.*
+*Last updated: 2026-10-18 after first-party voice UI GATE-05 re-verification. PROT-03 and GATE-07 are complete; PROT-01 remains pending written M0 sign-off; public-form DEMO-03 is deferred by core-owner decision.*

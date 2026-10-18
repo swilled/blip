@@ -1,6 +1,7 @@
 // @vitest-environment node
 import process from "node:process";
 import { describe, expect, it } from "vitest";
+// @ts-expect-error The browser-served voice core is plain JavaScript and has no declaration file.
 import { INJECTION_WARNING } from "../../../voice/public/voice-core.js";
 import { openFixturePage, type BrowserFixtureSession } from "./harness.js";
 
@@ -105,7 +106,7 @@ describe("first-party voice window warning and tracked speech", () => {
         (value) => typeof value === "object" && value !== null &&
           "status" in value && value.status === "Warning heard. Commands are enabled." &&
           "enabled" in value && value.enabled === true &&
-          "spokenCount" in value && value.spokenCount > 0,
+          "spokenCount" in value && typeof value.spokenCount === "number" && value.spokenCount > 0,
         3_000,
       ).catch(async () => {
         const warningEvents = fixture.stateEvents().map((entry) => entry.payload.page === null

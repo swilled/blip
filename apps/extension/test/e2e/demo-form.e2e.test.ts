@@ -35,6 +35,23 @@ async function sendFromVoiceUi(fixture: Awaited<ReturnType<typeof openFixturePag
   expect(submitted).toBe(true);
 }
 
+async function enableMockSpeech(fixture: Awaited<ReturnType<typeof openFixturePage>>) {
+  const enabledAudio = await fixture.evaluateInVoiceUi(`(() => {
+    window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+    Object.defineProperty(window, 'speechSynthesis', {
+      configurable: true,
+      value: {
+        cancel() {},
+        resume() {},
+        speak(item) { queueMicrotask(() => item.onend?.()); },
+      },
+    });
+    document.querySelector('#enable-audio')?.click();
+    return true;
+  })()`);
+  expect(enabledAudio).toBe(true);
+}
+
 async function waitForVoiceUiReply(fixture: Awaited<ReturnType<typeof openFixturePage>>, text: string) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
@@ -135,6 +152,48 @@ describe("local synthetic survey demo", () => {
       expect(fixture.serverLogs().every((line) =>
         !line.includes("Ada Demo") && !line.includes("ada@example.invalid"),
       )).toBe(true);
+    } finally {
+      await fixture.close();
+    }
+  }, 120_000);
+
+  it.skipIf(!enabled)("reconciles the browser UI redemption before accepting the next command", async () => {
+    const fixture = await openFixturePage(PAGE_PATH, {
+      dialogueRunner: true,
+      voiceUi: true,
+      autoCompleteSpeech: false,
+    });
+    try {
+      await enableMockSpeech(fixture);
+      await waitForReport(fixture, "page-ready");
+
+      await sendFromVoiceUi(fixture, "fill Name with Ada Demo");
+      await waitForVoiceUiReply(fixture, "Ada Demo");
+      await sendFromVoiceUi(fixture, "fill Email with ada@example.invalid");
+      await waitForVoiceUiReply(fixture, "ada at example dot invalid");
+
+      await sendFromVoiceUi(fixture, "submit survey");
+      const readback = await waitForVoiceUiReply(fixture, "Reading back");
+      expect(readback).toContain("Ada Demo");
+      expect(readback).toContain("ada at example dot invalid");
+      expect(await waitFor(
+        () => fixture.evaluateInVoiceUi("document.querySelector('#confirmation')?.hidden === false"),
+        (value) => value === true,
+      )).toBe(true);
+      // The reducer refuses confirmation while the prompt is still speaking and for one second afterward.
+      await delay(1_100);
+
+      await sendFromVoiceUi(fixture, "submit survey");
+      await waitForReport(fixture, "demo-survey-submit");
+      const submitReply = await waitForVoiceUiReply(fixture, "Local submit observed");
+      expect(submitReply).toContain("Local submit observed");
+      expect((await fixture.reports(PAGE_PATH)).filter((report) => report.type === "demo-survey-submit")).toHaveLength(1);
+      expect(fixture.actResults().filter((result) => result.liveKind === "submit" && result.ok)).toHaveLength(1);
+
+      await sendFromVoiceUi(fixture, "what's here");
+      const followup = await waitForVoiceUiReply(fixture, "Community Survey");
+      expect(followup).toContain("Community Survey");
+      expect((await fixture.reports(PAGE_PATH)).filter((report) => report.type === "demo-survey-submit")).toHaveLength(1);
     } finally {
       await fixture.close();
     }

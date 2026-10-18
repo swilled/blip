@@ -30,9 +30,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-audit-milestone core",
-    "label": "Reconcile core v1 acceptance and release evidence",
-    "reason": "Phase 5 technical acceptance passes: AGY hostile-page refusal, full local I3, launcher-cache prewarm/reload, full fake-brain launcher smoke, fake-browser E2Es, full tests, typecheck, and production builds. GSD closeout awaits written M0 sign-off, teammate review, mainline promotion, and demo-safe tagging."
+    "command": "/gsd-progress core",
+    "label": "Await M0 sign-off and release review",
+    "reason": "The core v1 milestone audit is recorded. Local requirements and integration are verified except PROT-01's written voice-owner M0 sign-off. Phase 5 technical acceptance passes; closeout still needs teammate review, mainline promotion, and demo-safe tagging."
   },
-  "updated_at": "2026-10-18T01:58:15Z"
+  "updated_at": "2026-10-18T02:14:38Z"
 }

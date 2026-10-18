@@ -3,6 +3,7 @@ phase: 05-hostile-pages-real-web-and-freeze
 plan: 05-11
 status: executed
 verified: 2026-10-17
+requirements-completed: [GATE-06, GATE-07, PROT-03]
 ---
 
 # Phase 5 Plan 05-11: Local Voice Integration and Synthetic Demo Summary
@@ -38,6 +39,7 @@ Local Phase 5 acceptance is complete for GATE-06, GATE-07, PROT-03, local synthe
 
 - Fetched `origin/voice/phase-2-dialogue-gateport` at `2f22bb5` and merged its Phase 2 reducer/runtime into the core integration branch.
 - Connected the reducer's `arm`, `clear`, and `redeem` lifecycle through `createCoreDialogueGatePort`; the server remains the only owner of the one-use grant and `ConsumedGrant` dispatch.
+- Re-verified the first-party UI's direct `confirm.redeem` handoff on 2026-10-18. The DialogueRunner now reconciles completion and accepts the next ordinary request after one local submit; see `05-VERIFICATION.md` and the `demo-form.e2e.test.ts` browser proof.
 - Added automated checks for server-tracked read-back `speakId`, exact `submit survey`, refusal of bare `yes`, one-use submission, and grant invalidation on cancel, stop/repeat, PTT, or page change.
 - Ran the integrated reducer through the production extension in a harness-owned browser profile against the local synthetic form. The exact phrase produced one submit and the page's confirmation result; the read-back did not reveal the fictional card number.
 - Verification: `npm test -- --maxWorkers=1` passed (113 files, 1,189 tests; 16 files and 26 tests skipped); `npm run typecheck`, `npm run ext:build`, and `npm run build --workspace @blip/voice` passed; `BLIP_E2E_BROWSER=1 npx vitest run apps/extension/test/e2e/gated-flow.e2e.test.ts` passed (2/2).

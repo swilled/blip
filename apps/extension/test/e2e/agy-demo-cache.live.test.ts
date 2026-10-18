@@ -297,8 +297,8 @@ async function waitForReport(fixture: BrowserFixtureSession, pagePath: string, t
   throw new Error("the synthetic survey did not record the expected local submit");
 }
 
-function countReports(reports: readonly { type: string }[], type: string): number {
-  return reports.filter((report) => report.type === type).length;
+function countReports(reports: readonly Record<string, unknown>[], type: string): number {
+  return reports.filter((report) => report["type"] === type).length;
 }
 
 describe("bounded live AGY cache prewarm for the local survey", () => {

@@ -103,10 +103,11 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     event: DialogueEvent,
     context?: HandlerContext,
     formOverride?: FormModel | null,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const session = context?.session ?? activeSession!;
     const form = formOverride !== undefined ? formOverride : currentForm(session);
     const result = reduce(state, event, { form, now: now() });
+    const redeemed = result.effects.some((effect) => effect.kind === "redeem");
     state = result.state;
     const hub = context?.hub ?? sessionHub;
 
@@ -128,6 +129,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       session.busy = false;
       hub.pushState();
     }
+    return redeemed;
   }
 
   let activeSession: Session | undefined;
@@ -355,14 +357,70 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         }
       });
     },
+    "confirm.redeem"(context) {
+      if (context.role !== "voice" || context.message.type !== "confirm.redeem") return;
+      const redemption = context.message.payload;
+      activeSession = context.session;
+      sessionHub = context.hub;
+      return enqueue(async () => {
+        context.session.busy = true;
+        context.hub.pushState();
+        try {
+          // The browser voice UI has already matched its exact phrase. Re-enter the same reducer
+          // path as a voice-role utterance so the server reducer clears its private pending state;
+          // the core GatePort still validates the tracked grant/speak ids before dispatch.
+          const confirm = state.confirm;
+          if (confirm === null || confirm.grantId !== redemption.grantId || confirm.speakId !== redemption.speakId) {
+            context.hub.send("voice", "confirm.cleared", {
+              grantId: redemption.grantId,
+              reason: "cancelled",
+            });
+            return;
+          }
+          const redeemed = await dispatch({
+            type: "utterance",
+            utterance: {
+              utteranceId: redemption.utteranceId,
+              text: redemption.phrase,
+              source: "typed",
+            },
+          }, context);
+          if (!redeemed && state.confirm?.grantId === redemption.grantId) {
+            clearTimeout(expiryTimers.get(redemption.grantId));
+            expiryTimers.delete(redemption.grantId);
+            let clearedByGate = false;
+            try {
+              clearedByGate = (await options.gate.clear(redemption.grantId, "cancelled")) === true;
+            } catch {
+              // A rejected UI confirmation must never leave its local redeeming lock armed.
+            }
+            if (!clearedByGate) {
+              context.hub.send("voice", "confirm.cleared", {
+                grantId: redemption.grantId,
+                reason: "cancelled",
+              });
+            }
+            await dispatch({
+              type: "confirm.cleared",
+              grantId: redemption.grantId,
+              reason: "cancelled",
+            }, context);
+          }
+        } finally {
+          context.session.busy = false;
+          context.hub.pushState();
+          options.onTurnComplete?.();
+        }
+      });
+    },
     "speak.done"(context) {
       if (context.role !== "voice" || context.message.type !== "speak.done") return;
       const done = context.message.payload;
       activeSession = context.session;
       sessionHub = context.hub;
-      return enqueue(() => {
+      return enqueue(async () => {
         context.session.completeSpeech(done.speakId, done.interrupted, now());
-        return dispatch({ type: "speak.done", done }, context);
+        await dispatch({ type: "speak.done", done }, context);
       });
     },
     "page.changed"(context) {
@@ -416,9 +474,9 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       activeSession = context.session;
       sessionHub = context.hub;
       if (cmd !== "reconnect-browser") {
-        return enqueue(() =>
-          dispatch({ type: "control", cmd }, context),
-        );
+        return enqueue(async () => {
+          await dispatch({ type: "control", cmd }, context);
+        });
       }
       return enqueue(async () => {
         context.hub.send(

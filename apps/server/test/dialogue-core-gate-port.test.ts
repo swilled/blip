@@ -98,6 +98,25 @@ async function arm(rig: ReturnType<typeof makeRig>) {
 }
 
 describe("dialogue reducer to core GatePort integration", () => {
+  it("clears the one-use grant after a UI confirmation arrives before the prompt cooldown", async () => {
+    const rig = makeRig();
+    const { armed } = await arm(rig);
+
+    await rig.handle("voice", "confirm.redeem", {
+      grantId: armed.payload.grantId,
+      speakId: armed.payload.speakId,
+      utteranceId: "u-too-early",
+      phrase: armed.payload.phrase,
+    });
+
+    expect(rig.session.pendingGatedAction).toBeNull();
+    expect(rig.requests.filter((request) => request.type === "act.request" &&
+      (request.payload as ActRequest).action.op === "click")).toHaveLength(0);
+    expect(rig.frames("confirm.cleared")).toContainEqual(expect.objectContaining({
+      payload: { grantId: armed.payload.grantId, reason: "cancelled" },
+    }));
+  });
+
   it("requires a tracked uninterrupted read-back and redeems the exact survey phrase once through core", async () => {
     const rig = makeRig();
     const action = rig.session.model!.actions.find((item) => item.kind === "submit")!;

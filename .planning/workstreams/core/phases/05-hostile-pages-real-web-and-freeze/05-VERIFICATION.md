@@ -1,9 +1,11 @@
 ---
 phase: 05-hostile-pages-real-web-and-freeze
-verified: 2026-10-18T01:43:29Z
+verified: 2026-10-18T02:14:38Z
 status: gaps_found
 score: 4/5 phase success criteria fully verified for current AGY runtime; 1 partial release freeze
 plans_executed: 11/11
+re_verification: true
+re_verification_note: "The first-party voice UI confirmation handoff was fixed and verified through a production browser flow; human/repository freeze gates remain open."
 gaps:
   - "Written M0 sign-off, teammate review, mainline promotion, and the `demo-safe` tag remain pending human/repository gates."
 ---
@@ -12,7 +14,7 @@ gaps:
 
 **Phase goal:** Harden the core against seeded page prompt injection, carry a deterministic warning for text addressed to Blip, complete a self-hosted synthetic survey by voice, provide one-command startup, and freeze only after the full local demo gate passes.
 
-**Current result:** The fresh bounded AGY hostile-page run 05-13 passed with zero acts, submits, navigation, or page changes. Full local AGY I3 passed in 05-26: exact repair identity, cache write/reuse, AGY intent, fictional fills, tracked read-back, exact confirmation, and exactly one grant-bound local submit. Run 05-27 refreshed the exact launcher-cache entry through AGY; 05-29 loaded that entry in a fresh session with zero repair prompts. The full test suite, typecheck, extension and voice builds, fake-brain browser E2Es, isolated extension/server smoke, and full fake-brain launcher smoke pass. Phase 5's technical acceptance is verified; written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain human/repository release gates. The voice Phase 2 reducer/GatePort branch `origin/voice/phase-2-dialogue-gateport` (`2f22bb5`) is integrated on this branch. Voice-owned DEMO-03 is deferred because this hackathon has no public-form URL; no arbitrary form was opened.
+**Current result:** The fresh bounded AGY hostile-page run 05-13 passed with zero acts, submits, navigation, or page changes. Full local AGY I3 passed in 05-26: exact repair identity, cache write/reuse, AGY intent, fictional fills, tracked read-back, exact confirmation, and exactly one grant-bound local submit. Run 05-27 refreshed the exact launcher-cache entry through AGY; 05-29 loaded that entry in a fresh session with zero repair prompts. A production Edge E2E now also confirms that the first-party voice UI's `confirm.redeem` is reconciled by the DialogueRunner: one local submit succeeds, and the next ordinary page question is answered normally. The full test suite, typechecks, extension and voice builds, isolated extension/server smoke, and full fake-brain launcher smoke pass. Phase 5 technical acceptance is verified; written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain human/repository release gates. The voice Phase 2 reducer/GatePort branch `origin/voice/phase-2-dialogue-gateport` (`2f22bb5`) is integrated on this branch. Voice-owned DEMO-03 is deferred because this hackathon has no public-form URL; no arbitrary form was opened.
 
 ## Success criteria
 
@@ -23,6 +25,17 @@ gaps:
 | 3 | Local I3 works with the self-hosted survey: the voice reducer fills/submits through the core gate, AGY repairs and reuses the exact cache identity, and hostile action remains blocked. | PASS | 05-26 passed every local I3 step with exactly one submit. 05-13 separately passed the live hostile-page refusal scenario. The launcher cache was refreshed by AGY in 05-27 and reloaded by a fresh session with no repair prompt in 05-29. No public form was used. |
 | 4 | One command launches the loopback server, dedicated extension profile, and voice window; both roles connect. | PASS | `npm run demo -- --brain=fake --smoke` emitted the pass marker: extension connected, voice connected, synthetic survey selected, isolated profiles. The dedicated demo profile was free before launch; the user's regular Edge window was left open. |
 | 5 | Freeze: exact AGY demo repair is prewarmed, fake fallback passes, and main is tagged `demo-safe`. | PARTIAL | AGY prewarm and fresh-session cache load pass; fake-brain E2Es pass. The `demo-safe` tag is intentionally pending written M0 sign-off, teammate review, and mainline promotion. |
+
+## Re-verification: first-party voice UI handoff (2026-10-18)
+
+The integration audit found that the browser UI sent `confirm.redeem` through the core Executor without updating the DialogueRunner's private reducer state. The runner now checks that the incoming grant and read-back IDs match its current confirmation, routes the phrase through the reducer and core GatePort, and safely clears a refused early or mismatched redemption.
+
+- Production Edge E2E on the synthetic survey: **1 passed**. The browser voice UI filled fictional values, completed the tracked read-back and exact confirmation, made exactly one grant-bound local submit, and then answered “what's here” normally.
+- Focused server reducer/GatePort tests: **10 passed**, including early confirmation invalidation and one-use dispatch.
+- Latest `npm test`: **114 files passed, 16 skipped; 1,197 tests passed, 28 skipped**.
+- `npm run typecheck`, `npm run ext:typecheck`, `npm run ext:build`, `npm run pages:build`, and `npm run build --workspace @blip/voice`: all passed.
+
+This closes the local GATE-05 integration finding. The remaining Phase 5 gap is the release freeze gate listed above; there is no public-form URL in scope.
 
 ## Current AGY verification scope
 

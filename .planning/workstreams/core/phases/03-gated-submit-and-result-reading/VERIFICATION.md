@@ -1,16 +1,18 @@
 ---
 phase: 03-gated-submit-and-result-reading
-verified: 2026-10-17T07:27:01Z
+verified: 2026-10-18T02:14:38Z
 status: passed
 score: 5/5 must-haves verified
+re_verification: true
+re_verification_note: "The first-party voice UI confirm.redeem path now reconciles the DialogueRunner after core execution; a production browser E2E confirms one submit and a normal follow-up turn."
 ---
 
 # Phase 3: Gated Submit and Result Reading Verification Report
 
 **Phase Goal:** Nothing irreversible can happen on a page except through the single Executor, after a full read-back and the exact spoken phrase from the user's voice channel, and afterwards the user hears what the page actually said.
-**Verified:** 2026-10-17T07:27:01Z
+**Verified:** 2026-10-18T02:14:38Z
 **Status:** passed
-**Re-verification:** No — initial verification
+**Re-verification:** Yes — first-party voice UI redemption handoff and post-submit continuation
 
 ## Goal Achievement
 
@@ -87,6 +89,17 @@ Evidence below is from the recorded executions in the six plan summaries, which 
 
 No additional Phase 3 requirements are mapped to this phase in `REQUIREMENTS.md`.
 
+### First-party voice UI handoff re-verification (2026-10-18)
+
+The browser voice UI sends `confirm.redeem` after its own exact-phrase match. The DialogueRunner now validates the frame's grant and read-back IDs, routes the phrase through its armed reducer and the core GatePort, and clears its reducer state after a rejected early/mismatched UI confirmation. This closes the stale `awaiting-confirm` state found during the Core milestone integration audit.
+
+- `BLIP_E2E_BROWSER=1 BLIP_BROWSER=<Edge executable> npx vitest run apps/extension/test/e2e/demo-form.e2e.test.ts --maxWorkers=1 -t "reconciles the browser UI redemption"` — **1 passed**. It used the production first-party voice page and extension, completed exactly one local survey submit, then asked “what's here” and received the normal current-page answer.
+- `npx vitest run apps/server/test/dialogue-core-gate-port.test.ts apps/server/test/dialogue-runner-server.test.ts --maxWorkers=1` — **10 passed**, including early confirmation refusal/clearing and single-use dispatch.
+- `npm test` — **114 files passed, 16 skipped; 1,197 tests passed, 28 skipped**.
+- Root and extension typechecks passed; extension, test-page, and voice production builds passed.
+
+The canonical supported connected launch path is `npm run demo -- --brain=fake` for I2 and `npm run demo -- --brain=agy` for I3. The dev REPL and legacy `npm start` entrypoints serve different development paths and are not equivalent connected-gate launchers.
+
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
@@ -103,5 +116,5 @@ No Core Phase 3 goal gaps found. All five roadmap success criteria and all eight
 
 ---
 
-_Verified: 2026-10-17T07:27:01Z_
+_Re-verified: 2026-10-18T02:14:38Z_
 _Verifier: Codex (goal-backward phase audit)_
