@@ -15,6 +15,25 @@ async function waitForFrame(client: TestClient, predicate: (frame: Frame) => boo
 }
 
 describe("core server dialogue runner option", () => {
+  it("tracks rate-only acknowledgement speech and rejects invalid settings", async () => {
+    const server = await startServer({ port: 0, dialogueRunner: true });
+    const voice = await bindClient(server.port, "voice");
+    try {
+      voice.send("settings", { outputMode: "agent-voice", rate: 1.26 });
+      const faster = await waitForFrame(voice, f => f.type === "speak" && f.payload.text === "Speaking faster.");
+      expect(faster.payload.interrupt).toBe(false);
+      expect(server.session.speechCompletion(faster.payload.speakId)).toBeNull();
+      expect(server.session.activeSpeakId).toBe(faster.payload.speakId);
+      voice.send("speak.done", { speakId: faster.payload.speakId, interrupted: false });
+      await vi.waitFor(() => expect(server.session.speechCompletion(faster.payload.speakId)?.interrupted).toBe(false));
+      voice.send("settings", { outputMode: "agent-voice", rate: 0.79 });
+      const slower = await waitForFrame(voice, f => f.type === "speak" && f.payload.text === "Speaking slower.");
+      expect(slower.payload.speakId).not.toBe(faster.payload.speakId);
+      voice.send("settings", { outputMode: "agent-voice", rate: 1.1 });
+      await waitForFrame(voice, f => f.type === "error" && f.payload.code === "invalid-speech-rate");
+      expect(server.session.speechRate).toBe(0.79);
+    } finally { voice.close(); await server.close(); }
+  });
   it("reports unavailable NVDA once and falls back to tracked agent-voice speech", async () => {
     const speechOutput = {
       speak: vi.fn(() => 0),

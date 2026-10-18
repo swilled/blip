@@ -63,7 +63,24 @@ export class Session {
 
   #extensionConnected = false;
   /** Whether the current voice-role socket is bound to this session. */
-  voiceConnected = false;
+  #voiceConnected = false;
+  voiceEpoch = 0;
+  speechRevision = 0;
+  speechRate = 1;
+  voiceCapture: { epoch: number; eligible: boolean; ended: boolean; startedAt: number; speechRevision: number; snapshotRevision: number; grantId: string | null } | null = null;
+  get voiceConnected(): boolean { return this.#voiceConnected; }
+  set voiceConnected(value: boolean) {
+    if (value || value !== this.#voiceConnected) {
+      this.voiceEpoch++;
+      this.voiceCapture = null;
+      this.grants.clear();
+      this.pendingGatedAction = null;
+      this.#speech.clear();
+      this.activeSpeakId = null;
+      this.speechRate = 1;
+    }
+    this.#voiceConnected = value;
+  }
   #snapshotOrder: { tabId: number; version: number; capturedAt: number } | null = null;
   #snapshotRevision = 0;
 
@@ -74,6 +91,7 @@ export class Session {
 
   /** Track a speech only after its selected output path accepted the request. */
   trackSpeech(speakId: string, category = "answer"): void {
+    this.speechRevision++;
     this.activeSpeakId = speakId;
     // NVDA's Controller Client speakText call only reports dispatch acceptance. It has no
     // completion callback, so its acknowledgement must never satisfy a confirmation read-back.

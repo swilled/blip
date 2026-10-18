@@ -1,3 +1,5 @@
+import { SPEECH_RATES } from "@blip/dialogue";
+export { SPEECH_RATES } from "@blip/dialogue";
 export type SpeechRateDirection = "faster" | "slower";
 
 export function parseSpeechRateCommand(text: string): SpeechRateDirection | null {
@@ -11,7 +13,6 @@ export interface SpeechRateAdjustment {
 }
 
 const DEFAULT_RATE = 1.0;
-export const SPEECH_RATES = [0.50, 0.63, 0.79, 1.00, 1.26, 1.59, 2.00] as const;
 
 export function createSpeechRate(): number {
   return DEFAULT_RATE;

@@ -7,7 +7,6 @@ import { createHoldClient } from "./hold-client";
 import { createHoldOwner } from "./hold-owner";
 import {
   createOutputModeController,
-  shouldSpeakLocalAcknowledgement,
   statusAriaLive,
   type VoiceOutputMode,
 } from "./output-mode";
@@ -24,7 +23,6 @@ import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log
 
 const CLIENT_VERSION = "0.0.0";
 const CAPTION_CLEAR_MS = 1000;
-const LOCAL_RATE_ACK_ID = "local-speech-rate-ack";
 declare const __BLIP_BUILD_ID__: string;
 const diagnostics = createSpeechDiagnostics();
 let nativeRecognitionId = 0;
@@ -123,6 +121,7 @@ function commitExchange(): void {
 }
 
 const tts = createTts({
+  localFiller: false,
   synth: nativeSynth,
   onFailure: message => { el("output-mode-status").textContent = message; },
   getRate: () => speechRate,
@@ -130,13 +129,8 @@ const tts = createTts({
   setTimer: (fn, ms) => setTimeout(fn, ms),
   clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
   onDone: (d) => {
-    if (d.speakId === LOCAL_RATE_ACK_ID) {
-      if (state.get() === "thinking" || state.get() === "speaking") state.speechDone();
-      talk.onSpeechEnd();
-      return;
-    }
     bridge.onTtsDone(d); // sends speak.done for defined speakIds only
-    if (d.speakId === undefined) return; // local "One moment." filler
+    if (d.speakId === undefined) return;
     if (d.interrupted) replyInterrupted = true;
     outstanding = Math.max(0, outstanding - 1);
     if (outstanding === 0) {
@@ -253,10 +247,7 @@ function handleLocalRateUtterance(text: string): boolean {
 
 function announceRateAcknowledgement(acknowledgement: string): void {
   el("output-mode-status").textContent = acknowledgement;
-  if (shouldSpeakLocalAcknowledgement(outputMode.getMode())) {
-    if (!tts.isSpeaking()) state.messageSent();
-    tts.speak(acknowledgement, { speakId: LOCAL_RATE_ACK_ID });
-  }
+  socket?.sendSettings(outputMode.getMode(), speechRate);
 }
 
 document.querySelectorAll<HTMLButtonElement>("[data-speech-rate]").forEach((button) => {

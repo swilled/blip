@@ -1,4 +1,5 @@
 export { reduce } from "./reduce";
+export { SPEECH_RATES, isSpeechRate } from "./speech-rate";
 export { formDigest, requiredEmpty } from "./fields";
 export { classifyUtterancePrivacy } from "./sensitive";
 export type { UtterancePrivacy } from "./sensitive";

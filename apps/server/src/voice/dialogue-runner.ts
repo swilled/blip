@@ -1,4 +1,4 @@
-import { classifyUtterancePrivacy, dialogueStateName, initialState, reduce } from "@blip/dialogue";
+import { classifyUtterancePrivacy, dialogueStateName, initialState, reduce, speakEffect, isSpeechRate } from "@blip/dialogue";
 import {
   newId,
   type ActRequest,
@@ -52,6 +52,17 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
   let lastSnapshotTabId: number | undefined;
   let queue: Promise<void> = Promise.resolve();
   const expiryTimers = new Map<string, NodeJS.Timeout>();
+  let stateEpoch = 0;
+  function syncVoice(context: HandlerContext, epoch: number): boolean {
+    if (epoch !== context.session.voiceEpoch) return false;
+    if (stateEpoch !== epoch) {
+      stateEpoch = epoch;
+      state = initialState();
+      for (const timer of expiryTimers.values()) clearTimeout(timer);
+      expiryTimers.clear();
+    }
+    return true;
+  }
 
   function enqueue(job: () => Promise<void>): Promise<void> {
     const run = queue.then(job);
@@ -446,15 +457,35 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     },
     settings(context) {
       if (context.role !== "voice" || context.message.type !== "settings") return;
-      const nextMode = context.message.payload.outputMode;
+      const { outputMode: nextMode, rate } = context.message.payload;
+      const epoch = context.session.voiceEpoch;
       activeSession = context.session;
       sessionHub = context.hub;
-      if (context.session.outputMode === nextMode) return;
       return enqueue(async () => {
+        if (!syncVoice(context, epoch)) return;
+        if (rate !== undefined && !isSpeechRate(rate)) {
+          context.hub.send("voice", "error", { code: "invalid-speech-rate", message: "That speech speed is not supported.", fatal: false });
+          return;
+        }
         // Cancel speech and clear any armed/read-back state through GatePort while the old output
         // route is still active, then apply the new setting to this session.
-        await dispatch({ type: "control", cmd: "stop" }, context);
-        context.hub.setOutputMode(nextMode);
+        if (context.session.outputMode !== nextMode) {
+          context.session.voiceCapture = null;
+          await dispatch({ type: "control", cmd: "stop" }, context);
+          context.hub.setOutputMode(nextMode);
+        }
+        if (rate !== undefined) {
+          const previous = context.session.speechRate;
+          context.session.speechRate = rate;
+          if (nextMode === "agent-voice") {
+            const text = rate > previous ? "Speaking faster." : rate < previous ? "Speaking slower."
+              : rate === 2 ? "Already at the fastest rate." : rate === 0.5 ? "Already at the slowest rate." : "Speech speed is unchanged.";
+            const acknowledgement = speakEffect(state, text, "answer");
+            state = acknowledgement.state;
+            await runEffect(acknowledgement.effect, context.session, context.hub, context);
+          }
+          context.hub.pushState();
+        }
       });
     },
     "page.changed"(context) {

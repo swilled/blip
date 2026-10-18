@@ -51,6 +51,12 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe("socket", () => {
+  it("sends the existing optional rate setting without changing the output mode", () => {
+    const { s, socks } = setup();
+    socks[0].open(); socks[0].recv(welcome());
+    s.sendSettings("agent-voice", 1.26);
+    expect(JSON.parse(socks[0].sent.at(-1)!)).toMatchObject({ type: "settings", payload: { outputMode: "agent-voice", rate: 1.26 } });
+  });
   it("sends hello first, valid", () => {
     const { socks } = setup();
     socks[0].open();

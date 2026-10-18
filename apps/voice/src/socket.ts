@@ -42,7 +42,7 @@ export interface VoiceSocket {
   }): string | null;
   sendPtt(state: PayloadOf<"ptt">["state"]): void;
   sendSpeakDone(p: PayloadOf<"speak.done">): void;
-  sendSettings(outputMode: "agent-voice" | "screen-reader"): void;
+  sendSettings(outputMode: "agent-voice" | "screen-reader", rate?: number): void;
   isConnected(): boolean;
   close(): void;
 }
@@ -126,8 +126,8 @@ export function createSocket(deps: SocketDeps): VoiceSocket {
     sendSpeakDone(p) {
       send(buildFrame("speak.done", p));
     },
-    sendSettings(outputMode) {
-      send(buildFrame("settings", { outputMode }));
+    sendSettings(outputMode, rate) {
+      send(buildFrame("settings", { outputMode, ...(rate !== undefined ? { rate } : {}) }));
     },
     isConnected: () => connected,
     close() {

@@ -20,6 +20,8 @@ export interface TtsDone {
 }
 
 export interface TtsDeps {
+  /** The integrated server owns tracked filler; standalone test harnesses may opt in. */
+  localFiller?: boolean;
   synth: Synth;
   getRate?: () => number;
   now: () => number;
@@ -193,6 +195,7 @@ export function createTts(deps: TtsDeps): Tts {
     },
     markSent() {
       clearOneMoment();
+      if (deps.localFiller === false) return;
       oneMomentTimer = setTimer(() => {
         oneMomentTimer = null;
         api.speak("One moment.");
