@@ -254,7 +254,7 @@ Plans:
 - [x] 08-01-PLAN.md — Capture generic visible items with bounded recency evidence
 - [x] 08-02-PLAN.md — Route item reads through the full extension path with live DOM revalidation
 - [x] 08-03-PLAN.md — Add per-session task state and deterministic item resolution
-- [ ] 08-04-PLAN.md — Compose and revise drafts with observed field read-back
+- [x] 08-04-PLAN.md — Compose and revise drafts with observed field read-back
 - [ ] 08-05-PLAN.md — Gate sending on exact phrase and draft-bound grant
 - [ ] 08-06-PLAN.md — Integrate and verify the synthetic end-to-end workflow
 

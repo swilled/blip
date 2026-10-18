@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 08-03-PLAN.md
-last_updated: "2026-10-18T07:27:27.466Z"
+stopped_at: Completed 08-04-PLAN.md
+last_updated: "2026-10-18T07:38:15.642Z"
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 90
-  completed_plans: 72
+  completed_plans: 73
 ---
 
 # Project State
@@ -25,7 +25,7 @@ Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP
 ## Current Position
 
 Phase: 8 (Multi-step web reading and drafting) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 
 ## Performance Metrics
 
@@ -93,6 +93,7 @@ Plan: 4 of 6
 | Phase 08 P08-01 | 6 min | 3 tasks | 10 files |
 | Phase 08 P08-02 | 6 min | 2 tasks | 8 files |
 | Phase 08 P08-03 | 8m | 2 tasks | 5 files |
+| Phase 08 P08-04 | 12m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -171,6 +172,9 @@ Recent decisions affecting current work:
 - [Phase 08]: Keep one bounded page task in Session and scrub it on voice, extension, capture, page, tab, replacement, or cancellation transitions.
 - [Phase 08]: Resolve targets only from the current identity-bound visible-item capture; latest requires complete valid date evidence and a unique greatest instant.
 - [Phase 08]: Keep exact-phrase confirmation in the existing deterministic action gate; affirmative text such as 'yes' is not modeled as authorization in page-task state.
+- [Phase 08]: Keep the content provider lazy, tool-less, and limited to proposed prose; field, recipient, task, action, and confirmation authority remain in deterministic core.
+- [Phase 08]: A draft is current only when ActResult observedValue exactly matches the accepted post-write FormModel value for the same bound field and page task.
+- [Phase 08]: Leave the existing exact context-specific phrase gate separate; this plan neither models nor accepts a bare yes as authorization.
 
 ### Pending Todos
 
@@ -203,6 +207,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T07:27:27.462Z
-Stopped at: Completed 08-03-PLAN.md
+Last session: 2026-10-18T07:38:15.638Z
+Stopped at: Completed 08-04-PLAN.md
 Resume file: None
