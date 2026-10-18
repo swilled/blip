@@ -25,6 +25,38 @@ afterEach(() => {
 });
 
 describe("walkDocument", () => {
+  it("reads a Microsoft Forms question-level required note without leaking it to optional questions", () => {
+    document.body.innerHTML = `
+      <div data-automation-id="questionItem">
+        <span data-automation-id="questionTitle">
+          <span id="QuestionId_employment" role="heading" aria-level="2">
+            <span data-automation-id="questionOrdinal">2.</span>
+            <span>Employment type</span>
+            <span data-automation-id="requiredStar" role="note" aria-label="Required to answer"></span>
+          </span>
+        </span>
+        <input data-automation-id="textInput" aria-labelledby="QuestionId_employment QuestionInfo_employment">
+      </div>
+      <div data-automation-id="questionItem">
+        <span data-automation-id="questionTitle">
+          <span id="QuestionId_title" role="heading" aria-level="2">
+            <span data-automation-id="questionOrdinal">4.</span>
+            <span>Title</span>
+          </span>
+        </span>
+        <input data-automation-id="textInput" aria-labelledby="QuestionId_title QuestionInfo_title">
+      </div>
+    `;
+
+    const elements = walkDocument(document);
+
+    expect(elements.map((element) => ({ label: element.labelCandidates[0]?.text, required: element.required, requiredSource: element.requiredSource })))
+      .toEqual([
+        { label: "2. Employment type", required: true, requiredSource: "aria" },
+        { label: "4. Title", required: false, requiredSource: "none" },
+      ]);
+  });
+
   it("collects native fields, one radio group, actions and unsupported widgets with safe metadata", () => {
     document.body.innerHTML = `
       <form action="/book">
