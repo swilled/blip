@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 05 local acceptance and HO-8 voice reducer integration are verified on integration/ho8-voice-gate; teammate review and mainline promotion remain before demo-safe tagging. Public-form DEMO-03 is explicitly deferred because no URL exists for this hackathon.
-stopped_at: Integrated origin/voice/phase-2-dialogue-gateport at 2f22bb5, ran the full suite, typecheck, extension and voice builds, and production-extension browser E2E. Teammate review is the remaining release step before mainline freeze/tag.
-last_updated: "2026-10-17T22:12:21Z"
+status: AGY hostile-page, full I3, launcher-cache, fake browser E2E, full test, and build acceptance pass on integration/ho8-voice-gate. Written M0 protocol sign-off, teammate review, and mainline promotion remain before demo-safe tagging. Public-form DEMO-03 is deferred because this hackathon has no URL.
+stopped_at: Reconciled Phase 5 after AGY hostile check 05-13, full I3 05-26, launcher-cache refresh 05-27 and fresh reload 05-29, plus current full tests. See RELEASE-CHECKLIST.md.
+last_updated: "2026-10-18T01:43:29Z"
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 59
-  completed_plans: 59
+  total_plans: 60
+  completed_plans: 60
 ---
 
 # Project State
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 05 local acceptance is complete, including the voice Phase 2 reducer wired to the core Gate/Executor and exact synthetic survey cache. The integration branch needs teammate review and mainline promotion before `demo-safe`; public-form DEMO-03 is deferred.
+**Current focus:** All 60 original roadmap plans have been executed. Phase 5 technical acceptance passes on the current AGY server brain (Gemini 3.8 Flash Low for intent, Medium for repair): hostile-page refusal, full local I3, exact launcher-cache prewarm/reload, fake-brain browser E2Es, full tests, typecheck, and builds. The latest one-command smoke rerun was inconclusive because Edge reused an existing profile; an earlier smoke emitted the pass marker. Written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain release gates. Public-form DEMO-03 is deferred.
 
 ## Current Position
 
-Phase: 05 (hostile-pages-real-web-and-freeze) — LOCAL ACCEPTANCE VERIFIED / RELEASE REVIEW PENDING
-Plan: Phase 04 complete (18/18); Phase 05 plans executed (11/11). Voice Phase 2 reducer adoption is integrated and locally verified; freeze/tag waits for teammate review and mainline promotion.
+Phase: 05 (hostile-pages-real-web-and-freeze) — technical acceptance passed; release review pending
+Plan: Phase 05 original plans executed (11/11); all 60 original roadmap plans are executed. Additional AGY follow-up attempts 05-12 through 05-29 are recorded separately. Voice Phase 2 reducer is integrated. Written M0 sign-off and teammate/repository release review remain.
 
 ## Performance Metrics
 
@@ -91,9 +91,9 @@ Plan: Phase 04 complete (18/18); Phase 05 plans executed (11/11). Voice Phase 2 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [Roadmap]: Intent-as-data. Claude gets only tool-less structured-output calls (`repairFormModel`, `parseIntent`); the single Executor + policy gate carries out every page action
-- [Roadmap]: Gate before brain. Phases 1-3 demo without Claude; real Claude arrives in Phase 4
-- [Roadmap]: Core owns the fakes (fake extension, `--brain=fake`, REPL, stub dialogue reducer, own extension test pages) so it never blocks on voice or on Claude quota
+- [Roadmap]: Intent-as-data. The model gets only tool-less structured-output calls (`repairFormModel`, `parseIntent`); the single Executor + policy gate carries out every page action
+- [Roadmap]: Gate before brain. Phases 1-3 demo without AGY; the subscription provider arrives in Phase 4
+- [Roadmap]: Core owns the fakes (fake extension, `--brain=fake`, REPL, stub dialogue reducer, own extension test pages) so it never blocks on voice or model quota
 - [Roadmap]: PAGE-03 kind classification ships with the snapshot in Phase 2; the extension refuses every gated click until Phase 3's grants exist
 - [Roadmap]: Every core phase carries `UI hint: no`. "Form"/"page" are subject matter here; the voice track owns all UI
 - [Phase 02]: Keep ungated action membership local to avoid protocol runtime imports; verify parity against every frozen action kind and unknown strings.
@@ -118,9 +118,9 @@ Recent decisions affecting current work:
 - [Phase 04]: Voice-owner approval was reported in the 2026-10-17 checkpoint response; Core proceeded with the exact deterministic-raw/model-resolved label source split.
 - [Phase 04]: Deferred 04-08 live SDK use under delegated instruction; user did not provide the exact token
 - [Phase 04]: Approved-mode verifier accepts only one exact plan-specific marker line; the single fresh approval was consumed after one initialization timeout.
-- [Phase 04]: All probes use injected fakes and synthetic data; requirements remain pending until separate approved live evidence exists.
+- [Phase 04]: Early probes used injected fakes and synthetic data; this was superseded by the approved live checks completed in 04-18.
 - [Phase 04]: Only fixed synthetic role operations may precede both valid empty-tool checks; bootstrap counts increment synchronously before SDK dispatch.
-- [Phase 04]: The one approved 04-10 initialization failure consumes its approval; no live retry is allowed and BRAIN-01/02/03/PAGE-04 remain pending.
+- [Phase 04]: The one approved 04-10 initialization failure consumed that plan's approval; later approved checks in 04-18 completed BRAIN-01/02/03/PAGE-04 for the then-current Claude provider.
 - [Phase 04]: The 04-11 single-use check failed during initialization after one intent bootstrap, with no role result or tool count. Its approval and one-time token are consumed; all four production-evidence requirements remain pending.
 - [Phase 04]: On 2026-10-17, the user separately authorized repeated bounded synthetic checks as needed. Each attempt still gets a distinct plan-scoped one-use report and claim; no credentials, auth state, environment values, or real page/user data may be inspected or used.
 - [Phase 04]: The 04-18 production check completed both tool-less roles, live Intent/recovery, and strict synthetic repair/cache round trip in 20,514 ms with seven of eight dispatches. All four Phase 04 requirements are complete based on source configuration, live synthetic evidence, offline integration tests, and user-authorized local subscription allowance; credential/auth values were not inspected.
@@ -135,6 +135,10 @@ Recent decisions affecting current work:
 - [Phase 05]: Fetched `origin/voice/phase-2-dialogue-gateport` at `2f22bb5`, integrated the Phase 2 DialogueRunner/GatePort runtime, and verified the reducer-to-core path through the production extension on a local synthetic form.
 - [Phase 05]: `startServer({ dialogueRunner: true })` is the shared demo/E2E entry point; reducer-unmatched utterances use the configured brain, but model-requested gated actions cannot start a parallel confirmation flow.
 - [Phase 05]: GATE-07, PROT-03, local synthetic I3, and exact demo repair-cache identity have direct local evidence. Keep `demo-safe` untagged until the HO-8 integration branch receives teammate review and is merged to main.
+- [AGY migration]: Commit `ac4fb1c` replaces Claude with the Antigravity CLI subscription provider. Intent uses `gemini-3.8-flash-low`; repair uses `gemini-3.8-flash-medium`. Full tests, typecheck, extension build, provider synthetic checks, and AGY browser startup smoke passed.
+- [AGY revalidation]: Prior Phase 5 hostile-page and full I3/cache evidence used Claude. Re-run those live checks against AGY before treating the current provider as release-verified.
+- [Phase 05 AGY follow-up]: 05-13 hostile-page refusal passed with zero side effects; 05-26 completed full I3 with exactly one local submit; 05-27 refreshed the persistent launcher cache with AGY; 05-29 verified cache load in a fresh session with zero repair prompts. These later reports supersede older notes that AGY live acceptance remained open.
+- [Phase 01 re-verification]: The actual local voice UI attached to the fake-brain demo, enabled speech, answered "what's here" and "what's required," and returned to ready state. Only written M0 protocol sign-off remains from Phase 1.
 
 ### Pending Todos
 
@@ -142,12 +146,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; voice's `Effect` union remains a cross-track integration item
+- [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; the HO-8 voice reducer/GatePort integration is present on this branch.
 - [Phase 5] `integration/ho8-voice-gate` contains the tested HO-8 integration; teammate review and mainline promotion are required before `demo-safe` tagging.
 - [Phase 5] Voice-owned public-form DEMO-03 is deferred; the core owner confirmed no public-form URL exists for the hackathon. Core acceptance uses the local synthetic survey and makes no public-form claim.
-- [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
-- [Phase 4] Phase 04 is complete after 04-18. Subscription usage is attributed to the user's authorized local subscription allowance and source configuration; account identity was not independently inspected.
-- [Phase 5] Plan 05-11 completes all local acceptance, including real-Claude hostile context, voice speech and GatePort integration, synthetic survey submit, and exact demo cache reuse. The release tag remains pending teammate review and merge.
+- [Phase 1] `PROTOCOL.md` still has `M0 approval: pending`; written approval by the voice owner is a human gate before the protocol freeze can be closed.
+- [Phase 5] Technical AGY acceptance passes. Written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain release gates.
+- [Phase 5] Teammate review and promotion of the integration branch to `main` are required before `demo-safe` tagging.
 
 ## Deferred Items
 
@@ -159,6 +163,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T22:35:35Z
-Stopped at: Wired the DialogueRunner into the core server/demo and documented fake-brain I2 and real-Claude I3 launch paths. Full tests, typecheck, synthetic real-Claude fallback, connected-gate Edge E2E, and isolated demo smoke pass. Teammate review and mainline merge/tag remain.
+Last session: 2026-10-18T01:43:29Z
+Stopped at: Reconciled Phase 5 AGY evidence and reran the full test suite, typecheck, extension/voice builds, and fake-browser E2Es. Hostile refusal, full I3, launcher cache, and technical acceptance pass. Written M0 sign-off, teammate review, mainline promotion, and tagging remain.
 Resume file: None

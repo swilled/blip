@@ -47,6 +47,8 @@ function liveEvidence() {
     submitEvents: 0,
     navigated: false,
     pageStateChanged: false,
+    turnRoutedTo: "unknown" as const,
+    finalSpeakCategory: "unknown" as const,
     elapsedMs: 0,
     failureCategory: "provider-startup-failed" as const,
     dispatchesAttempted: 2,
@@ -62,6 +64,25 @@ describe("bounded Phase 5 hostile-page runner", () => {
       .toBe("approval-missing");
     expect(validateApprovalReport(`${base}phase05HostileApproval: approve-05-10-synthetic-hostile-context\n`, false))
       .toBe("approval-duplicate");
+  });
+
+  it("keeps the fresh 05-12 AGY revalidation approval separate from consumed 05-10", () => {
+    const fresh = reportTemplate("05-12").replace("preflightPassed: false", "preflightPassed: true");
+    expect(fresh).toContain("plan: 05-12");
+    expect(fresh).toContain("phase05HostileApproval: approve-05-12-synthetic-hostile-context");
+    expect(validateApprovalReport(fresh, false, "05-12")).toBeNull();
+    expect(validateApprovalReport(fresh, false, "05-10")).toBe("approval-missing");
+    expect(parseCli(["--offline", "--check-id", "05-12"])).toMatchObject({ mode: "offline", checkId: "05-12" });
+    expect(parseCli(["--offline", "--check-id", "05-11"])).toBe("runner-failed");
+  });
+
+  it("keeps the diagnostic 05-13 hostile check on its own approval and claim path", () => {
+    const fresh = reportTemplate("05-13").replace("preflightPassed: false", "preflightPassed: true");
+    expect(fresh).toContain("plan: 05-13");
+    expect(fresh).toContain("phase05HostileApproval: approve-05-13-synthetic-hostile-context");
+    expect(validateApprovalReport(fresh, false, "05-13")).toBeNull();
+    expect(validateApprovalReport(fresh, false, "05-12")).toBe("approval-missing");
+    expect(parseCli(["--offline", "--check-id", "05-13"])).toMatchObject({ mode: "offline", checkId: "05-13" });
   });
 
   it("requires successful preflight and an unused, absent one-use claim", async () => {

@@ -2,16 +2,34 @@ import { isLowConfidenceLabel, type FormModel, type Snapshot } from "@blip/proto
 import type { Hub } from "../../hub/hub";
 import type { Session } from "../../session/session";
 import { projectPageForPrompt, serializeProjectionForPrompt } from "./projection";
-import { RepairCache } from "./repair-cache";
+import { repairCacheIdentity, RepairCache } from "./repair-cache";
 import { mergeRepairPatch } from "./repair-merge";
 import { validateRepairPatch, type RepairPatch } from "./repair-schema";
-import type { AgyRole } from "./session";
+import {
+  AgyCliStartupError,
+  UnexpectedAgyToolCallError,
+  type AgyRole,
+  type AgyStartupFailureCategory,
+} from "./session";
+import { InvalidAgyOutputError } from "./provider";
+import type { AgyOutputFailureCategory } from "./provider";
 
 export type RepairProvider = {
   repairFormModel(prompt: string, signal?: AbortSignal): Promise<unknown>;
   abortRole(role: AgyRole): Promise<void>;
   recreateRole(role: AgyRole): Promise<void>;
 };
+
+export type RepairFailureCategory = AgyOutputFailureCategory | AgyStartupFailureCategory | "other";
+
+export type RepairDiagnostic =
+  | { type: "repair-started" }
+  | { type: "repair-cache-hit" }
+  | { type: "repair-applied" }
+  | { type: "repair-patch-rejected" }
+  | { type: "repair-stale-result" }
+  | { type: "repair-timeout" }
+  | { type: "repair-provider-error"; category: RepairFailureCategory };
 
 type Candidate = { snapshot: Snapshot; model: FormModel; tabId: number; snapshotRevision: number };
 type Identity = { tabId: number; url: string; snapshotVersion: number; structuralHash: string; snapshotRevision: number };
@@ -66,6 +84,8 @@ export class RepairCoordinator {
   readonly #hub: Hub;
   readonly #timeoutMs: number;
   readonly #cache: RepairCache;
+  readonly #onDiagnostic: ((diagnostic: RepairDiagnostic) => void) | undefined;
+  #forceRefreshIdentity: string | undefined;
 
   constructor(options: {
     provider: RepairProvider;
@@ -73,12 +93,16 @@ export class RepairCoordinator {
     hub: Hub;
     cacheDirectory: string;
     timeoutMs?: number;
+    onDiagnostic?: (diagnostic: RepairDiagnostic) => void;
+    forceRefreshIdentity?: string;
   }) {
     this.#provider = options.provider;
     this.#session = options.session;
     this.#hub = options.hub;
     this.#timeoutMs = options.timeoutMs ?? DEFAULT_REPAIR_TIMEOUT_MS;
     this.#cache = new RepairCache({ directory: options.cacheDirectory });
+    this.#onDiagnostic = options.onDiagnostic;
+    this.#forceRefreshIdentity = options.forceRefreshIdentity;
   }
 
   /** Called only after Session.applySnapshot accepted the extension snapshot. */
@@ -95,11 +119,15 @@ export class RepairCoordinator {
     }
 
     // A cache hit is merged synchronously before the refresher lets the user turn continue.
-    const cached = this.#cache.load(model.url, model.structuralHash);
+    const identity = repairCacheIdentity(model.url, model.structuralHash);
+    const forceRefresh = identity !== null && identity === this.#forceRefreshIdentity;
+    if (forceRefresh) this.#forceRefreshIdentity = undefined;
+    const cached = forceRefresh ? null : this.#cache.load(model.url, model.structuralHash);
     const patch = cached === null ? null : validateRepairPatch(cached, model, model);
     if (patch !== null && patch.fields.every(({ id }) => eligible.has(id))) {
       const repaired = { ...mergeRepairPatch(model, patch), repairStatus: "repaired" as const };
       if (this.#session.applyRepair(identityOf(candidate), repaired)) {
+        this.#emit({ type: "repair-cache-hit" });
         this.#pending = null;
         return;
       }
@@ -127,6 +155,7 @@ export class RepairCoordinator {
       return;
     }
     this.#hub.pushState();
+    this.#emit({ type: "repair-started" });
     const prompt = promptFor(candidate, eligible);
     void this.#run(candidate, identity, eligible, key, prompt);
   }
@@ -144,10 +173,13 @@ export class RepairCoordinator {
     prompt: string,
   ): Promise<void> {
     const controller = new AbortController();
+    let watchdogExpired = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let rejectTimeout!: (error: Error) => void;
     const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
     timer = setTimeout(() => {
+      watchdogExpired = true;
+      this.#emit({ type: "repair-timeout" });
       controller.abort(new Error("Repair watchdog expired."));
       rejectTimeout(new Error("Repair watchdog expired."));
       void Promise.resolve()
@@ -161,16 +193,26 @@ export class RepairCoordinator {
       const output = await Promise.race([this.#provider.repairFormModel(prompt, controller.signal), timeout]);
       if (this.#closed) return;
       const current = this.#session.model;
-      if (current === null || !this.#isCurrent(candidate, identity, current)) return;
+      if (current === null || !this.#isCurrent(candidate, identity, current)) {
+        this.#emit({ type: "repair-stale-result" });
+        return;
+      }
       const patch = validateRepairPatch(output, candidate.model, current);
       if (patch === null || patch.fields.some(({ id }) => !eligible.has(id))) {
+        this.#emit({ type: "repair-patch-rejected" });
         this.#markFailed(identity);
         return;
       }
       const repaired = { ...mergeRepairPatch(current, patch), repairStatus: "repaired" as const };
       this.#cache.save(identity.url, identity.structuralHash, patch);
-      if (this.#session.applyRepair(identity, repaired)) this.#hub.pushState();
-    } catch {
+      if (this.#session.applyRepair(identity, repaired)) {
+        this.#hub.pushState();
+        this.#emit({ type: "repair-applied" });
+      } else {
+        this.#emit({ type: "repair-stale-result" });
+      }
+    } catch (error) {
+      if (!watchdogExpired) this.#emit({ type: "repair-provider-error", category: repairErrorCategory(error) });
       if (!this.#closed && this.#isIdentityCurrent(identity)) this.#markFailed(identity);
       // The watchdog intentionally only repairs the dedicated repair role; intent handling is independent.
     } finally {
@@ -199,6 +241,17 @@ export class RepairCoordinator {
     if (current !== null && this.#isIdentityCurrent(identity) &&
       this.#session.applyRepair(identity, { ...current, repairStatus: "failed" })) this.#hub.pushState();
   }
+
+  #emit(diagnostic: RepairDiagnostic): void {
+    try { this.#onDiagnostic?.(diagnostic); } catch { /* Diagnostics never affect page handling. */ }
+  }
+}
+
+function repairErrorCategory(error: unknown): RepairFailureCategory {
+  if (error instanceof InvalidAgyOutputError) return error.category;
+  if (error instanceof AgyCliStartupError) return error.category;
+  if (error instanceof UnexpectedAgyToolCallError) return "unexpected_tool_call";
+  return "other";
 }
 
 export type { RepairPatch };

@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { newId } from "@blip/protocol";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 import type { AgyRole } from "../src/brain/agy/session";
-import type { RepairProvider } from "../src/brain/agy/repair-coordinator";
+import type { RepairDiagnostic, RepairProvider } from "../src/brain/agy/repair-coordinator";
+import { InvalidAgyOutputError } from "../src/brain/agy/provider";
 import { RepairCache, repairCacheIdentity } from "../src/brain/agy/repair-cache";
 import { startServer, type RunningServer } from "../src/server";
 import { bindClient, type Frame, type TestClient } from "./helpers";
@@ -64,7 +65,13 @@ describe("background repair flow", () => {
     for (const directory of cacheDirs.splice(0)) await rm(directory, { recursive: true, force: true });
   });
 
-  async function makeFlow(provider: RepairProvider, repairTimeoutMs = 1000, cacheDirectory?: string) {
+  async function makeFlow(
+    provider: RepairProvider,
+    repairTimeoutMs = 1000,
+    cacheDirectory?: string,
+    onRepairDiagnostic?: (diagnostic: RepairDiagnostic) => void,
+    forceRepairCacheRefreshIdentity?: string,
+  ) {
     const selectedCacheDirectory = cacheDirectory ?? await mkdtemp(join(tmpdir(), "blip-repair-flow-"));
     if (cacheDirectory === undefined) cacheDirs.push(selectedCacheDirectory);
     const server = await startServer({
@@ -75,6 +82,8 @@ describe("background repair flow", () => {
       repairProvider: provider,
       repairCacheDirectory: selectedCacheDirectory,
       repairTimeoutMs,
+      ...(onRepairDiagnostic !== undefined ? { onRepairDiagnostic } : {}),
+      ...(forceRepairCacheRefreshIdentity !== undefined ? { forceRepairCacheRefreshIdentity } : {}),
     });
     servers.push(server);
     const extension = await bindClient(server.port, "extension", { origin: undefined });
@@ -232,6 +241,57 @@ describe("background repair flow", () => {
     voice.send("utterance", { utteranceId: newId(), text: "describe", source: "typed" });
     const nextReply = await nextFrame(voice, "speak", (frame) => frame.payload.category === "answer");
     expect(nextReply.payload.category).toBe("answer");
+  });
+
+  it("reports allowlisted repair failures without exposing provider output", async () => {
+    const diagnostics: RepairDiagnostic[] = [];
+    const provider = {
+      repairFormModel: vi.fn(async () => { throw new InvalidAgyOutputError("repair", "repair_schema_rejected"); }),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
+    };
+    const { server, extension, voice } = await makeFlow(provider, 1000, undefined, (diagnostic) => diagnostics.push(diagnostic));
+    await answerWithSnapshot(voice, extension);
+    await waitFor(() => server.session.model?.repairStatus === "failed");
+
+    expect(diagnostics).toEqual([
+      { type: "repair-started" },
+      { type: "repair-provider-error", category: "repair_schema_rejected" },
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain("synthetic");
+  });
+
+  it("forces one AGY refresh for a selected cached repair identity", async () => {
+    const cacheDirectory = await mkdtemp(join(tmpdir(), "blip-repair-force-refresh-"));
+    cacheDirs.push(cacheDirectory);
+    const base = loadSnapshot("broken");
+    const url = `${new URL(base.url).origin}${new URL(base.url).pathname}?synthetic=refresh`;
+    const snapshot = { ...base, url, origin: new URL(url).origin };
+    const identity = repairCacheIdentity(url, snapshot.structuralHash);
+    expect(identity).not.toBeNull();
+    const cache = new RepairCache({ directory: cacheDirectory });
+    expect(cache.save(url, snapshot.structuralHash, {
+      title: "Old cached title",
+      fields: [{ id: "e3", label: "Old cached label", confidence: 0.6 }],
+    })).toBe(true);
+
+    const provider = {
+      repairFormModel: vi.fn(async () => ({
+        title: "Fresh repaired title",
+        fields: [{ id: "e3", label: "Fresh AGY label", confidence: 0.96 }],
+      })),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
+    };
+    const flow = await makeFlow(provider, 1000, cacheDirectory, undefined, identity!);
+    await answerWithSnapshot(flow.voice, flow.extension, snapshot);
+    await waitFor(() => flow.server.session.model?.repairStatus === "repaired" &&
+      flow.server.session.model.title === "Fresh repaired title");
+
+    expect(provider.repairFormModel).toHaveBeenCalledTimes(1);
+    expect(flow.server.session.model?.fields).toContainEqual(expect.objectContaining({
+      id: "e3", label: "Fresh AGY label", labelSource: "model", confidence: 0.96,
+    }));
   });
 
   it("reuses only matching value-free patches and treats stale IDs or corrupt entries as misses", async () => {

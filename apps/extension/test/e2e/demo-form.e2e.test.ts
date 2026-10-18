@@ -39,7 +39,17 @@ async function waitForVoiceUiReply(fixture: Awaited<ReturnType<typeof openFixtur
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     const reply = await fixture.evaluateInVoiceUi("document.querySelector('#reply')?.textContent ?? ''");
-    if (typeof reply === "string" && reply.includes(text)) return reply;
+    if (typeof reply === "string" && reply.includes(text)) {
+      await waitFor(
+        () => fixture.evaluateInVoiceUi(`(() => {
+          const send = document.querySelector('#send');
+          return send instanceof HTMLButtonElement && !send.disabled &&
+            document.querySelector('#utterance-form')?.getAttribute('aria-busy') === 'false';
+        })()`),
+        (ready) => ready === true,
+      );
+      return reply;
+    }
     await delay(25);
   }
   throw new Error(`voice UI did not show the expected reply containing ${text}`);

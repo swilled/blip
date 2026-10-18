@@ -69,7 +69,7 @@ function renderState(state) {
   } else if (warningRequired && page?.untrustedInstructionDetected !== false) {
     // Missing page metadata is not evidence that a previously detected warning cleared.
     warning.hidden = false;
-    setInputLocked(warningPending);
+    setInputLocked(warningPending || state.busy === true);
   } else if (page?.untrustedInstructionDetected !== true) {
     warningRequired = false;
     warning.hidden = true;
@@ -78,7 +78,7 @@ function renderState(state) {
     const staleWarning = speechQueue.filter((item) => item.warning);
     speechQueue = speechQueue.filter((item) => !item.warning);
     for (const item of staleWarning) finishSpeech(item, true);
-    setInputLocked(false);
+    setInputLocked(state.busy === true);
   }
 }
 

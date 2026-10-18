@@ -1,13 +1,13 @@
 # Roadmap: Blip
 
 **Workstream:** `core` (Person A, Pranav)
-**Owns:** `@blip/protocol`, server hub, Chrome MV3 extension, Executor + policy gate (`packages/policy`), Claude brain (intent-as-data), result reading
+**Owns:** `@blip/protocol`, server hub, Chrome MV3 extension, Executor + policy gate (`packages/policy`), AGY subscription brain (intent-as-data), result reading
 **Scope:** the 26 core v1 requirements (PROT, PAGE, ACT, GATE, BRAIN, RES). Voice-track requirements (VOX, DLG, VIS, DEMO) are planned in `.planning/workstreams/voice/` and appear here only as dependencies.
 **Granularity:** coarse (5 phases) | **Project mode:** mvp (vertical slices; the build is demoable at the end of every phase)
 
 ## Overview
 
-Core builds Blip's trust machinery from the contract outward. Phase 1 freezes the shared `@blip/protocol` package in the first 45 minutes and stands up a loopback-only server with a fake extension, a fake brain and a typed REPL, so neither developer ever waits on the other, on Chrome, or on Claude quota. Phase 2 swaps the fake extension for a real one that reads a live form and fills it the way a person would, reporting only what the DOM actually holds. Phase 3 adds the policy gate and the single Executor (nothing irreversible happens without a read-back and the exact spoken phrase) and reads the result page back, which lands I2 with no model in the loop. Phase 4 brings in real Claude, locked down and tool-less, for free-form intents and background label repair. Phase 5 hardens Blip against a seeded prompt-injection page and validates the demo against a self-hosted synthetic survey, adds one-command startup, and ends at the `demo-safe` feature freeze. The owner confirmed this hackathon has no public-form URL; Core's local survey is the Phase 5 acceptance target, while voice-owned DEMO-03 remains deferred. Gate before brain: everything through Phase 3 demos without Claude.
+Core builds Blip's trust machinery from the contract outward. Phase 1 freezes the shared `@blip/protocol` package and stands up a loopback-only server with a fake extension, a fake brain and a typed REPL, so neither developer waits on a model subscription. Phase 2 swaps the fake extension for a real one that reads a live form and fills it the way a person would, reporting only what the DOM actually holds. Phase 3 adds the policy gate and the single Executor (nothing irreversible happens without a read-back and the exact spoken phrase) and reads the result page back, which lands I2 with no model in the loop. Phase 4 adds a locked-down, tool-less subscription brain for free-form intents and background label repair; the current implementation is AGY via the Antigravity CLI using Gemini 3.8 Flash. Phase 5 hardens Blip against a seeded prompt-injection page and validates the demo against a self-hosted synthetic survey, adds one-command startup, and ends at the `demo-safe` feature freeze. The owner confirmed this hackathon has no public-form URL; Core's local survey is the Phase 5 acceptance target, while voice-owned DEMO-03 remains deferred. Gate before brain: everything through Phase 3 demos without AGY.
 
 ## Phases
 
@@ -17,11 +17,11 @@ Core builds Blip's trust machinery from the contract outward. Phase 1 freezes th
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Contract and Walking Skeleton** - Frozen `@blip/protocol`, a loopback-only server hub, and fakes (extension, brain, REPL) so the whole loop runs offline
+- [ ] **Phase 1: Contract and Walking Skeleton** - Implementation and 5/5 plans complete; written M0 protocol sign-off remains pending
 - [x] **Phase 2: Real Page Read and Fill** - The Chrome extension snapshots a live form, classifies every action by rule, and fills fields with DOM-verified values (completed 2026-10-17)
 - [x] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2) (completed 2026-10-17)
-- [x] **Phase 4: Claude Brain and Label Repair** - Locked-down, pre-warmed Claude turns free-form speech into Intents and repairs unlabeled fields in the background (completed 2026-10-17)
-- [ ] **Phase 5: Hostile Pages, Local Synthetic Web and Freeze** - Injection page blocked and flagged, local survey works through voice (I3), one-command startup, `demo-safe` freeze
+- [x] **Phase 4: AGY Subscription Brain and Label Repair** - Current runtime uses the locked-down Antigravity CLI with Gemini 3.8 Flash; provider checks and live synthetic startup/roundtrip passed (2026-10-17)
+- [ ] **Phase 5: Hostile Pages, Local Synthetic Web and Freeze** - AGY hostile, full I3, and launcher-cache acceptance pass; written M0 sign-off, teammate review, and mainline release gates remain
 
 ## Shared Milestones
 
@@ -32,16 +32,16 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
 | **M0** Protocol frozen | ~h0.75 | `@blip/protocol` v1 (zod schemas + fixtures) and `PROTOCOL.md` committed; voice has reviewed and signed off; port and Origin allowlist chosen | Phase 1: authors schemas, fixtures, `PROTOCOL.md` (first task of the phase) | Reviews the protocol; hand-writes `booking.formmodel.json` and a snapshot fixture; drafts the `Effect` union for `packages/dialogue` |
 | **I1** Walking skeleton | ~h6-8 | Voice UI <-> server <-> extension (fake or real) round trip: an utterance triggers a snapshot request and comes back as a spoken reply | Phase 1 (hub, fake extension, fake brain); Phase 2 (real extension) | Voice UI shell with ws client and typed input (VOX-03); TTS queue (VOX-04) |
 | **I2** End-to-end with the gate | ~h12 | On the local broken demo form: describe -> fill -> read back -> exact phrase -> submitted -> result read back; bare "yes" rejected; fake brain OK | Phases 2-3 (extension, policy gate, Executor, result reading) | DEMO-01 broken form; `packages/dialogue` read-back and confirm states (DLG-08, DLG-09); BLOCKED banner (VIS-02) |
-| **I3** Real brain, local survey | ~h20 | Real Claude in the loop; the self-hosted synthetic survey is completed by voice through gated submit; its labels are repaired by Claude; injection page is blocked and warned about | Phase 4 (brain, label repair); Phase 5 (injection defense, local survey) | DLG-11 "I guessed" disclosure; DLG-14 injection warning; public-form DEMO-03 deferred by core-owner decision |
+| **I3** Real brain, local survey | ~h20 | AGY (Gemini 3.8 Flash) in the loop; the self-hosted synthetic survey is completed by voice through gated submit; labels are repaired by AGY; injection page is blocked and warned about | Phase 4 (brain, label repair); Phase 5 (injection defense, local survey) | DLG-11 "I guessed" disclosure; DLG-14 injection warning; public-form DEMO-03 deferred by core-owner decision |
 | **Freeze** | ~h30 | Feature freeze; `main` tagged `demo-safe`; bugfix only afterwards | Phase 5 (one-command startup, pre-warmed repair cache, `--brain=fake` plan B) | DEMO-02 reset script; DEMO-04 fallback kit; NVDA mode (VOX-08) |
 
-**Core never blocks on voice or Claude:** core keeps `tools/fake-extension`, `--brain=fake`, `tools/repl`, a 20-minute stub dialogue reducer (describe / fill / read back / submit) until `packages/dialogue` lands, and its own small extension test pages (React-controlled input, implicit Enter submit, div button). Core can rehearse each joint milestone alone with these before the real voice pieces arrive.
+**Core never blocks on voice or model access:** core keeps `tools/fake-extension`, `--brain=fake`, `tools/repl`, a stub dialogue reducer (describe / fill / read back / submit) until `packages/dialogue` lands, and its own small extension test pages (React-controlled input, implicit Enter submit, div button). Core can rehearse each joint milestone alone with these before the real voice pieces arrive.
 
 ## Phase Details
 
 ### Phase 1: Contract and Walking Skeleton
 
-**Goal**: Both developers build against one frozen contract, and the whole loop (typed utterance -> server -> extension snapshot -> spoken reply) runs on one machine with no Chrome, no voice UI and no Claude.
+**Goal**: Both developers build against one frozen contract, and the whole loop (typed utterance -> server -> extension snapshot -> spoken reply) runs on one machine with no Chrome, no voice UI and no AGY CLI.
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
 **Requirements**: PROT-01, PROT-02, PROT-04, PAGE-02
@@ -49,7 +49,7 @@ Both workstreams hit these checkpoints together. Hours are from kickoff (about 4
 **Shared milestones**: M0 (delivers it); server side of I1
 **Success Criteria** (what must be TRUE):
   1. M0 (~h0.75): `@blip/protocol` holds zod schemas and fixtures for every extension<->server and voice<->server message, the Snapshot and FormModel shapes, ActRequest/ActResult and the Intent union (with no confirm variant); `PROTOCOL.md` matches it and the voice developer has signed off.
-  2. With Claude unreachable, `npm run dev -- --brain=fake` starts the server and the fake extension and REPL attach; typing "what's here" returns a reply built from the fixture form (field count, required count), with the fake brain's ~1.5 s delay visible on model-routed turns.
+  2. With AGY unavailable, `npm run dev -- --brain=fake` starts the server and the fake extension and REPL attach; typing "what's here" returns a reply built from the fixture form (field count, required count), with the fake brain's ~1.5 s delay visible on model-routed turns.
   3. For every protocol fixture snapshot, code builds the baseline form model (id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms, checked by unit tests.
   4. The server listens on 127.0.0.1 only; a WebSocket opened from an ordinary web page (Origin not the extension or voice UI) is rejected, and an `utterance` from a client that said hello as `extension` is refused.
   5. The voice developer's UI, pointed at the real server instead of its mock, connects as `role=voice` and receives `welcome` and `state` pushes, so the voice track can retire `dev/mock-server`.
@@ -126,22 +126,22 @@ Plans:
 **Plans**: 6/6 plans complete
 **UI hint**: no
 
-### Phase 4: Claude Brain and Label Repair
+### Phase 4: AGY Subscription Brain and Label Repair
 
-**Goal**: Real Claude, running locked down on the developer's own subscription, understands free-form requests and repairs a broken form's labels in the background, with no way to act on the page.
+**Goal**: AGY, running locked down through the developer's Antigravity subscription, understands free-form requests and repairs a broken form's labels in the background, with no way to act on the page.
 **Mode:** mvp
 **Depends on**: Phase 3 (gate before brain)
 **Requirements**: BRAIN-01, BRAIN-02, BRAIN-03, PAGE-04
 **Target window**: h12-h17
 **Shared milestones**: brain side of I3
 **Success Criteria** (what must be TRUE):
-  1. Starting with `--brain=claude` runs Claude on the subscription login (no API key) with no built-in tools, settings, connectors or memory and an empty working directory; if the init message lists any unexpected tool, the server refuses to start and says why.
+  1. Starting with `--brain=agy` runs AGY on the subscription login (no API key) with no model tools, connectors or memory and an isolated working directory; an unexpected tool call fails closed.
   2. An utterance the grammar can't match (e.g. "put my work email in the second box") comes back as a schema-valid Intent that refers only to existing field ids, typically within about 2 s, from a pre-warmed process.
-  3. When a Claude call hangs, errors or returns invalid output, the user hears "I couldn't understand that" within the watchdog timeout instead of silence, and the next utterance works normally.
+  3. When an AGY call hangs, errors or returns invalid output, the user hears "I couldn't understand that" within the watchdog timeout instead of silence, and the next utterance works normally.
   4. On the broken demo form, unlabeled and placeholder-only fields get repaired labels in the background (marked model-sourced, with a confidence) without delaying the instant baseline answer; patches touch only existing ids and never kind, value or sensitivity; a second visit loads the repair from cache instantly.
 
-**Research**: A bounded local `outputFormat` + `startup()` spike reported one init tool for both roles, so production uses the streaming/Zod path with explicit deny-all and a mandatory empty-tool init check. Plans 04-14 through 04-18 verified both live roles, successful current-id Intents, cancellation/recreation/recovery, and a value-free live repair patch with cache reload. The local SDK configuration removes API-key override and disables built-in tools, settings, connectors, and auto-memory; the user authorized use of their local subscription allowance. No credential values or auth state were inspected. Apply the roughly 8k-token snapshot trim at the model-prompt boundary; Phase 2 only caps the extension wire snapshot at 250 elements.
-**Plans**: 18/18 plans executed. Plan 04-18 completed in 20.5 seconds using seven dispatches: both roles initialized with empty tools, Intent and recovery checks passed, and the synthetic repair patch validated and round-tripped through RepairCache. BRAIN-01, BRAIN-02, BRAIN-03, and PAGE-04 are Complete.
+**Research and current implementation**: The original Phase 4 plans and live checks used Claude. Commit `ac4fb1c` replaced the production provider with AGY via the Antigravity CLI; intent uses `gemini-3.8-flash-low` and repair uses `gemini-3.8-flash-medium`. The AGY provider's synthetic bootstrap/roundtrip, full automated suite, typecheck, extension build, and live browser startup smoke passed. This replaces the runtime provider; historical Claude plan and Phase 5 evidence remain historical. Full hostile-page and local I3 acceptance with AGY is tracked as a Phase 5 revalidation item. No credential values or auth state were inspected. Apply the roughly 8k-token snapshot trim at the model-prompt boundary; Phase 2 only caps the extension wire snapshot at 250 elements.
+**Plans**: 18/18 plans executed; the provider migration is on `integration/ho8-voice-gate` at `ac4fb1c`. BRAIN-01/02/03 and PAGE-04 are implemented; release evidence for the current AGY provider is recorded separately from the Claude-era phase plans.
 
 Plans:
 - [x] 04-01-PLAN.md — Approve the exact SDK pin and add a bounded, gated SDK lifecycle spike
@@ -173,14 +173,14 @@ Plans:
 **Target window**: h17-h30 (I3 at ~h20, Freeze at ~h30)
 **Shared milestones**: I3 (~h20), Freeze (~h30)
 **Success Criteria** (what must be TRUE):
-  1. On the seeded injection page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button), with real Claude in the loop, no gated action ever executes, and each attempt shows as blocked in the audit log.
+  1. On the seeded injection page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button), with AGY in the loop, no gated action ever executes, and each attempt shows as blocked in the audit log.
   2. When a page contains text addressed to Blip or AI agents, accepted page state carries only an optional warning boolean and the voice side speaks a warning before continuing (with voice's DLG-14); the signal and page text never enter `FormModel` or model input.
-  3. I3 (~h20): automated local runs prove the self-hosted synthetic survey completes through the voice UI and gated submit, Claude repairs and reuses the exact demo-form cache identity, and the injection page remains blocked. No public form is in scope without a team-owned URL; voice-owned DEMO-03 is deferred.
+  3. I3 (~h20): automated local runs prove the self-hosted synthetic survey completes through the voice UI and gated submit, AGY repairs and reuses the exact demo-form cache identity, and the injection page remains blocked. No public form is in scope without a team-owned URL; voice-owned DEMO-03 is deferred.
   4. One command on either developer's machine launches the server, the dedicated Chrome profile with the extension (which connects on its own), and the voice window.
   5. Freeze (~h30): `main` is tagged `demo-safe`, demo-form repairs are pre-warmed in the cache, and the full demo script also runs with `--brain=fake` as plan B.
 
 **Research**: Spike needed: real-site widgets (Google Forms ARIA radios and listboxes, React fills on the live form); one-command Chrome launch now that branded Chrome 137 removed `--load-extension` (load unpacked once into a dedicated `--user-data-dir` profile).
-**Plans**: 11/11 executed. Local synthetic I3, GATE-07 speech, exact repair-cache reuse, and the fake fallback are verified. Core adapter commit `bc6d2f0` is pushed to `integration/ho8-voice-gate`; Freeze stays open until the voice Phase 2 DialogueRunner/GatePort adopts it, teammate review is complete, the branch is merged to main, and `demo-safe` is tagged. The fetched voice branch at `18ebb67` contains Phase 1 dialogue code and Phase 2 plans, but not that runtime implementation yet. Public-form DEMO-03 is explicitly deferred, not replaced with an arbitrary external target. See `05-VERIFICATION.md`.
+**Plans**: 11/11 original phase plans executed. Follow-up diagnostics 05-12 through 05-29 are recorded separately and do not change the original phase plan count. AGY hostile-page refusal passed in 05-13; full AGY I3 passed in 05-26 with exactly one local submit; and the launcher cache was AGY-refreshed and reloaded in 05-27/05-29. Phase 5 acceptance is technically verified. Freeze stays open until written M0 sign-off and teammate review are complete, the branch is promoted to main, and `demo-safe` is tagged. Public-form DEMO-03 is explicitly deferred, not replaced by an arbitrary external target. See `05-VERIFICATION.md`, `05-AGY-REVALIDATION-SUMMARY.md`, and `RELEASE-CHECKLIST.md`.
 Plans:
 - [x] 05-01-PLAN.md — Add the synthetic hostile-page fixture and deterministic refusal assertions
 - [x] 05-02-PLAN.md — Implement the bounded local warning detector
@@ -202,11 +202,11 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Contract and Walking Skeleton | 5/5 | In Progress | - |
+| 1. Contract and Walking Skeleton | 5/5 | In Progress - M0 written sign-off pending | - |
 | 2. Real Page Read and Fill | 20/20 | Complete    | 2026-10-17 |
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
-| 4. Claude Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
-| 5. Hostile Pages, Real Web and Freeze | 11/11 | In Progress | - |
+| 4. AGY Subscription Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
+| 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 

@@ -16,23 +16,23 @@
     {
       "number": "3",
       "name": "Gated Submit and Result Reading",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "4",
-      "name": "Claude Brain and Label Repair",
-      "status": "pending"
+      "name": "AGY Subscription Brain and Label Repair",
+      "status": "complete"
     },
     {
       "number": "5",
-      "name": "Hostile Pages, Real Web and Freeze",
-      "status": "pending"
+      "name": "Hostile Pages, Local Synthetic Web and Freeze",
+      "status": "in_progress"
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 3 --auto",
-    "label": "Discuss the next core phase",
-    "reason": "Phase 2 core verification complete; Phase 3 is next. Shared voice UI I1 sign-off remains external."
+    "command": "/gsd-audit-milestone core",
+    "label": "Reconcile core v1 acceptance and release evidence",
+    "reason": "Phase 5 technical acceptance passes: AGY hostile-page refusal, full local I3, launcher-cache prewarm/reload, fake-browser E2Es, full tests, typecheck, and production builds. GSD closeout awaits written M0 sign-off, teammate review, mainline promotion, and demo-safe tagging; the latest one-command smoke rerun remains inconclusive."
   },
-  "updated_at": "2026-10-17T05:30:46Z"
+  "updated_at": "2026-10-18T01:43:29Z"
 }

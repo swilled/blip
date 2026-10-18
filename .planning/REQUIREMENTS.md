@@ -4,7 +4,7 @@
 **Core Value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
 
 **Ownership:** every requirement belongs to one track.
-- **core** = Person A (Pranav): extension, server hub, Executor, policy gate, brain (Claude), result reading. Workstream `core`.
+- **core** = Person A (Pranav): extension, server hub, Executor, policy gate, AGY subscription brain, result reading. Workstream `core`.
 - **voice** = Person B (teammate): voice UI, STT/TTS, NVDA, dialogue reducer and commands, demo assets. Workstream `voice`.
 - Shared contract (`PROT-*`) is authored by core, reviewed by voice, and frozen in the first ~45 minutes.
 
@@ -15,8 +15,8 @@ The per-workstream copies under `.planning/workstreams/{core,voice}/REQUIREMENTS
 ### Protocol & Runtime (core)
 
 - [ ] **PROT-01**: Both developers build against one `@blip/protocol` package of zod schemas + fixtures covering extension↔server and voice↔server messages, the snapshot/form-model shapes, ActRequest/ActResult and the Intent union
-- [x] **PROT-02**: Either developer can run the full system offline from Claude using a fake extension, a fake brain (`--brain=fake`) and a typed REPL
-- [ ] **PROT-03**: Developer can start Blip with one command that launches the server, a dedicated Chrome profile with the extension, and the voice window
+- [x] **PROT-02**: Either developer can run the full system offline without AGY using a fake extension, a fake brain (`--brain=fake`) and a typed REPL
+- [x] **PROT-03**: Developer can start Blip with one command that launches the server, a dedicated browser profile with the extension, and the voice window
 - [x] **PROT-04**: The server binds only to 127.0.0.1 and rejects WebSocket connections whose Origin is not the extension or the voice UI
 
 ### Page Understanding (core)
@@ -24,7 +24,7 @@ The per-workstream copies under `.planning/workstreams/{core,voice}/REQUIREMENTS
 - [x] **PAGE-01**: Blip captures a snapshot of the active tab's form controls via a content-script DOM walk (accessible names, roles, values, required, options, errors), capped at 250 elements on the extension wire; `truncated` is true only when that element cap cuts the result, and the ~8k-token trim is applied in Phase 4 at the model-prompt boundary
 - [x] **PAGE-02**: Blip builds a baseline form model in code from the snapshot (field id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms
 - [x] **PAGE-03**: Every actionable element gets a kind (fill / select / check / click-safe / submit / pay / delete / send / navigate-cross-domain) from fail-closed rules, never from the model
-- [ ] **PAGE-04**: For unlabeled or placeholder-only fields, Claude repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
+- [x] **PAGE-04**: For unlabeled or placeholder-only fields, AGY repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
 - [x] **PAGE-05**: When the page changes (navigation, revealed fields, new errors), Blip re-snapshots and the form model updates within ~1 s
 
 ### Actions (core)
@@ -42,14 +42,14 @@ The per-workstream copies under `.planning/workstreams/{core,voice}/REQUIREMENTS
 - [x] **GATE-04**: If any field value changes after the read-back the user heard, the pending confirmation is voided (values-hash binding)
 - [x] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant and the confirm phrase is matched in code only on utterances from the voice socket
 - [x] **GATE-08**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
-- [ ] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
-- [ ] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
+- [x] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
+- [x] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
 
 ### Brain (core)
 
-- [ ] **BRAIN-01**: Blip runs Claude through the Agent SDK on the developer's own subscription with all built-in tools, settings, connectors and auto-memory disabled, and refuses to start if the init message lists any unexpected tool
-- [ ] **BRAIN-02**: Free-form utterances the grammar can't match are turned into a structured Intent by a tool-less Claude call, typically within ~2 s
-- [ ] **BRAIN-03**: Claude processes are pre-warmed at startup, and a watchdog recovers from a hung or failed call with a spoken "I couldn't understand that" rather than silence
+- [x] **BRAIN-01**: Blip runs AGY through the Antigravity CLI on the developer's subscription, with no API key or model tools, and refuses to start if a role reports an unexpected tool
+- [x] **BRAIN-02**: Free-form utterances the grammar can't match are turned into a structured Intent by a tool-less AGY call, typically within ~2 s
+- [x] **BRAIN-03**: AGY role sessions are pre-warmed at startup, and a watchdog recovers from a hung or failed call with a spoken "I couldn't understand that" rather than silence
 
 ### Results (core)
 
@@ -142,12 +142,12 @@ Merged from `.planning/workstreams/core/REQUIREMENTS.md` and `.planning/workstre
 |-------------|------------|-------|--------|
 | PROT-01 | core | Phase 1 | Pending |
 | PROT-02 | core | Phase 1 | Complete |
-| PROT-03 | core | Phase 5 | Pending |
+| PROT-03 | core | Phase 5 | Complete |
 | PROT-04 | core | Phase 1 | Complete |
 | PAGE-01 | core | Phase 2 | Complete |
 | PAGE-02 | core | Phase 1 | Complete |
 | PAGE-03 | core | Phase 2 | Complete |
-| PAGE-04 | core | Phase 4 | Pending |
+| PAGE-04 | core | Phase 4 | Complete |
 | PAGE-05 | core | Phase 2 | Complete |
 | ACT-01 | core | Phase 2 | Complete |
 | ACT-02 | core | Phase 2 | Complete |
@@ -159,11 +159,11 @@ Merged from `.planning/workstreams/core/REQUIREMENTS.md` and `.planning/workstre
 | GATE-04 | core | Phase 3 | Complete |
 | GATE-05 | core | Phase 3 | Complete |
 | GATE-08 | core | Phase 3 | Complete |
-| GATE-06 | core | Phase 5 | Pending |
-| GATE-07 | core | Phase 5 | Pending |
-| BRAIN-01 | core | Phase 4 | Pending |
-| BRAIN-02 | core | Phase 4 | Pending |
-| BRAIN-03 | core | Phase 4 | Pending |
+| GATE-06 | core | Phase 5 | Complete |
+| GATE-07 | core | Phase 5 | Complete |
+| BRAIN-01 | core | Phase 4 | Complete |
+| BRAIN-02 | core | Phase 4 | Complete |
+| BRAIN-03 | core | Phase 4 | Complete |
 | RES-01 | core | Phase 3 | Complete |
 | RES-02 | core | Phase 3 | Complete |
 | VOX-01 | voice | Phase 1 | Pending |

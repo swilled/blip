@@ -15,9 +15,11 @@ re_verification:
 gaps: []
 ---
 
-# Phase 4: Claude Brain and Label Repair Verification Report
+# Phase 4: Brain and Label Repair Verification Report
 
-**Phase Goal:** Real Claude, running locked down on the developer's own subscription, understands free-form requests and repairs a broken form's labels in the background, with no way to act on the page.
+**Phase Goal:** The current AGY subscription brain understands free-form requests and repairs a broken form's labels in the background, with no way to act on the page.
+
+> **Provider history:** The 2026-10-17 5/5 live verification below was run against Claude before commit `ac4fb1c` replaced the production provider with AGY. It remains valid evidence for those Claude runs, not for the current AGY runtime. After the migration, synthetic AGY bootstrap/roundtrip checks, the full automated suite, typecheck, extension build, and browser startup smoke passed. The Phase 5 verification report tracks the remaining AGY hostile-page, full voice I3, and exact repair-cache prewarm checks. No credential values or auth state were inspected.
 
 **Verified:** 2026-10-17T19:22:41Z
 **Status:** passed

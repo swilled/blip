@@ -1,7 +1,7 @@
 # Requirements: Blip (core workstream)
 
 **Defined:** 2026-10-16
-**Workstream:** core (Person A, Pranav): extension, server hub, Executor, policy gate, brain (Claude), result reading
+**Workstream:** core (Person A, Pranav): extension, server hub, Executor, policy gate, AGY subscription brain, result reading
 **Core Value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
 
 **Source:** this is the core subset (categories PROT, PAGE, ACT, GATE, BRAIN, RES) of the master list in `.planning/REQUIREMENTS.md`. The master stays authoritative; the orchestrator merges this file's traceability back into it. The shared contract (`PROT-*`) is authored by core, reviewed by voice, and frozen in the first ~45 minutes (M0).
@@ -11,8 +11,8 @@
 ### Protocol & Runtime
 
 - [ ] **PROT-01**: Both developers build against one `@blip/protocol` package of zod schemas + fixtures covering extension↔server and voice↔server messages, the snapshot/form-model shapes, ActRequest/ActResult and the Intent union
-- [x] **PROT-02**: Either developer can run the full system offline from Claude using a fake extension, a fake brain (`--brain=fake`) and a typed REPL
-- [ ] **PROT-03**: Developer can start Blip with one command that launches the server, a dedicated Chrome profile with the extension, and the voice window
+- [x] **PROT-02**: Either developer can run the full system offline without AGY using a fake extension, a fake brain (`--brain=fake`) and a typed REPL
+- [x] **PROT-03**: Developer can start Blip with one command that launches the server, a dedicated browser profile with the extension, and the voice window
 - [x] **PROT-04**: The server binds only to 127.0.0.1 and rejects WebSocket connections whose Origin is not the extension or the voice UI
 
 ### Page Understanding
@@ -20,7 +20,7 @@
 - [x] **PAGE-01**: Blip captures a snapshot of the active tab's form controls via a content-script DOM walk (accessible names, roles, values, required, options, errors), capped at 250 elements on the extension wire; `truncated` is true only when that element cap cuts the result, and the ~8k-token trim is applied in Phase 4 at the model-prompt boundary
 - [x] **PAGE-02**: Blip builds a baseline form model in code from the snapshot (field id, label, labelSource, confidence, type, required, options, value, error) in under 100 ms
 - [x] **PAGE-03**: Every actionable element gets a kind (fill / select / check / click-safe / submit / pay / delete / send / navigate-cross-domain) from fail-closed rules, never from the model
-- [x] **PAGE-04**: For unlabeled or placeholder-only fields, Claude repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
+- [x] **PAGE-04**: For unlabeled or placeholder-only fields, AGY repairs labels/title/grouping in the background via a tool-less structured-output call, patching only existing ids, cached by origin + path + structure hash
 - [x] **PAGE-05**: When the page changes (navigation, revealed fields, new errors), Blip re-snapshots and the form model updates within ~1 s
 
 ### Actions
@@ -39,13 +39,13 @@
 - [x] **GATE-05**: The model cannot approve a gated action: the Intent schema has no confirm variant; the fixed phrase is matched in server code after tracked read-back, and the voice reducer redeems only its armed grant/read-back IDs
 - [x] **GATE-08**: The server ignores a confirm-phrase match while a `speak` is outstanding (no `speak.done` yet) and for 1 s after `speak.done`, regardless of what the voice UI does with its mic. Needed because VOX-05 now allows barge-in, so Blip must not rely on a half-duplex mic to avoid confirming itself
 - [x] **GATE-06**: A seeded prompt-injection test page (hidden instructions, fake "verified" banner, "click #pay", lookalike submit button) cannot trigger any gated action
-- [ ] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
+- [x] **GATE-07**: When a page contains text addressed to Blip/AI agents, Blip flags it so the user hears a warning
 
 ### Brain
 
-- [x] **BRAIN-01**: Blip runs Claude through the Agent SDK on the developer's own subscription with all built-in tools, settings, connectors and auto-memory disabled, and refuses to start if the init message lists any unexpected tool
-- [x] **BRAIN-02**: Free-form utterances the grammar can't match are turned into a structured Intent by a tool-less Claude call, typically within ~2 s
-- [x] **BRAIN-03**: Claude processes are pre-warmed at startup, and a watchdog recovers from a hung or failed call with a spoken "I couldn't understand that" rather than silence
+- [x] **BRAIN-01**: Blip runs AGY through the Antigravity CLI on the developer's subscription, with no API key or model tools, and refuses to start if a role reports an unexpected tool
+- [x] **BRAIN-02**: Free-form utterances the grammar can't match are turned into a structured Intent by a tool-less AGY call, typically within ~2 s
+- [x] **BRAIN-03**: AGY role sessions are pre-warmed at startup, and a watchdog recovers from a hung or failed call with a spoken "I couldn't understand that" rather than silence
 
 ### Results
 
@@ -130,4 +130,4 @@ Voice-owned requirements that core phases or shared milestones rely on. These ar
 
 ---
 *Requirements defined: 2026-10-16*
-*Last updated: 2026-10-17 after Phase 5 voice-window and synthetic-survey verification; GATE-06/07 and PROT-03 are complete; public-form DEMO-03 is deferred by core-owner decision*
+*Last updated: 2026-10-17 after the AGY migration and isolated Edge voice-path check. PROT-03 and GATE-07 are complete; PROT-01 remains pending written M0 sign-off; public-form DEMO-03 is deferred by core-owner decision.*

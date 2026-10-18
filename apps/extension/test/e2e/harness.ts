@@ -167,6 +167,10 @@ export type OpenFixturePageOptions = {
   pagePort?: number;
   /** Dedicated repair cache path for an explicitly bounded local integration check. */
   repairCacheDirectory?: string;
+  /** Receives only allowlisted repair outcome categories during bounded AGY checks. */
+  onRepairDiagnostic?: StartServerOptions["onRepairDiagnostic"];
+  /** Requests a single targeted cache refresh in the isolated bounded prewarm check. */
+  forceRepairCacheRefreshIdentity?: string;
 };
 
 type VoiceClientRig = { socket: VoiceWebSocket; frames: Message[] };
@@ -336,6 +340,10 @@ export async function openFixturePage(
     ...(options.brain !== undefined ? { brain: options.brain } : {}),
     ...(options.agySessionHooks !== undefined ? { agySessionHooks: options.agySessionHooks } : {}),
     ...(options.repairCacheDirectory !== undefined ? { repairCacheDirectory: options.repairCacheDirectory } : {}),
+    ...(options.onRepairDiagnostic !== undefined ? { onRepairDiagnostic: options.onRepairDiagnostic } : {}),
+    ...(options.forceRepairCacheRefreshIdentity !== undefined
+      ? { forceRepairCacheRefreshIdentity: options.forceRepairCacheRefreshIdentity }
+      : {}),
     ...(options.disableRepairModel === true
       ? {
           repairProvider: {

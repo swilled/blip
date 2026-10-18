@@ -11,7 +11,7 @@ import { Session, type Brain } from "./session/session";
 import { createRefresher, type Refresher } from "./session/refresh";
 import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
 import { createAgyProvider, type AgyProvider } from "./brain/agy/provider";
-import { RepairCoordinator, type RepairProvider } from "./brain/agy/repair-coordinator";
+import { RepairCoordinator, type RepairDiagnostic, type RepairProvider } from "./brain/agy/repair-coordinator";
 import type { AgyCliAdapter, AgySessionOptions } from "./brain/agy/session";
 import { handleDialogueFallback, handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
@@ -55,6 +55,10 @@ export type StartServerOptions = {
   repairCacheDirectory?: string;
   /** Bound on a repair role call. Default 15000 ms. */
   repairTimeoutMs?: number;
+  /** Test-only allowlisted repair outcomes; never receives prompts, output text, or page values. */
+  onRepairDiagnostic?: (diagnostic: RepairDiagnostic) => void;
+  /** Test-only: bypass one matching cache entry once so a bounded check can prewarm it with AGY. */
+  forceRepairCacheRefreshIdentity?: string;
   /** Message handlers by type; anything without one gets not-implemented (D-14). Plan 01-05 fills these. */
   handlers?: Handlers;
   /** Build server-integrated handlers after the Hub exists, with its live grant/executor context. */
@@ -278,6 +282,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       hub,
       cacheDirectory: options.repairCacheDirectory ?? join(process.env.LOCALAPPDATA ?? homedir(), "Blip", "repair-cache"),
       ...(options.repairTimeoutMs !== undefined ? { timeoutMs: options.repairTimeoutMs } : {}),
+      ...(options.onRepairDiagnostic !== undefined ? { onDiagnostic: options.onRepairDiagnostic } : {}),
+      ...(options.forceRepairCacheRefreshIdentity !== undefined
+        ? { forceRefreshIdentity: options.forceRepairCacheRefreshIdentity }
+        : {}),
     });
   }
   refresher = createRefresher({

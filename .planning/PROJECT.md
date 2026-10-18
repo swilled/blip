@@ -54,18 +54,18 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 **Architecture (decided in planning conversation):**
 
 ```
-[Voice app: mic, STT, speech out, UI]  <->  [Agent server: Claude Code headless, MCP tools, policy gate]  <-ws->  [Chrome extension: snapshot + act]
+[Voice app: mic, STT, speech out, UI]  <->  [Agent server: AGY subscription CLI, intent-as-data, policy gate]  <-ws->  [Chrome extension: snapshot + act]
 ```
 
 - **Extension (thin):** `getSnapshot()` (accessibility tree via `chrome.debugger`/CDP + DOM heuristics), `act({type, target, value})` (focus, type, select, check, click), page-change events, field highlight. No AI logic, no credentials.
-- **Agent server (TypeScript, Node):** runs Claude via the Claude Agent SDK on the user's Claude subscription login, as pre-warmed, tool-less structured-output calls (`repairFormModel`, `parseIntent`) — **intent-as-data** (decided after research; supersedes the earlier MCP-tools plan). All built-in tools, settings, claude.ai connectors and auto-memory disabled; empty working directory. A deterministic dialogue reducer + single **Executor** carry out every action; the **policy gate** lives in the Executor (and is re-checked in the extension): action `kind` (submit/pay/delete/send/cross-domain) is classified by rules, not the model, and blocked until the voice socket delivers the exact confirm phrase.
+- **Agent server (TypeScript, Node):** runs AGY through the Antigravity CLI on the user's local subscription. The current intent and repair roles use Gemini 3.8 Flash Low and Medium as tool-less JSON calls (`parseIntent`, `repairFormModel`) — **intent-as-data** (the model proposes; deterministic code acts). Each role uses an isolated work directory and a no-tools agent definition; unexpected tool calls fail closed. A deterministic dialogue reducer + single **Executor** carry out every action; the **policy gate** lives in the Executor (and is re-checked in the extension): action `kind` (submit/pay/delete/send/cross-domain) is classified by rules, not the model, and blocked until the voice socket delivers the exact confirm phrase.
 - **Voice app:** localhost web UI served by the agent server (Chrome page → Web Speech API for STT, mic permission just works on localhost). Output: Blip's own TTS and/or a screen-reader path for NVDA (ARIA live region; Windows NVDA Controller Client is a candidate — research to confirm).
 - **Deterministic work in code, not the model:** read-back loop, confirm flow, fill execution, profile lookups. Model is called for (1) page → form schema (once per page, background) and (2) utterance → intent/field values.
 
 **Interaction design (from the doc):** short sentences; counts before lists; options read in page order with numbers; never describe colors/positions unless asked; say "I don't know" rather than guess; keep a "where am I" (site, step, field). Commands: what's here, read the form, fill from profile, go to field X, change X to Y, spell X, what's required, what went wrong, read back, undo, stop, submit.
 
 **Team / two-machine workflow:**
-- **Person A — Pranav (core track, the more complex role):** Chrome extension (snapshot + actions), MCP tool server, policy gate, Claude subprocess management, form-model prompt and label repair, prompt-injection defenses.
+- **Person A — Pranav (core track, the more complex role):** Chrome extension (snapshot + actions), server and policy gate, AGY CLI provider integration, form-model prompt and label repair, prompt-injection defenses.
 - **Person B — teammate (voice track, the simpler role):** voice app UI, push-to-talk, STT, speech output + NVDA path, read-back / confirm-phrase dialogue flow, profile file, demo forms, demo script and polish.
 - Shared contract first: `PROTOCOL.md` (WebSocket + tool message schemas), agreed in the first ~30–45 min. Each side builds against mocks of the other (mock agent for voice track; typed-text console for core track) and integrates by ~hour 12.
 - GSD runs in **workstreams**: `core` (Pranav) and `voice` (teammate), each with its own ROADMAP/STATE/phases under `.planning/workstreams/`; each machine sets `GSD_WORKSTREAM`. Shared files (`PROJECT.md`, `REQUIREMENTS.md`, `research/`, `config.json`, `PROTOCOL.md`) change rarely and only by agreement.
@@ -76,21 +76,21 @@ A blind user can complete a real web form by voice and trust it: Blip never subm
 ## Constraints
 
 - **Timeline**: 36–48 hours of build time (GatorHacks) — everything optimizes for a reliable live demo, not completeness
-- **Model access**: Claude subscription only, no API key — agent must run through Claude Code headless / Claude Agent SDK on each developer's logged-in subscription; subject to subscription rate limits and Anthropic's terms for subscription auth (fine for personal hackathon use on own machine; do not ship as hosted product)
+- **Model access**: AGY/Antigravity subscription for the core provider, no direct Gemini API key; current model IDs are `gemini-3.8-flash-low` (intent) and `gemini-3.8-flash-medium` (repair). Calls run locally under the developer's Antigravity login and remain subject to its rate limits and terms; Blip does not host this personal subscription backend.
 - **Tech stack**: TypeScript everywhere (extension, agent server, voice app) — one toolchain for both developers
 - **Platform**: Both machines Windows; Chrome; demo screen reader is NVDA
-- **Latency**: measured Agent SDK turns: Haiku 5.5 0.7–1.8 s, Sonnet 5.5 (low effort) 1.6–2.5 s; keep it low with grammar-first commands, background cached label repair, filler speech ("one moment"), Haiku for intents, snapshots capped ~8k tokens
-- **Security**: every page is untrusted input; Claude Code built-in tools must be disabled so prompt injection can't reach a shell or filesystem; passwords/card numbers never sent to the model
-- **Collaboration**: two people on separate machines; both have Claude subscriptions and can run the agent locally
+- **Latency**: keep model calls low with grammar-first commands, background cached label repair, filler speech ("one moment"), low-effort Gemini Flash for intents, and snapshots capped at the prompt boundary
+- **Security**: every page is untrusted input; AGY roles have no configured tools and run from isolated work directories; unexpected tool calls are refused; passwords/card numbers never reach model input or speech
+- **Collaboration**: two people on separate machines and separate local environments; no shared hosted subscription credentials
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Local app + thin extension over localhost WebSocket (not extension-only) | Cleaner two-person split; avoids Chrome side-panel mic permission issues; keeps Claude process and logic out of MV3 | — Pending |
-| Headless Claude via Agent SDK on subscription (not Messages API) | Team has subscriptions only; verified live: `apiKeySource: none`, Haiku turns 0.7–1.8 s | ✓ Good |
-| Intent-as-data: Claude gets only tool-less structured-output calls (`repairFormModel`, `parseIntent`); deterministic Executor runs every action (supersedes "MCP tools") | One round trip per utterance; nothing for prompt injection to click; fully testable with a fake brain. MCP-tools agent mode deferred to v2 (AGENT-01), routed through the Executor if built | — Pending |
-| All built-in tools, settings, connectors and auto-memory disabled; empty cwd; init tool-list assertion | Pages are untrusted; research found the default SDK config leaks claude.ai connectors and memory | — Pending |
+| Local app + thin extension over localhost WebSocket (not extension-only) | Cleaner two-person split; avoids Chrome side-panel mic permission issues; keeps model process and logic out of MV3 | Implemented |
+| AGY Antigravity CLI on subscription (not Gemini API key) | Current runtime uses Gemini 3.8 Flash Low/Medium through the developer's local Antigravity subscription | Implemented in `ac4fb1c`; provider checks and live demo startup passed |
+| Intent-as-data: AGY receives tool-less JSON requests (`repairFormModel`, `parseIntent`); deterministic Executor runs every action (supersedes "MCP tools") | One round trip per utterance; nothing for prompt injection to click; fully testable with a fake brain. MCP-tools agent mode deferred to v2 (AGENT-01), routed through the Executor if built | Implemented |
+| AGY roles use isolated work directories and no-tools agent definitions; unexpected tool calls terminate the role | Pages are untrusted and must never gain access to action tools or local files | Implemented and covered by tests |
 | Policy gate in the Executor + extension (default-deny, kind from fail-closed rules, grant bound to target/kind/URL/values hash, 30 s TTL) | Core value: model cannot bypass the submit gate; Enter-to-submit and div buttons bypass a click-only gate | — Pending |
 | Grammar first, model last | ~70–80% of commands (incl. confirm phrase) are code templates; keeps latency and quota down | — Pending |
 | Vertical MVP phase structure in each workstream | Always-demoable state; integration milestones at ~h6–8, ~h12, ~h20 | — Pending |
