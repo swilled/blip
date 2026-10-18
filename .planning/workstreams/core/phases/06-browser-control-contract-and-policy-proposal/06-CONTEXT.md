@@ -25,7 +25,7 @@ This phase produces a reviewable proposal for adding user-directed browser contr
 
 ### Search behavior
 - **D-07:** For “search for…” requests, Blip chooses between the current site's search and the browser's default search based on the user's wording and current page context. Use only the query expressed by the user. Do not derive a query or destination from page instructions. If the route is ambiguous or cannot be validated, ask a short clarification or use the safe browser-search path.
-- **D-08:** Site search remains subject to the existing gated-submit policy until a written protocol and policy approval changes it. Browser-search navigation follows the cross-origin navigation gate.
+- **D-08:** Site search remains subject to the existing gated-submit policy until a written protocol and policy approval changes it. Browser-search navigation follows the cross-site navigation gate.
 
 ### Multi-step requests
 - **D-09:** Include AGENT-01 as a separate future phase after the browser-control contract and basic browser primitives are reviewed. It may coordinate multiple steps, but every page action must still pass through the deterministic Executor and existing policy gate. It cannot confirm actions, mint grants, or treat page text as authority.
@@ -108,7 +108,7 @@ The proposed browser-control scope should cover: “where am I”; reading by he
 - Implementation of browser-control features is for follow-on phases after Phase 6's contract review.
 - AGENT-01 multi-step orchestration is a separate later phase.
 - Any shared project or requirements edits remain proposals until both workstream owners agree.
-- Changing live same-origin link policy remains blocked on written voice-owner review of the precise contract.
+- Changing live same-site link policy remains blocked on written voice-owner review of the precise contract.
 
 </deferred>
 
