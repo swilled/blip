@@ -8,18 +8,19 @@ updated: 2026-10-17
 
 ## Current Test
 
-[retest the live Microsoft Form's required fields after reloading the rebuilt extension]
+[test fill-from-profile behavior on the live Microsoft Form]
 
 ## Tests
 
 ### 1. Read the live Microsoft Form and check required fields
 expected: Blip reads the current form and reports the required fields that remain.
-result: partial - live retest in progress
-reported: After the corrected bundle was copied to the extension folder loaded by the demo Chrome profile and Blip was restarted, the user asked "what's required?" on the live form. Blip replied "Vacation and sick leave form. 8 fields, 5 required, 9 actions." The required count is now correct, but this is a page summary rather than the required-field names, so the check remains partial. The reducer's focused tests confirm the exact phrase routes to the required-field list; verify the recognized transcript or use the less ambiguous supported phrase "which fields are required?" in the live voice retest.
+result: pass
+reported: The first ask "what's required?" returned a page summary ("Vacation and sick leave form. 8 fields, 5 required, 9 actions."). Using the supported phrase "which fields are required?" returned "5 required fields are empty: 2.Employment type, 3.Department, 5.Leave type. Say continue for more." On "continue," Blip replied "Still empty and required: 6.Leave date, 7.Return date." Together these are the five required fields, without the conditional Other answer or type suffixes.
+
 ### 2. Fill from my profile
 expected: Blip fills eligible empty profile matches or reports which fields it skipped.
 result: pending
-reason: Re-test after the required-field check passes on the rebuilt extension. The current integrated server is running with `--brain=claude`; the previous fake-brain block no longer describes the active run.
+reason: Run this check on the live Microsoft Form now that the required-fields check has passed. The integrated server is using the Claude brain.
 
 ### 3. Remaining Phase 3 checks
 expected: The remaining tested Phase 3 behaviors match the plan's human I3 criteria.
@@ -29,13 +30,14 @@ reported: User said, “ok everything else works fine”; individual results wer
 ## Summary
 
 total: 3
-passed: 1
-issues: 1
+passed: 2
+issues: 0
 pending: 1
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-The first live required-field check exposed an extension snapshot gap. Microsoft Forms places an accessible "Required to answer" marker in the question title while setting the field's aria-required attribute to false; the previous extractor missed that marker. A follow-up fix scopes the marker to the radio question and removes the conditional "Other answer" textbox and type suffixes. The live snapshot now reports five required fields, but the latest voice response was only the page summary. Confirm the recognized transcript and rerun test 1 with "which fields are required?"; pass only when Blip lists the field names.
+The exact first phrasing, "what's required?", returned the page summary. The supported clearer phrase, "which fields are required?", produced the complete five-field list over two batches. The transcript for the first phrasing was not captured, so that voice-recognition discrepancy remains noted for follow-up.
+
 The separate Phase 2 connected-gate I2 run remains outside this UAT result and must be tracked independently.
