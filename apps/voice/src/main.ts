@@ -16,12 +16,38 @@ import { adjustSpeechRate, createSpeechRate, parseSpeechRateCommand, type Speech
 import { createVoiceState } from "./state";
 import { createStt, type RecognitionLike } from "./stt";
 import { createTalkController } from "./talk-controller";
+import { checkMicrophone, createSpeechDiagnostics, observeRecognition } from "./speech-diagnostics";
 import { createTts, type Synth } from "./tts";
 import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log";
 
 const CLIENT_VERSION = "0.0.0";
 const CAPTION_CLEAR_MS = 1000;
 const LOCAL_RATE_ACK_ID = "local-speech-rate-ack";
+declare const __BLIP_BUILD_ID__: string;
+const diagnostics = createSpeechDiagnostics();
+let nativeRecognitionId = 0;
+const diagnosticDetails = document.getElementById("speech-diagnostics") as HTMLDetailsElement;
+diagnosticDetails.addEventListener("toggle", () => {
+  diagnostics.enable(diagnosticDetails.open);
+  document.getElementById("speech-events")!.textContent = "";
+});
+function recordSpeechEvent(event: Parameters<typeof diagnostics.record>[0]): void {
+  diagnostics.record(event);
+  if (diagnosticDetails.open) document.getElementById("speech-events")!.textContent = JSON.stringify(diagnostics.snapshot(), null, 2);
+}
+document.getElementById("build-identity")!.textContent = `Voice build: ${__BLIP_BUILD_ID__}`;
+const microphoneCheckOwner = new AbortController();
+window.addEventListener("pagehide", () => microphoneCheckOwner.abort());
+document.getElementById("check-microphone")!.addEventListener("click", async () => {
+  const button = el<HTMLButtonElement>("check-microphone");
+  button.disabled = true;
+  el("microphone-check-status").textContent = "Allow microphone access if Chrome asks.";
+  el("microphone-check-status").textContent = await checkMicrophone(
+    () => navigator.mediaDevices.getUserMedia({ audio: true }),
+    microphoneCheckOwner.signal,
+  );
+  button.disabled = false;
+});
 
 function el<T extends HTMLElement>(id: string): T {
   const e = document.getElementById(id);
@@ -274,7 +300,12 @@ talk = createTalkController({
     createStt({
       makeRecognition: () => {
         if (!RecognitionImpl) throw new Error("speech recognition unavailable");
-        return new RecognitionImpl();
+        const recognition = new RecognitionImpl();
+        const remove = observeRecognition(recognition as unknown as EventTarget, ++nativeRecognitionId, recordSpeechEvent);
+        (recognition as unknown as EventTarget).addEventListener("end", remove, { once: true });
+        recordSpeechEvent({ event: "capture-request", generation: nativeRecognitionId, focused: document.hasFocus(), visible: document.visibilityState === "visible" });
+        el("status-hint").textContent = "Starting microphone…";
+        return recognition;
       },
       onInterim: h.onInterim,
       onFinal: h.onFinal,
