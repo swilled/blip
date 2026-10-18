@@ -5,7 +5,7 @@ This document is a proposal for review. It describes future additive shapes and 
 ## Status and approval
 
 - **Status:** proposal only. No implementation or merge is authorized by this document.
-- **Written voice-owner approval:** pending. The core owner reports that the teammate is comfortable with the direction, but no written decision on this exact contract has been recorded here. That report does not satisfy the approval gate.
+- **Written voice-owner approval:** pending. The core owner reports that the teammate is comfortable with the direction, but no written decision on this exact contract has been recorded here. That report does not satisfy the approval gate. The **voice-owner approval pending** state remains until the exact contract is approved in writing.
 - **Live behavior:** unchanged. Existing form actions, link classification, confirmation grants, protocol schemas, and manifests remain authoritative until a separately reviewed change is approved.
 - **Scope:** the proposal covers browser control and page reading. It does not implement AGENT-01. Multi-step orchestration is a separate later phase after this contract and the basic browser primitives are reviewed.
 
@@ -62,10 +62,97 @@ The authority path remains:
 1. The voice app sends the user's utterance and, for gated work, tracks the same `speakId` through read-back, cancellation, and confirmation.
 2. Server grammar or a tool-less AGY role may return a typed request or route suggestion as data. AGY does not receive browser tools, grants, or an Executor handle.
 3. Deterministic server code resolves targets only from the original utterance or a user-selected live page candidate. It checks the accepted page identity and current policy.
-4. For a gated operation, the existing GatePort/Executor flow owns read-back, exact purpose-specific phrase matching, one-use grant creation/consumption, and dispatch. A proposed browser grant must bind the destination/operation, source page and tab, exact user query when relevant, and tracked speech identity. It cannot reuse a submit grant.
+4. For a gated operation, the existing GatePort/Executor flow owns read-back, exact purpose-specific phrase matching, the existing one-second confirmation guard, one-use grant creation/consumption, and dispatch. A proposed browser grant must bind the destination/operation, source page and tab, exact user query when relevant, and tracked speech identity. It cannot reuse a submit grant or shorten/skip the current confirmation guard.
 5. The extension revalidates the live tab, page identity, element, and destination immediately before dispatch. Results return through the existing server authority path.
 
 Navigation, site search, and any other operation that can leave the current page never dispatch directly from an `Intent`, model result, page instruction, or UI click. Stop, cancellation, timeout, mismatch, page change, and tab change clear pending browser authorization. An affirmative utterance only redeems the currently armed purpose-bound request if it matches the exact expected phrase.
+
+### Local direct reads
+
+The direct read-by-heading and direct read-by-paragraph paths **capture bounded visible text and speak locally**. They make **no AGY call**. Their excerpt **never enters the model projection** and never changes an ordinary form snapshot.
+
+- Capture at most 20 visible content blocks, at most 400 Unicode code points per block, and at most 4,000 Unicode code points total. Count Unicode code points, not UTF-16 code units. Preserve page order and retain whether each block is a heading or paragraph.
+- Use the existing short DOM-walk time budget: at most the current 100 ms composed-tree walk budget for a request, not a new unlimited `innerText` scan. Keep the extension's existing bounded request/frame deadline too.
+- Read only visible eligible text from the top-level page and supported same-origin frames. Do not read hidden content, form values, password/card fields, or arbitrary control text. Cross-origin frames and restricted browser pages are unsupported by this proposal.
+- Resolve heading and paragraph IDs from the user's words against a current capture. If labels are duplicated or the requested block is absent, ask the user which one or say it could not be found.
+- Return a direct-content result with its own `contentTruncated` marker (or an equivalently named content-only field). This is a **separate truncation marker**, never an overloaded `Snapshot.truncated`. A direct read may say that it was shortened; the 250-element wire cap remains independent.
+- The voice app labels the words as page content when speaking them. Page instructions remain untrusted and are not followed or presented as Blip guidance. Apply conservative secret-shape checks before speech; if a block appears to contain a password, card number, credential, or other protected value, redact or refuse that block.
+
+### AGY summaries and questions
+
+New body text is permitted **only for explicit summary or page-question requests**. It uses a **separate bounded and filtered excerpt** assembled for that single request. Do not add paragraphs or article text to ordinary `Intent` parsing or the existing page projection.
+
+- Keep the existing value-free projection of title, headings, field types and labels, action labels/kinds, required/sensitivity flags, and option labels for ordinary intent parsing. It excludes field values and DOM option values. Unrelated commands receive no body text.
+- A summary or page question may send visible, eligible content blocks only after local bounds and conservative filtering. The direct-capture limits above are the maximum source size, not permission to send every captured block. The excerpt must also fit in the remaining room under the existing 8,000-token prompt estimator. If it cannot fit, shorten it or omit it and tell the user the summary or answer may be incomplete; never silently expand the budget.
+- Delimit page text as untrusted data in the prompt. AGY has no tools and can only return a schema-validated answer. The server checks freshness and output shape after the model call. An answer cannot issue a browser action or change the query, URL, link, or grant.
+- Exclude field values, sensitive controls, detected credentials, card/SSN-like shapes, and other known secret patterns before serialization. Recheck generated speech for sensitive shapes. If a suspected secret cannot be safely removed, do not send or speak that content; say that the page text could not be safely processed.
+- These checks reduce exposure but **shape filters cannot guarantee removal of all private data** from arbitrary article text. Do not promise perfect PII detection. Do not log excerpts, URLs, queries, or transcripts.
+
+## Text data flow
+
+| Request | Data that may reach AGY | Data excluded or kept local |
+|---|---|---|
+| Ordinary form/page intent | Current accepted, value-free metadata projection under the existing prompt budget. A route-only search suggestion may use the request's routing words and current metadata. | Field values, option values, body paragraphs, and unrequested article text. The exact search query stays in server state for validation and dispatch. |
+| Direct heading/paragraph read | None. | Bounded visible excerpt remains in the local extension/server/voice path and is spoken locally. It never enters the model projection. |
+| Explicit summary/page question | A separate filtered excerpt, only after an explicit user request and only within the remaining projection budget. | Sensitive fields/values, excluded blocks, unrelated page body, page-derived action targets, and any content that fails the safety filter. |
+| Search routing | At most a route suggestion (`site`, `browser`, or `clarify`) from query-redacted request routing cues and current value-free page metadata. Treat it as untrusted data and validate it locally. | The server extracts and retains the exact query locally before any route call; the query itself is not serialized to AGY. Every destination remains sourced from the original user utterance or a user-selected live link. Page instructions cannot rewrite either. If routing cues cannot be separated from a secret-shaped query, withhold the route call and clarify. |
+| Page action | No page-derived authority is sent to AGY. | AGY never receives browser tools, grants, extension dispatch handles, confirmation phrases, or private values. The deterministic Executor alone authorizes actions. |
+
+Every excerpt and model result is bound to the accepted tab and page identity. Page text can contain prompt injection; it is quoted data, never an instruction. A bounded excerpt does not make hostile text trustworthy.
+
+### Proposed same-origin link eligibility
+
+D-02 is the user's choice to **prepare an ungated ordinary safe-GET proposal**. It is not approval to change the live classifier. “Same-site” is still a product boundary to review. The research recommendation here is **exact top-level `URL.origin`** equality, not a locked interpretation of same-site: scheme, canonical hostname, and port must match the active top-level page. A link inside a third-party frame is compared with the top-level origin, never with its own frame origin.
+
+The research boundary is **exact top-level URL.origin** equality with the active top-level page. This is the proposed first boundary, not a product choice that the user has already locked. The initial proposed ungated set is intentionally narrow. A candidate must satisfy every item below:
+
+1. The user's request identifies exactly one currently visible anchor. The live extension re-resolves it from an ephemeral link ID and rechecks its label and `href`; hidden page text or AGY cannot choose the candidate.
+2. The element is a native `<a href>` with a non-empty, bounded visible label and a parseable canonical HTTP(S) target. It has no username or password in the URL, no malformed/control-character target, and no unsupported scheme.
+3. The target's exact canonical origin matches the active top-level page's exact canonical origin. This is the research-recommended starting boundary, subject to voice-owner review.
+4. The anchor has no `download` attribute, and `target` is absent or exactly `_self`. A present empty or other target value is excluded. In this proposal, any non-empty rel excludes the link from the initial ungated set; absent or whitespace-only rel is required.
+5. The label is unique in the live candidate set, passes a conservative explicit safe-label allowlist, and does not match gated or unsafe text rules. A non-match against a danger-word blacklist alone is not proof that a label is safe. Empty, overlong, ambiguous, or unrecognized labels remain gated.
+6. Navigation is dispatched directly to the revalidated `href`. Do not invoke a page-provided click handler as the authority path. Do not silently broaden this rule to buttons, form submissions, JavaScript URLs, or unverified actions.
+
+Even a same-origin HTTP GET can cause server-side effects. The server may also redirect cross-origin after the request begins. The extension cannot preflight the remote server's behavior or redirect chain, so an origin check does not prove an action harmless and cannot prevent the first redirecting request. Detect a changed URL through the existing navigation event path, invalidate all old state, and treat the resulting page as a fresh untrusted page. Keep the **live classifier gated** for ordinary same-origin links until the voice owner approves this exact eligibility contract in writing and a separate implementation PR passes review.
+
+### Browser-default search authorization
+
+Search intent may use request wording and current-page context to suggest `site`, `browser`, or `clarify`. AGY may suggest a route as data, but deterministic code validates that suggestion against the current accepted page and available controls. First extract the exact query from the original user utterance in local server code. A route suggestion may see query-redacted routing cues plus the existing value-free page metadata, but it does not receive the query itself. Do not let page text or model output rewrite the query or supply a destination. The site route is eligible only when code finds one unique visible current-page search control; otherwise ask for clarification or ask whether to use browser-default search.
+
+As a locked safety rule for this proposal, site search remains gated. Fill the user-derived query into the validated control through the normal Executor path and retain the existing read-back and submit phrase flow. A search control is not inherently safe: the form may use POST, trigger a state change, or have a destructive side effect. Do not infer method or safety from `type="search"` alone.
+
+Browser-default search is a cross-site operation whose provider URL is hidden before dispatch: **`chrome.search.query() does not expose its provider URL`**. Since Chrome does not reveal the host first, its distinct operation-bound authorization reads back “browser default search” rather than claiming to verify a provider host. This is a deliberate, visible limit for voice-owner review, not a way around cross-site confirmation. If approved, add the `search` permission as a future manifest delta and use Chrome's configured default provider; never construct a hardcoded Google/Bing destination URL.
+
+1. read back the exact query from the user and the words “browser default search.” The confirmation prompt must identify this operation and say that it will search the configured default provider.
+2. Require the exact operation phrase **`search for {query} with browser default search`**, matched through the existing deterministic phrase rules. “Yes” or another generic affirmation does not authorize it.
+3. Bind the one-use grant to the **original query**, `browser-default-search` route/operation, **source tab**, canonical source URL, **source page identity**, and the tracked `speakId`. It is not a submit grant and cannot authorize an arbitrary URL.
+4. The `chrome.search.query()` call is allowed only after the Executor consumes that grant. This **authorization cannot open result links**; each result link requires a new user request and the applicable link policy.
+5. If the permission, API, phrase, source identity, or query validation is unavailable or fails, **missing search permission fails closed**. Do not dispatch and do not fall back to a hardcoded provider URL. Refuse and ask for another route.
+
+The configured provider is outside Blip's control, so even a purpose-bound grant authorizes the default-search operation, not a previewed provider host. The query must be user-derived and should be rejected or clarified when it matches a known password, card-number, or credential shape. The provider may return arbitrary hostile pages; result navigation receives no inherited authorization. **Site search remains gated** under the existing submit policy; **back and forward are refused** whenever the next destination cannot be established before dispatch. On a **slow load**, stop at the existing snapshot deadline and never reuse the previous page's content.
+
+## Lifecycle and refusal behavior
+
+Re-use current active-tab tracking and navigation listeners rather than creating a second tab authority. Before and after each asynchronous refresh/model call, check the same tab ID, canonical URL, accepted snapshot version, structural/page identity, and request identity. Treat URL changes, tab activation, SPA History API changes, page replacement, cancellation, and timeout as invalidation events. Clear excerpt IDs, link IDs, pending read-backs, and all grants. A scroll or content mutation that changes the selectable content revision also requires a refresh before reusing content IDs.
+
+| Condition | Required response | Authority effect |
+|---|---|---|
+| Malformed URL, unsupported scheme, credentials in target, or ambiguous named site | Ask the user to clarify or report the destination is unsupported. | No navigation request or grant. |
+| No unique visible link, hidden candidate, duplicate label, or stale link ID | Ask which visible link the user means, or say it changed. | Never resolve a target from page text or stale ID. |
+| Cross-site link without host read-back and destination-bound confirmation | Read the host and ask for the distinct confirmation; if not completed, refuse. | No reusable submit grant; no dispatch. |
+| Same-origin link that fails the proposed safe-GET shape | Keep it gated under current policy or refuse if it cannot enter the supported gate. | The current classifier is unchanged. |
+| User cancels, says stop, the tracked speech is interrupted, or any source identity changes | Clear the pending browser authorization. | No late or duplicate confirmation can dispatch. |
+| AGY route output is invalid, stale, or inconsistent with the current controls | Ask a short clarification. | Model output cannot select a target, query, or action. |
+| Page text contains hostile instructions or tries to change the search query/destination | Treat it only as untrusted page content. | No new action, target, or authorization. |
+| A local excerpt exceeds its item, character, or time bound | Return only the bounded portion with the separate content truncation marker and say it is incomplete. | Do not change `Snapshot.truncated` or the wire element cap. |
+| A page is restricted (for example, browser-internal or unsupported cross-origin content) | Say the page cannot be read here; distinguish this from a successful empty page. | No broad permission request or stale-page fallback. |
+| A page is still loading at the 8-second snapshot deadline | Say it is still loading and invite a retry. | Discard late results whose tab/page identity no longer matches. |
+| Browser-default search lacks its future permission or exact authorized operation | Refuse and ask for another route. | **Missing search permission fails closed**; no hardcoded URL fallback. |
+| Back/forward cannot preview the next destination before dispatch | Say the destination cannot be checked and refuse the traversal. | Do not add `history` permission as a workaround. |
+| A native reload triggers `beforeunload` | Leave the browser's native prompt in control; the user may cancel. | Blip never auto-accepts or suppresses the warning. |
+| Excerpt or generated speech matches a known sensitive shape, or safe filtering cannot complete | Redact or refuse and explain briefly. | Do not send/speak detected secrets; acknowledge that shape filters cannot identify every private datum. |
+
+These refusals preserve the difference between an empty page, a restricted page, a stale page, and a slow load. They also keep each failure out of the action path rather than treating missing data as permission to guess.
 
 ## Compatibility and ownership gates
 
