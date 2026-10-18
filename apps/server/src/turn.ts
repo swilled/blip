@@ -35,6 +35,8 @@ export type TurnContext = {
   schedule?: (callback: () => void, delayMs: number) => unknown;
   /** Injectable watchdog clock; the provider call remains bounded in production too. */
   intentWatchdog?: { schedule(callback: () => void, delayMs: number): unknown; cancel(handle: unknown): void };
+  /** The dialogue reducer owns gated requests; model output cannot start a parallel gate flow. */
+  dialogueManaged?: boolean;
 };
 
 type SpeakCategory = PayloadOf<"speak">["category"];
@@ -268,13 +270,89 @@ async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promi
       return speak(hub, session, result.text, result.category);
     }
     case "request_action":
+      if (ctx.dialogueManaged) {
+        return speak(hub, session, "I can't act on that request directly. Ask me to read the form back to start its confirmation flow.", "error");
+      }
       return createVoiceGateAdapter(ctx).arm({ actionId: intent.actionId });
     case "click_safe":
+      if (ctx.dialogueManaged) {
+        return speak(hub, session, "I can't run that action from a model suggestion. Ask me to read the form back to start its confirmation flow.", "error");
+      }
       return executeGatedAction(ctx, intent);
     default:
       // No Intent approves an action; request_action and click_safe only enter the Executor above.
       return speak(hub, session, MSG_NOT_YET, "answer");
   }
+}
+
+/**
+ * Resolve a reducer-unmatched utterance through the configured brain while leaving busy state,
+ * transcript routing, and dialogue state ownership with the voice reducer runner.
+ */
+export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
+  const { message, hub, session } = ctx;
+  if (message.type !== "utterance") return;
+  const { text } = message.payload;
+  const fieldPhrase = matchFieldPhrase(text);
+
+  if (fieldPhrase !== null) {
+    if (fieldPhrase.type === "invalid") {
+      return speak(
+        hub,
+        session,
+        fieldPhrase.reason === "too-long" ? MSG_FIELD_PHRASE_TOO_LONG : "Say a field and the value to fill.",
+        "error",
+      );
+    }
+
+    if (ctx.claudeProvider !== undefined) {
+      const captured = await captureIntentPage(ctx);
+      if (!captured.ok) return speak(hub, session, captured.reply, "error");
+      const decision = decideUtteranceForBrain(text, captured.model);
+      if (decision.kind === "withhold-and-handoff") {
+        await handlePrivacyHandoff(ctx, decision.handoff);
+        return;
+      }
+      await runIntent(ctx, resolveFieldPhrase(captured.model, fieldPhrase));
+      return;
+    }
+
+    hub.send("voice", "earcon", { name: "thinking" });
+    speak(hub, session, MSG_FILLER, "filler");
+    let modelIntent: Intent | null = null;
+    try {
+      modelIntent = await ctx.brain.parseIntent(safePhraseForBrain(fieldPhrase));
+    } catch {
+      // Field phrase matching is deterministic and does not depend on the offline brain.
+    }
+    if (modelIntent?.type === "request_action") {
+      await runIntent(ctx, modelIntent);
+      return;
+    }
+    const ready = await ensureSnapshot(ctx, ctx.freshnessMs);
+    if (!ready.ok) return speak(hub, session, ready.reply, "error");
+    await runIntent(ctx, resolveFieldPhrase(session.model!, fieldPhrase));
+    return;
+  }
+
+  hub.send("voice", "earcon", { name: "thinking" });
+  speak(hub, session, MSG_FILLER, "filler");
+  if (ctx.claudeProvider !== undefined) {
+    const captured = await captureIntentPage(ctx);
+    if (!captured.ok) return speak(hub, session, captured.reply, "error");
+    await runClaudeIntent(ctx, text, captured.snapshot, captured.model);
+    return;
+  }
+
+  let intent: Intent;
+  try {
+    intent = await ctx.brain.parseIntent(text);
+  } catch {
+    hub.send("voice", "earcon", { name: "error" });
+    speak(hub, session, MSG_BRAIN_FAILED, "error");
+    return;
+  }
+  await runIntent(ctx, intent);
 }
 
 export async function handleUtterance(ctx: TurnContext): Promise<void> {
@@ -304,67 +382,8 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
       return;
     }
 
-    if (command !== null) {
-      await runIntent(ctx, command);
-    } else if (fieldPhrase !== null) {
-      if (fieldPhrase.type === "invalid") {
-        return speak(
-          hub,
-          session,
-          fieldPhrase.reason === "too-long" ? MSG_FIELD_PHRASE_TOO_LONG : "Say a field and the value to fill.",
-          "error",
-        );
-      }
-
-      // Claude mode resolves every parsed field phrase locally. Apply the same privacy classifier
-      // before a local write so a dictated card/password value gets a value-free focus handoff.
-      if (ctx.claudeProvider !== undefined) {
-        const captured = await captureIntentPage(ctx);
-        if (!captured.ok) return speak(hub, session, captured.reply, "error");
-        const decision = decideUtteranceForBrain(text, captured.model);
-        if (decision.kind === "withhold-and-handoff") {
-          await handlePrivacyHandoff(ctx, decision.handoff);
-          return;
-        }
-        await runIntent(ctx, resolveFieldPhrase(captured.model, fieldPhrase));
-        return;
-      }
-
-      // Keep the offline fake brain's request_action test hook, but never pass a field value to it.
-      hub.send("voice", "earcon", { name: "thinking" });
-      speak(hub, session, MSG_FILLER, "filler");
-      let modelIntent: Intent | null = null;
-      try {
-        modelIntent = await ctx.brain.parseIntent(safePhraseForBrain(fieldPhrase));
-      } catch {
-        // The typed field grammar is deterministic and does not depend on the offline brain.
-      }
-      if (modelIntent?.type === "request_action") {
-        await runIntent(ctx, modelIntent);
-        return;
-      }
-      const ready = await ensureSnapshot(ctx, ctx.freshnessMs);
-      if (!ready.ok) return speak(hub, session, ready.reply, "error");
-      await runIntent(ctx, resolveFieldPhrase(session.model!, fieldPhrase));
-    } else if (ctx.claudeProvider !== undefined) {
-      hub.send("voice", "earcon", { name: "thinking" });
-      speak(hub, session, MSG_FILLER, "filler");
-      const captured = await captureIntentPage(ctx);
-      if (!captured.ok) return speak(hub, session, captured.reply, "error");
-      await runClaudeIntent(ctx, text, captured.snapshot, captured.model);
-    } else {
-      hub.send("voice", "earcon", { name: "thinking" });
-      speak(hub, session, MSG_FILLER, "filler");
-      let intent: Intent;
-      try {
-        intent = await ctx.brain.parseIntent(text);
-      } catch {
-        hub.send("voice", "earcon", { name: "error" });
-        speak(hub, session, MSG_BRAIN_FAILED, "error");
-        return;
-      }
-      await runIntent(ctx, intent);
-    }
+    if (command !== null) await runIntent(ctx, command);
+    else await handleDialogueFallback(ctx);
   } finally {
     session.busy = false;
     session.dialogue = session.pendingGatedAction !== null

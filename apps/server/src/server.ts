@@ -13,10 +13,12 @@ import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
 import { createClaudeProvider, type ClaudeProvider } from "./brain/claude/provider";
 import { RepairCoordinator, type RepairProvider } from "./brain/claude/repair-coordinator";
 import type { ClaudeSdkAdapter, ClaudeSessionOptions } from "./brain/claude/session";
-import { handleUtterance, sayRepeat, sayStop } from "./turn";
+import { handleDialogueFallback, handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
 import { createGatePort } from "./act/gate-port";
 import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
+import { createDialogueHandlers } from "./voice/dialogue-runner";
+import { createCoreDialogueGatePort } from "./voice/core-gate-port";
 
 function clearPendingThroughVoiceGate(
   ctx: GatedContext,
@@ -57,6 +59,8 @@ export type StartServerOptions = {
   handlers?: Handlers;
   /** Build server-integrated handlers after the Hub exists, with its live grant/executor context. */
   handlersFactory?: (context: GatedContext) => Handlers;
+  /** Install the Phase 3 voice reducer, wired to this server's refresher and grant-bound Executor. */
+  dialogueRunner?: boolean;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
   snapshotTimeoutMs?: number;
   /** Maximum model age for read_form and what's_required. Default 2000. */
@@ -283,15 +287,41 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     onAccepted: (snapshot) => repairCoordinator?.accept(snapshot),
   });
 
-  if (options.handlersFactory !== undefined) {
-    Object.assign(handlers, options.handlersFactory({
-      hub,
-      gatePort: createGatePort(hub, session.grants),
-      session,
+  const gatedContext: GatedContext = {
+    hub,
+    gatePort: createGatePort(hub, session.grants),
+    session,
+    refresher,
+    clock,
+    ...(schedule !== undefined ? { schedule } : {}),
+  };
+
+  if (options.dialogueRunner) {
+    Object.assign(handlers, createDialogueHandlers({
+      gate: createCoreDialogueGatePort(gatedContext),
       refresher,
-      clock,
-      ...(schedule !== undefined ? { schedule } : {}),
+      now: clock,
+      onTurnComplete: () => repairCoordinator?.schedulePending(),
+      parseIntent: async (_text, context) => {
+        await handleDialogueFallback({
+          message: context.message,
+          hub: context.hub,
+          session: context.session,
+          freshnessMs,
+          refresher,
+          brain,
+          ...(claudeProvider !== null ? { claudeProvider } : {}),
+          clock,
+          ...(schedule !== undefined ? { schedule } : {}),
+          ...(options.intentWatchdog !== undefined ? { intentWatchdog: options.intentWatchdog } : {}),
+          dialogueManaged: true,
+        });
+      },
     }));
+  }
+
+  if (options.handlersFactory !== undefined) {
+    Object.assign(handlers, options.handlersFactory(gatedContext));
   }
 
   await new Promise<void>((resolve, reject) => {

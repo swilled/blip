@@ -47,9 +47,11 @@ const USAGE = `usage: npm run demo -- [--brain=fake|claude] [--smoke]
   --smoke              exit after extension and voice readiness and print a pass marker
   --help               show this help
 
-The launcher uses .chrome-profile/demo for the extension and .chrome-profile/demo-voice
-for the voice window, keeping the extension focused on the survey tab. It never auto-loads
-the extension. It serves the synthetic survey on port ${DEMO_PAGES_PORT}.`;
+The launcher runs the Phase 3 dialogue reducer through core's grant-bound Executor.
+I2: npm run demo -- --brain=fake
+I3: npm run demo -- --brain=claude
+It uses .chrome-profile/demo for the extension and .chrome-profile/demo-voice for the voice
+window, never auto-loads the extension, and serves the synthetic survey on port ${DEMO_PAGES_PORT}.`;
 
 export function parseDemoArgs(args: string[]): DemoOptions {
   let brain: DemoBrain = "fake";
@@ -236,6 +238,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
       port: DEFAULT_PORT,
       dev: true,
       brain: options.brain,
+      dialogueRunner: true,
       repairCacheDirectory: DEMO_REPAIR_CACHE,
       staticRoots: [{ urlPrefix: "/voice", dir: voicePublic } satisfies StaticRoot],
       extraVoiceOrigins: configuredVoiceTarget === undefined ? [] : [configuredVoiceTarget.origin],
@@ -250,6 +253,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
     process.stdout.write(`Profile: ${profileDirectory}\n`);
     process.stdout.write(`Voice profile: ${voiceProfileDirectory}\n`);
     process.stdout.write(`Server: ws://127.0.0.1:${server.port}/ws (brain=${options.brain})\n`);
+    process.stdout.write("Voice flow: Phase 3 dialogue reducer + core grant-bound gate\n");
     process.stdout.write(`Local fixture: ${fixtureUrl}\n`);
     process.stdout.write(`Load unpacked once from: ${extensionDist}\n`);
     process.stdout.write(`Voice client: ${voiceTarget.url}\n`);

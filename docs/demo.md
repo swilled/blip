@@ -1,60 +1,56 @@
-# Local demo launcher
+# Local voice demo
 
-The core demo starts the fake brain, the loopback test-page host, and a browser in the repository-local `.chrome-profile/demo` profile. It opens the synthetic injection fixture at `http://127.0.0.1:<port>/injection.html`. The launcher never uses the browser's normal profile and never passes the removed `--load-extension` switch.
+The demo uses the Phase 3 dialogue reducer connected to core's refresher, one-use grant store, and gated Executor. The fake brain is the offline default; use Claude explicitly for I3. Both modes open the local synthetic survey and use repository-local browser profiles. No public URL or real form data is involved.
 
-## One-time unpacked extension setup
+## One-time extension setup
 
-The extension must be loaded once into this dedicated profile:
+The extension must be loaded once into the demo's dedicated browser profile:
 
-1. Run `npm run demo -- --brain=fake` and leave its dedicated browser window open. If the extension is not installed, the launcher prints `DEMO_SETUP_REQUIRED` and keeps waiting.
-2. In that window, open `chrome://extensions` (or `edge://extensions`) and turn on Developer mode.
+1. Run `npm run demo -- --brain=fake` and leave the dedicated browser window open. If the extension is not installed, the launcher prints `DEMO_SETUP_REQUIRED` and keeps waiting.
+2. In that window, open `chrome://extensions` or `edge://extensions` and turn on Developer mode.
 3. Choose **Load unpacked** and select this repository's `apps/extension/dist` directory.
-4. Confirm the launcher reports `DEMO_READY` after the app server observes the extension connection. The running command continues into the demo.
+4. Wait for `DEMO_READY`. The voice window opens after the extension connects.
 
-The command creates the dedicated profile automatically. Loading the extension in another browser profile does not satisfy readiness for this launcher. After rebuilding the extension, open the extensions page in the same dedicated profile and reload the unpacked extension.
+The launcher uses `.chrome-profile/demo` for the extension and `.chrome-profile/demo-voice` for the voice UI. It does not read or reuse the normal browser profile and does not close unrelated browser windows. After rebuilding the extension, reload it from the extensions page in the dedicated profile.
 
-## Run the local demo
+## I2: connected gate with the fake brain
 
-Start a persistent local rehearsal with the fake brain:
+Start the real extension, reducer, local survey and voice UI:
 
 ```powershell
 npm run demo -- --brain=fake
 ```
 
-Run the isolated smoke and exit after the real unpacked extension connects to the server:
+Use fictional values in the Community Survey. Ask Blip to fill the required name and email fields, then say **submit survey**. Wait for the read-back and confirmation prompt to finish, and say the exact phrase **submit survey**. The connected extension should submit once; the page reports that the local submit was observed and that no data was sent. The core Executor checks the read-back speech ID, cooldown, current page and one-use grant before dispatch.
+
+`--smoke` checks only server, extension, voice-window and selected-page readiness. It does not exercise speech or the gate.
+
+## I3: real Claude with the same connected gate
+
+Run the same local flow with the Claude brain:
 
 ```powershell
-npm run demo -- --brain=fake --smoke
+npm run demo -- --brain=claude
 ```
 
-The smoke succeeds only after both the server observes an extension connection and the dedicated profile contains that extension. A successful run prints:
+This starts the Claude Agent SDK provider and uses the reducer for deterministic fill and gated-submit turns. Utterances the reducer does not handle are routed to the selected brain. Model output cannot arm or redeem a gated action; confirmation still follows the reducer and core Executor path. The SDK must already be authenticated in the local environment. If initialization fails, the launcher exits with the provider error instead of silently switching to fake mode.
 
-```text
-BLIP_DEMO_SMOKE=PASS extension-connected=true profile=dedicated
-```
+Use the synthetic survey only. I3 evidence should include a successful Claude-routed turn and the connected-gate submit flow; `--smoke` is not that evidence.
 
-If the extension is absent, the launcher prints `DEMO_SETUP_REQUIRED`, exits with code 2, and does not print the success marker. If the dedicated extension is present but fails to connect, it prints `DEMO_EXTENSION_TIMEOUT`. Persistent mode prints `DEMO_READY` only after extension-connected readiness; press Ctrl+C to stop the owned browser and local servers.
+## Browser selection and optional voice URL
 
-## Browser selection
-
-The launcher uses the existing browser resolver: Chrome first, then Edge. Set `BLIP_BROWSER` to choose a specific compatible executable. For example, in PowerShell:
+The launcher uses Chrome first, then Edge. Set `BLIP_BROWSER` to choose an executable:
 
 ```powershell
 $env:BLIP_BROWSER = "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
 npm run demo -- --brain=fake
 ```
 
-Every launch uses `.chrome-profile/demo`; the launcher does not read or reuse the normal browser profile. It opens the local fixture first. Voice is opened only after extension readiness and only when an explicit local target is configured.
-
-## Optional voice client
-
-This checkout has no voice client (`apps/voice` is absent). Without `BLIP_VOICE_URL`, the launcher reports that voice is not configured and does not create a substitute UI. PROT-03 voice-window evidence remains pending.
-
-When the voice client is available, set `BLIP_VOICE_URL` to its HTTP URL on `127.0.0.1` or `localhost`, with an explicit port. The launcher allowlists only that URL's origin and opens that URL after the extension connects:
+The built-in voice client is served from this checkout. To connect a different local voice client, set `BLIP_VOICE_URL` to an HTTP URL on `127.0.0.1` or `localhost` with an explicit port:
 
 ```powershell
 $env:BLIP_VOICE_URL = "http://127.0.0.1:5173/"
 npm run demo -- --brain=fake
 ```
 
-Remote hosts, HTTPS, non-HTTP schemes, credentials, and URLs without an explicit port are rejected because the current server role allowlist accepts exact loopback HTTP origins only. `--brain=claude` is available explicitly, but the fake brain is the offline default.
+The launcher allowlists only that exact loopback origin. HTTPS, remote hosts, credentials, non-HTTP schemes and URLs without an explicit port are rejected.

@@ -1,6 +1,6 @@
 ---
 phase: 05-hostile-pages-real-web-and-freeze
-verified: 2026-10-17T22:12:21Z
+verified: 2026-10-17T22:35:35Z
 status: gaps_found
 score: 4/5 phase success criteria fully verified; release freeze pending review and mainline tag
 plans_executed: 11/11
@@ -12,7 +12,7 @@ gaps:
 
 **Phase goal:** Harden the core against seeded page prompt injection, carry a deterministic warning for text addressed to Blip, complete a self-hosted synthetic survey by voice, provide one-command startup, and freeze only after the full local demo gate passes.
 
-**Result:** Local Phase 5 acceptance passed for hostile-page refusal, GATE-07 speech, the first-party voice window, the voice Phase 2 reducer integrated through the core Gate/Executor, the self-hosted synthetic survey, the exact Claude repair-cache identity, the one-command fake fallback, and dedicated Edge startup. The reducer/GatePort branch `origin/voice/phase-2-dialogue-gateport` (`2f22bb5`) is integrated and verified on this branch. Teammate review, mainline promotion, and `demo-safe` tagging remain pending. Voice-owned DEMO-03 is deferred because this hackathon has no public-form URL; no arbitrary form was opened.
+**Result:** Local Phase 5 acceptance passed for hostile-page refusal, GATE-07 speech, the first-party voice window, the voice Phase 2 reducer integrated through the core Gate/Executor, the self-hosted synthetic survey, the exact Claude repair-cache identity, the one-command fake fallback, and dedicated Edge startup. `startServer({ dialogueRunner: true })` now installs that runner for both the documented fake-brain I2 and real-Claude I3 demo paths. The reducer/GatePort branch `origin/voice/phase-2-dialogue-gateport` (`2f22bb5`) is integrated and verified on this branch. Teammate review, mainline promotion, and `demo-safe` tagging remain pending. Voice-owned DEMO-03 is deferred because this hackathon has no public-form URL; no arbitrary form was opened.
 
 ## Success criteria
 
@@ -26,7 +26,7 @@ gaps:
 
 ## Local test evidence
 
-- `npm test -- --maxWorkers=1`: 113 files passed, 16 skipped; 1,189 tests passed, 26 skipped.
+- `npm test`: 114 files passed, 16 skipped; 1,192 tests passed, 26 skipped.
 - `npm run typecheck`: passed; `npm run ext:build` and `npm run build --workspace @blip/voice`: passed.
 - `npx vitest run apps/server/test/voice-gate-adapter.test.ts apps/server/test/gated-flow.test.ts apps/server/test/act-path.test.ts --maxWorkers=1`: 3 files and 32 tests passed. Covers core-owned tracked read-back, exact `submit survey`, one-use grant-bound dispatch, grant-specific clear, and cancel/stop/repeat/page-change invalidation.
 - `BLIP_E2E_BROWSER=1` with `BLIP_BROWSER` set to Edge, then `npx vitest run apps/extension/test/e2e/demo-form.e2e.test.ts --maxWorkers=1`: passed against the local synthetic form after the adapter change.
@@ -34,6 +34,8 @@ gaps:
 - Focused voice reducer/GatePort/protocol/server-flow tests and the direct WebSocket integration test cover tracked speech IDs, exact `submit survey`, one-use grant dispatch, stale IDs, replay, and invalidation on cancel, stop, repeat, and page change.
 - `BLIP_E2E_BROWSER=1 npx vitest run apps/extension/test/e2e/gated-flow.e2e.test.ts`: 2 passed using harness-owned isolated browser profiles. The reducer/core-gate test uses the production extension, asserts the tracked read-back ID, refuses bare `yes`, accepts exact `submit survey`, reports the page result, and records one submit.
 - `npm run demo -- --brain=fake --smoke`: passed with `BLIP_DEMO_SMOKE=PASS extension-connected=true voice-connected=true survey-page-selected=true profiles=isolated`.
+- `npm run demo -- --brain=claude`: real provider started with the dedicated Edge extension and voice UI connected. One synthetic voice question was routed through the reducer fallback and returned a tracked answer speech frame (one model-routed prompt; no retry). This checks the real-Claude launch and fallback, not a full spoken I3 rehearsal.
+- `apps/server/test/dialogue-runner-server.test.ts`: verifies the production `dialogueRunner` option installs the reducer, model gated-action suggestions do not start a parallel confirmation flow, and reducer-unmatched utterances reach the configured Claude provider adapter.
 - 05-11 bounded real-Claude prewarm: 3/8 dispatches, 2 repaired labels, both empty-tool roles accepted, exact identity cache reloaded without a new provider prompt. Elapsed 11,037 ms. Identity SHA-256: `ddecb18b6fa05cbe627dd0edafda2a38b8d231ec408bcb37ea0460848ba3c7d2`.
 
 ## Requirement status

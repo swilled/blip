@@ -6,6 +6,7 @@ import {
 } from "@blip/protocol";
 import { type HandlerContext, type Handlers, type Hub } from "../hub/hub";
 import type { Session } from "../session/session";
+import type { Refresher } from "../session/refresh";
 import type { DialogueEvent, DialogueState, Effect, SpeakEffect } from "@blip/dialogue";
 import type { GatePort } from "./gate-port";
 
@@ -14,6 +15,8 @@ type RunnerOptions = {
   now?: () => number;
   snapshotTimeoutMs?: number;
   actTimeoutMs?: number;
+  refresher?: Refresher;
+  onTurnComplete?: () => void;
   onActRequest?: (request: ActRequest) => void;
   parseIntent?: (text: string, ctx: HandlerContext) => Promise<void>;
 };
@@ -60,6 +63,16 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
   }
 
   async function refreshSnapshot(session: Session, reason: "user" | "post-act"): Promise<boolean> {
+    if (options.refresher !== undefined) {
+      const refreshed = await options.refresher.request(reason === "post-act" ? "refresh" : "user");
+      if (!refreshed.ok) {
+        lastSnapshotTabId = undefined;
+        return false;
+      }
+      lastSnapshotTabId = refreshed.snapshot.tabId;
+      return true;
+    }
+
     if (!session.extensionConnected) {
       lastSnapshotTabId = undefined;
       return false;
@@ -108,7 +121,9 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       }
       for (const effect of result.effects) await runEffect(effect, session, hub, context);
     } finally {
-      session.dialogue = dialogueStateName(state.mode);
+      session.dialogue = session.pendingGatedAction !== null
+        ? session.pendingGatedAction.grantId === undefined ? "reading-back" : "awaiting-confirm"
+        : currentForm(session) === null ? "no-page" : dialogueStateName(state.mode);
       session.focusFieldId = state.currentFieldId ?? undefined;
       session.busy = false;
       hub.pushState();
@@ -333,7 +348,11 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         if (context.session.model === null || context.session.stale) {
           await refreshSnapshot(context.session, "user");
         }
-        await dispatch({ type: "utterance", utterance }, context);
+        try {
+          await dispatch({ type: "utterance", utterance }, context);
+        } finally {
+          options.onTurnComplete?.();
+        }
       });
     },
     "speak.done"(context) {
@@ -368,6 +387,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
           await dispatch({ type: "form.changed" }, context, null);
         }
         await refreshSnapshot(context.session, "user");
+        options.onTurnComplete?.();
       });
     },
     ptt(context) {

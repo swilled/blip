@@ -8,8 +8,6 @@ import { resolveBrowser } from "../../../../scripts/browser.js";
 import { buildFrame, EXTENSION_ID, extensionOrigin, newId, parseFrame, type ActRequest, type FormModel, type Message, type Snapshot as SnapshotData, type StatePayload } from "@blip/protocol";
 import { WebSocket as VoiceWebSocket } from "ws";
 import type { RunningServer, StartServerOptions } from "../../../server/src/server.js";
-import { createCoreDialogueGatePort } from "../../../server/src/voice/core-gate-port.js";
-import { createDialogueHandlers } from "../../../server/src/voice/dialogue-runner.js";
 import { startTestPages, type TestPageReport, type TestPagesServer } from "../../../../tools/test-pages/serve.js";
 import { setLogSink } from "../../../server/src/log.js";
 
@@ -349,13 +347,7 @@ export async function openFixturePage(
       : {}),
     ...(options.fakeRequestActionId !== undefined ? { fakeRequestActionId: options.fakeRequestActionId } : {}),
     ...(options.fakeRequestActionPhrase !== undefined ? { fakeRequestActionPhrase: options.fakeRequestActionPhrase } : {}),
-    ...(options.dialogueRunner === true
-      ? {
-          handlersFactory: (context) => createDialogueHandlers({
-            gate: createCoreDialogueGatePort(context),
-          }),
-        }
-      : {}),
+    ...(options.dialogueRunner === true ? { dialogueRunner: true } : {}),
   });
   const pages = await startTestPages({ port: options.pagePort ?? 0, build: false });
   const browser = options.browserExecutable ?? resolveBrowser();

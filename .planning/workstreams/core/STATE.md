@@ -133,6 +133,7 @@ Recent decisions affecting current work:
 - [Phase 05]: The first-party core voice UI sends `confirm.redeem` with its active grant and completed read-back IDs; the server validates them and alone consumes the `ConsumedGrant` for GatePort dispatch.
 - [Phase 05]: Commit `bc6d2f0` adds an arm/clear/redeem adapter that keeps read-back, grant binding, and `ConsumedGrant` dispatch in core. The adapter ignores reducer title/digest as authority and publishes `confirm.armed` through the existing protocol.
 - [Phase 05]: Fetched `origin/voice/phase-2-dialogue-gateport` at `2f22bb5`, integrated the Phase 2 DialogueRunner/GatePort runtime, and verified the reducer-to-core path through the production extension on a local synthetic form.
+- [Phase 05]: `startServer({ dialogueRunner: true })` is the shared demo/E2E entry point; reducer-unmatched utterances use the configured brain, but model-requested gated actions cannot start a parallel confirmation flow.
 - [Phase 05]: GATE-07, PROT-03, local synthetic I3, and exact demo repair-cache identity have direct local evidence. Keep `demo-safe` untagged until the HO-8 integration branch receives teammate review and is merged to main.
 
 ### Pending Todos
@@ -158,6 +159,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T22:12:21Z
-Stopped at: Integrated the teammate's voice Phase 2 branch into `integration/ho8-voice-gate`; full tests, typecheck, builds, and isolated production-extension E2E pass. Teammate review and mainline merge/tag remain.
+Last session: 2026-10-17T22:35:35Z
+Stopped at: Wired the DialogueRunner into the core server/demo and documented fake-brain I2 and real-Claude I3 launch paths. Full tests, typecheck, synthetic real-Claude fallback, connected-gate Edge E2E, and isolated demo smoke pass. Teammate review and mainline merge/tag remain.
 Resume file: None
