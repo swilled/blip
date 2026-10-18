@@ -21,17 +21,11 @@ type KokoroSynthOptions = {
 
 async function loadBrowserModel(): Promise<KokoroModel> {
   const { KokoroTTS } = await import("kokoro-js");
-  let tts: InstanceType<typeof KokoroTTS>;
-  if ("gpu" in navigator) {
-    try {
-      tts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, { dtype: "fp32", device: "webgpu" });
-    } catch {
-      // Some drivers expose WebGPU but fail to compile the model. Use the portable WASM path.
-      tts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, { dtype: "q8", device: "wasm" });
-    }
-  } else {
-    tts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, { dtype: "q8", device: "wasm" });
-  }
+  // Always use the quantized WASM model. WebGPU fp32 loads without error on some integrated GPUs
+  // (seen on an AMD Radeon 780M in Edge) but produces unintelligible audio, which a blind user
+  // cannot detect or work around. WASM q8 sounds the same everywhere and is a 92 MB download
+  // instead of 326 MB.
+  const tts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, { dtype: "q8", device: "wasm" });
   return {
     async generate(text, options) {
       const raw = await tts.generate(text, options);
