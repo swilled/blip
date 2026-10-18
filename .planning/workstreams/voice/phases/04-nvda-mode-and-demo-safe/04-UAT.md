@@ -54,5 +54,7 @@ blocked: 0
 
 ## Gaps
 
-- Test the Faster/Slower voice shortcut on the Phase 4 page and record whether the launcher itself opens a visible voice window.
+- On the updated page, the user could not speak through the shortcut and reported no perceptible slowdown at the minimum rate. The demo was not starting the existing `startPttWire` hook/sidecar; it is now wired into the demo lifecycle. The minimum-rate report remains a live UAT issue until a spoken phrase is compared after restart.
+
+- Restart with PTT wired in, verify the voice shortcut reaches speech recognition, compare a phrase at the minimum rate, and record whether the launcher itself opens a visible voice window.
 

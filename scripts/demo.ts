@@ -9,6 +9,7 @@ import { parseAllowedOrigin } from "../apps/server/src/hub/guard.js";
 import { startServer, type RunningServer } from "../apps/server/src/server.js";
 import type { StaticRoot } from "../apps/server/src/hub/static.js";
 import { startTestPages, type TestPagesServer } from "../tools/test-pages/serve.js";
+import { startPttWire } from "../dev/mock-server/src/ptt-wire.js";
 import { resolveBrowser } from "./browser.js";
 import { build as buildVoiceClient } from "vite";
 
@@ -235,11 +236,13 @@ async function runDemo(options: DemoOptions): Promise<number> {
   const children: ChildProcess[] = [];
   let server: RunningServer | undefined;
   let pages: TestPagesServer | undefined;
+  let stopPtt: (() => Promise<void>) | undefined;
   let closing = false;
 
   const cleanup = async (): Promise<void> => {
     if (closing) return;
     closing = true;
+    await stopPtt?.();
     for (const child of children.reverse()) await stopChild(child);
     await pages?.close();
     await server?.close();
@@ -258,6 +261,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
       staticRoots: [demoVoiceStaticRoot()],
       extraVoiceOrigins: configuredVoiceTarget === undefined ? [] : [configuredVoiceTarget.origin],
     });
+    stopPtt = await startPttWire(server.port);
     pages = await startTestPages({ port: DEMO_PAGES_PORT, build: true });
     const fixtureUrl = `${pages.origins.primary}/demo-form.html`;
     const voiceTarget = configuredVoiceTarget ?? {
