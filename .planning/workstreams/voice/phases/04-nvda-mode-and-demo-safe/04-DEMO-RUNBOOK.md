@@ -63,6 +63,7 @@ Start each run from a fresh response page or a cleared form. For each beat, wait
 
 | Check | Required evidence | Status / result |
 | --- | --- | --- |
+| Automated local preparation | `npm.cmd test -- dev/mock-server/src/run-real.test.ts dev/mock-server/src/demo-runbook.test.ts`; `npm.cmd run typecheck` | PASS — final combined run: 2 files, 7 tests; root typecheck passed |
 | Demo startup | `npm.cmd run demo`, machine, date, ready outcome | PENDING — not run for this preparation |
 | Live form target and reset | Confirm the URL above and fresh-page/clear behavior | PENDING — no Phase 4 page visit |
 | Negative validation attempt | Missing required field, each observed field-labeled error, remaining missing fields, and no success claim | PENDING |
@@ -80,3 +81,12 @@ Start each run from a fresh response page or a cleared form. For each beat, wait
 | Freeze review / `demo-safe` tag | Human acceptance of all required live and fallback evidence, then accepted freeze commit | PENDING — no tag created |
 
 Record only what the human directly observes. Leave failed, unavailable, or unperformed items pending or record the actual failure and fallback; do not fill fields from automated mock results. VOX-08 stays human-needed until its real audible completion/cancellation and `speakId` check passes. DEMO-03 and freeze remain pending until the live and physical acceptance criteria are reviewed.
+
+## Task 3 preparation record
+
+The prepared start path is `npm.cmd run demo`; the local synthetic reset path is `npm.cmd run reset -w @blip/mock-server`. The offline public form is served from `/fixtures/forms/offline/public-form.html`; the existing broken survey and core-owned injection route remain available at `/fixtures/forms/broken.html` and `/injection.html` on their local hosts. The automated local checks below cover route serving and runbook contents only. No demo window was launched, reset script invoked, live form visited or submitted, or physical rehearsal result inferred during this preparation.
+
+| Automated check | Result |
+| --- | --- |
+| `npm.cmd test -- dev/mock-server/src/run-real.test.ts dev/mock-server/src/demo-runbook.test.ts` | PASS — 2 files, 7 tests |
+| `npm.cmd run typecheck` | PASS — root TypeScript check |
