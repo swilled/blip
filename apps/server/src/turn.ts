@@ -512,6 +512,23 @@ async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, sour
     if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
     return speak(ctx.hub, ctx.session, "Switched to the selected browser tab.", "answer");
   }
+  if (command.type === "scroll-to-content") {
+    const capture = await executor.execute({ op: "capture" });
+    if (!capture.ok || !capture.payload.ok || capture.payload.operation !== "capture") return speakBrowserFailure(ctx, capture);
+    const selected = capture.payload.result.blocks.filter((block) =>
+      block.kind === command.kind && block.text.toLocaleLowerCase().includes(command.target.toLocaleLowerCase()),
+    );
+    if (selected.length === 0) return speak(ctx.hub, ctx.session, "I couldn't find that visible page text.", "answer");
+    if (selected.length > 1) return speak(ctx.hub, ctx.session, "More than one page text block matches. Please be more specific.", "answer");
+    const result = await executor.execute({
+      op: "scroll",
+      identity: capture.payload.result,
+      contentId: selected[0]!.contentId,
+      kind: selected[0]!.kind,
+    });
+    if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
+    return speakBrowserResult(ctx, result.payload, command);
+  }
   if (command.type === "scroll" || command.type === "find") {
     const capture = await executor.execute({ op: "capture" });
     if (!capture.ok || !capture.payload.ok || capture.payload.operation !== "capture") return speakBrowserFailure(ctx, capture);

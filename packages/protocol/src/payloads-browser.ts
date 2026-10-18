@@ -174,9 +174,19 @@ export const BrowserOperation = z.discriminatedUnion("op", [
   }),
   z.object({
     op: z.literal("scroll"),
-    direction: z.enum(["up", "down"]),
-    pixels: z.number().int().min(1).max(2000),
+    direction: z.enum(["up", "down"]).optional(),
+    pixels: z.number().int().min(1).max(2000).optional(),
+    contentId: BrowserId.optional(),
+    kind: z.enum(["heading", "paragraph"]).optional(),
     identity: BrowserPageIdentity,
+  }).superRefine((value, ctx) => {
+    const directionScroll = value.direction !== undefined && value.pixels !== undefined &&
+      value.contentId === undefined && value.kind === undefined;
+    const contentScroll = value.direction === undefined && value.pixels === undefined &&
+      value.contentId !== undefined && value.kind !== undefined;
+    if (!directionScroll && !contentScroll) {
+      ctx.addIssue({ code: "custom", message: "scroll requires either direction and pixels or a content ID and kind" });
+    }
   }),
   z.object({ op: z.literal("find"), query: NonEmptyQuery, identity: BrowserPageIdentity }),
 ]);
@@ -189,7 +199,7 @@ export const BrowserRequestPayload = z.object({
   operation: BrowserOperation,
 }).superRefine((request, ctx) => {
   const operation = request.operation;
-  if ((operation.op === "read-content" || operation.op === "open-link") &&
+  if ((operation.op === "read-content" || operation.op === "open-link" || operation.op === "scroll" || operation.op === "find") &&
       request.tabId !== undefined && request.tabId !== operation.identity.tabId) {
     ctx.addIssue({ code: "custom", path: ["tabId"], message: "must match the captured page identity" });
   }

@@ -16,6 +16,7 @@ export type BrowserContentRequest =
   | { t: "browser-content"; operation: "read-content"; identity: BrowserPageIdentity; contentId: string; kind: "heading" | "paragraph" }
   | { t: "browser-content"; operation: "open-link"; identity: BrowserPageIdentity; linkId: string; authorizationId: string }
   | { t: "browser-content"; operation: "scroll"; identity: BrowserPageIdentity; direction: "up" | "down"; pixels: number }
+  | { t: "browser-content"; operation: "scroll"; identity: BrowserPageIdentity; contentId: string; kind: "heading" | "paragraph" }
   | { t: "browser-content"; operation: "find"; identity: BrowserPageIdentity; query: string };
 
 export type BrowserContentResponse =

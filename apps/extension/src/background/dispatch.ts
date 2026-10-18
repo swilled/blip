@@ -6,6 +6,7 @@ import {
   type FrameCaptureAdapter,
 } from "./frames.js";
 import { findTargetTab } from "./tabs.js";
+import type { BrowserContentRequest } from "../shared/messages.js";
 
 type SnapshotRequest = Extract<Message, { type: "snapshot.request" }>;
 type SnapshotSocket = Pick<WebSocket, "readyState" | "send">;
@@ -31,6 +32,11 @@ function browserApi(): BrowserApi {
   const api = (globalThis as typeof globalThis & { chrome?: BrowserApi }).chrome;
   if (!api) throw new Error("extension browser APIs are unavailable");
   return api;
+}
+
+/** Route content-only browser reads to the top frame; child-frame data is never aggregated here. */
+export function sendBrowserContentRequest(tabId: number, request: BrowserContentRequest): Promise<unknown> {
+  return browserApi().tabs.sendMessage(tabId, request, { frameId: 0 });
 }
 
 function visibleFrameElements(): VisibleFrameElement[] {

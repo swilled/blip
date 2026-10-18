@@ -4,9 +4,12 @@ import {
   BrowserPageUrl,
   BrowserRequestPayload,
   BrowserResultPayload,
+  newId,
   type BrowserOperation,
   type BrowserResultPayload as BrowserResult,
 } from "@blip/protocol";
+import type { BrowserContentRequest, BrowserContentResponse } from "../shared/messages.js";
+import { sendBrowserContentRequest } from "./dispatch.js";
 import {
   findBrowserTargetTab,
   isBrowserTargetTab,
@@ -37,6 +40,7 @@ export type BrowserRequestDependencies = {
   api?: BrowserApi;
   findCurrentTargetTab?: () => Promise<BrowserTargetTab | undefined>;
   rememberTargetTab?: (tab: TabRecord) => boolean;
+  sendContentMessage?: (tabId: number, request: BrowserContentRequest) => Promise<unknown>;
   now?: () => number;
 };
 
@@ -50,6 +54,8 @@ type FailureOperation = Extract<BrowserResult, { ok: false }> extends infer Fail
 const AUTHORIZATION_TTL_MS = 30_000;
 const MAX_TRACKED_AUTHORIZATIONS = 2048;
 const BROWSER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
+const CONTENT_RESPONSE_TIMEOUT_MS = 2_000;
+type ContentSendOutcome = { ok: true; response: unknown } | { ok: false; code: "timeout" | "unsupported-frame" };
 
 function objectRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null ? value as Record<string, unknown> : undefined;
@@ -87,6 +93,47 @@ function success(requestId: string, operation: BrowserOperation["op"], result: u
 
 function apiFor(dependencies: BrowserRequestDependencies): BrowserApi | undefined {
   return dependencies.api ?? (globalThis as typeof globalThis & { chrome?: BrowserApi }).chrome;
+}
+
+function sameIdentity(left: BrowserPageIdentityLike, right: BrowserPageIdentityLike): boolean {
+  return left.captureId === right.captureId && left.captureRevision === right.captureRevision &&
+    left.tabId === right.tabId && left.pageUrl === right.pageUrl;
+}
+
+type BrowserPageIdentityLike = { captureId: string; captureRevision: number; tabId: number; pageUrl: string };
+
+function contentErrorCode(code: string): FailureCode {
+  const known: readonly FailureCode[] = [
+    "unsupported-page", "restricted-page", "stale-page", "stale-capture", "not-found", "ambiguous",
+    "unauthorized", "invalid-target", "unsupported-destination-check", "invalid-request", "unsupported-frame",
+    "timeout", "unavailable", "exception",
+  ];
+  return known.includes(code as FailureCode) ? code as FailureCode : "exception";
+}
+
+function contentFailure(requestId: string, operation: FailureOperation, response: BrowserContentResponse): BrowserResult | null {
+  if (response.t !== "browser-content.error") return null;
+  return failure(requestId, operation, contentErrorCode(response.code), response.message);
+}
+
+async function sendContent(
+  dependencies: BrowserRequestDependencies,
+  tabId: number,
+  request: BrowserContentRequest,
+): Promise<ContentSendOutcome> {
+  const send = dependencies.sendContentMessage ?? sendBrowserContentRequest;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const response = await Promise.race([
+      send(tabId, request),
+      new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), CONTENT_RESPONSE_TIMEOUT_MS); }),
+    ]);
+    return response === null ? { ok: false, code: "timeout" } : { ok: true, response };
+  } catch {
+    return { ok: false, code: "unsupported-frame" };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 function titleText(tab: TabRecord): string {
@@ -165,7 +212,16 @@ function authorizationId(operation: BrowserOperation): string | undefined {
 /** Create an injectable dispatcher so API behavior and stale state can be tested without Chrome. */
 export function createBrowserRequestDispatcher(dependencies: BrowserRequestDependencies = {}) {
   const usedAuthorizations = new Map<string, number>();
+  const captureRevisionByTab = new Map<number, number>();
   const now = dependencies.now ?? Date.now;
+
+  function nextIdentity(tab: BrowserTargetTab): BrowserPageIdentityLike | undefined {
+    const pageUrl = currentTabUrl(tab);
+    if (pageUrl === undefined) return undefined;
+    const revision = (captureRevisionByTab.get(tab.id) ?? 0) + 1;
+    captureRevisionByTab.set(tab.id, revision);
+    return { captureId: newId(), captureRevision: revision, tabId: tab.id, pageUrl };
+  }
 
   function consumeAuthorization(id: string): boolean {
     const currentTime = now();
@@ -243,6 +299,64 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
         title: titleText(current),
         status: isSupportedTargetTab(current) ? "supported" : "restricted",
       });
+    }
+
+    if (operation.op === "capture" || operation.op === "list-links") {
+      const current = await liveCurrentTab(api, dependencies, tabId);
+      if (!current) return failure(requestId, operation.op, tabId === undefined ? "unsupported-page" : "stale-page", "The current browser page changed before content capture.");
+      const identity = nextIdentity(current);
+      if (!identity) return failure(requestId, operation.op, "restricted-page", "This browser page cannot be read as web content.");
+      const request: BrowserContentRequest = { t: "browser-content", operation: operation.op, identity };
+      const sent = await sendContent(dependencies, current.id, request);
+      if (!sent.ok) return failure(requestId, operation.op, sent.code, sent.code === "timeout"
+        ? "Page content capture did not return before its time limit."
+        : "The top-level content frame is unavailable.");
+      const typed = sent.response as BrowserContentResponse;
+      const failed = contentFailure(requestId, operation.op, typed);
+      if (failed) return failed;
+      if (typed.t !== "browser-content.result" || typed.operation !== operation.op || !sameIdentity(identity, typed.result)) {
+        return failure(requestId, operation.op, "stale-capture", "The content capture did not match the current page.");
+      }
+      const rechecked = await liveCurrentTab(api, dependencies, current.id, identity.pageUrl);
+      if (!rechecked) return failure(requestId, operation.op, "stale-page", "The browser page changed while content was being captured.");
+      if (typed.result.status === "timeout") return failure(requestId, operation.op, "timeout", "Page content capture exceeded its time limit.");
+      if (typed.result.status === "capture-failed") return failure(requestId, operation.op, "exception", "Page content capture failed.");
+      return success(requestId, operation.op, typed.result);
+    }
+
+    if (operation.op === "read-content" || operation.op === "scroll" || operation.op === "find") {
+      const identity = operation.identity;
+      const current = await liveCurrentTab(api, dependencies, identity.tabId, identity.pageUrl);
+      if (!current) return failure(requestId, operation.op, "stale-page", "The current browser page no longer matches this content request.");
+      let request: BrowserContentRequest;
+      if (operation.op === "read-content") {
+        request = { t: "browser-content", operation: operation.op, identity, contentId: operation.contentId, kind: operation.kind };
+      } else if (operation.op === "find") {
+        request = { t: "browser-content", operation: operation.op, identity, query: operation.query };
+      } else if (operation.contentId !== undefined && operation.kind !== undefined) {
+        request = { t: "browser-content", operation: operation.op, identity, contentId: operation.contentId, kind: operation.kind };
+      } else if (operation.direction !== undefined && operation.pixels !== undefined) {
+        request = { t: "browser-content", operation: operation.op, identity, direction: operation.direction, pixels: operation.pixels };
+      } else {
+        return failure(requestId, operation.op, "invalid-request", "The page scroll target is incomplete.");
+      }
+      const sent = await sendContent(dependencies, current.id, request);
+      if (!sent.ok) return failure(requestId, operation.op, sent.code, sent.code === "timeout"
+        ? "The page content request did not return before its time limit."
+        : "The top-level content frame is unavailable.");
+      const typed = sent.response as BrowserContentResponse;
+      const failed = contentFailure(requestId, operation.op, typed);
+      if (failed) return failed;
+      if (typed.t !== "browser-content.result" || typed.operation !== operation.op) {
+        return failure(requestId, operation.op, "stale-capture", "The content request returned a stale page result.");
+      }
+      const returnedIdentity = typed.operation === "read-content" ? typed.result : typed.result.identity;
+      if (!sameIdentity(identity, returnedIdentity)) {
+        return failure(requestId, operation.op, "stale-capture", "The content request returned a stale page result.");
+      }
+      const rechecked = await liveCurrentTab(api, dependencies, identity.tabId, identity.pageUrl);
+      if (!rechecked) return failure(requestId, operation.op, "stale-page", "The browser page changed before the result was accepted.");
+      return success(requestId, operation.op, typed.result);
     }
 
     if (operation.op === "navigate") {
@@ -326,10 +440,43 @@ export function createBrowserRequestDispatcher(dependencies: BrowserRequestDepen
       if (!current || current.id !== operation.identity.tabId || current.url !== operation.identity.pageUrl) {
         return failure(requestId, "open-link", "stale-page", "The selected link no longer belongs to the current page.");
       }
-      return failure(requestId, "open-link", "unavailable", "The extension has no current visible-link capture to open.");
+      if (!api.tabs?.update) return failure(requestId, "open-link", "unavailable", "Browser link navigation is unavailable.");
+      const request: BrowserContentRequest = {
+        t: "browser-content",
+        operation: "open-link",
+        identity: operation.identity,
+        linkId: operation.linkId,
+        authorizationId: operation.authorizationId,
+      };
+      const sent = await sendContent(dependencies, current.id, request);
+      if (!sent.ok) return failure(requestId, "open-link", sent.code, sent.code === "timeout"
+        ? "The selected link did not return before its time limit."
+        : "The top-level content frame is unavailable.");
+      const typed = sent.response as BrowserContentResponse;
+      const failed = contentFailure(requestId, "open-link", typed);
+      if (failed) return failed;
+      if (typed.t !== "browser-content.result" || typed.operation !== "open-link" ||
+          typed.result.frameId !== 0 || !sameIdentity(operation.identity, typed.result.identity)) {
+        return failure(requestId, "open-link", "stale-capture", "The selected link no longer matches the current capture.");
+      }
+      const destination = BrowserDestinationUrl.safeParse(typed.result.href);
+      if (!destination.success || new URL(destination.data).origin !== new URL(operation.identity.pageUrl).origin) {
+        return failure(requestId, "open-link", "unsupported-destination-check", "The current link policy does not permit this destination.");
+      }
+      const rechecked = await liveCurrentTab(api, dependencies, current.id, operation.identity.pageUrl);
+      if (!rechecked) return failure(requestId, "open-link", "stale-page", "The page changed before the selected link could open.");
+      try {
+        const updated = await api.tabs.update(current.id, { url: destination.data });
+        if (updated.id !== current.id) return failure(requestId, "open-link", "stale-page", "The target tab changed during link navigation.");
+        (dependencies.rememberTargetTab ?? rememberTargetTab)({ ...updated, id: current.id, url: destination.data });
+        snapshotVersions.forget(current.id);
+        return success(requestId, "open-link", { tabId: current.id, status: "dispatched" });
+      } catch {
+        return failure(requestId, "open-link", "exception", "The browser rejected the selected link.");
+      }
     }
 
-    return failure(requestId, operation.op, "unavailable", "This browser operation is not available in the extension yet.");
+    return failure(requestId, "unknown", "unavailable", "This browser operation is not available in the extension yet.");
   }
 
   return async (input: unknown): Promise<BrowserResult> => {

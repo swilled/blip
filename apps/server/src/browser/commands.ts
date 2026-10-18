@@ -28,6 +28,7 @@ export type BrowserCommand =
   | { type: "history"; direction: "back" | "forward" }
   | { type: "reload" }
   | { type: "scroll"; direction: "up" | "down"; pixels: number }
+  | { type: "scroll-to-content"; kind: "heading" | "paragraph"; target: string }
   | { type: "find"; query: string }
   | { type: "summary"; identity?: BrowserPageIdentity }
   | { type: "question"; query: string; identity?: BrowserPageIdentity }
@@ -209,6 +210,14 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
     const pixels = scroll[2] === undefined ? 600 : Number(scroll[2]);
     if (!Number.isSafeInteger(pixels) || pixels < 1 || pixels > 2000) return clarify("Say a scroll amount from 1 to 2000 pixels.");
     return { type: "scroll", direction: scroll[1]!.toLocaleLowerCase() as "up" | "down", pixels };
+  }
+
+  const scrollTarget = /^scroll\s+to\s+(?:the\s+)?(heading|paragraph)\s+(?:about|named|containing)\s+([\s\S]+)$/iu.exec(input);
+  if (scrollTarget !== null) {
+    const target = exactTail(input, input.length - scrollTarget[2]!.length);
+    return target === null
+      ? clarify("Say which heading or paragraph you want to bring into view.")
+      : { type: "scroll-to-content", kind: scrollTarget[1]!.toLocaleLowerCase() as "heading" | "paragraph", target };
   }
 
   const find = /^(?:find|look for)\s+([\s\S]+)$/iu.exec(input);

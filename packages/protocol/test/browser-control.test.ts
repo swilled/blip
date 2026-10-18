@@ -46,6 +46,7 @@ const validOperations: BrowserOperationType[] = [
   { op: "read-content", kind: "heading", contentId: "content-1", identity },
   { op: "open-link", linkId: "link-1", identity, authorizationId: "auth-3" },
   { op: "scroll", direction: "down", pixels: 500, identity },
+  { op: "scroll", contentId: "content-1", kind: "paragraph", identity },
   { op: "find", query: "newsletter", identity },
 ];
 
@@ -105,6 +106,13 @@ describe("BrowserOperation", () => {
       tabId: 8,
       operation: { op: "read-content", kind: "heading", contentId: "content-1", identity },
     }).success).toBe(false);
+    expect(BrowserRequestPayload.safeParse({
+      requestId: "request-1",
+      tabId: 8,
+      operation: { op: "scroll", contentId: "content-1", kind: "paragraph", identity },
+    }).success).toBe(false);
+    expect(BrowserOperation.safeParse({ op: "scroll", identity, direction: "down" }).success).toBe(false);
+    expect(BrowserOperation.safeParse({ op: "scroll", identity, contentId: "content-1" }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "scroll", direction: "down", pixels: 0 }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "tabs", action: "switch" }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "tabs", action: "open-blank", targetTabId: 8 }).success).toBe(false);

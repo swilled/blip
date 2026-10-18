@@ -333,6 +333,23 @@ function openLink(document: Document, request: Extract<BrowserContentRequest, { 
 function scroll(document: Document, request: Extract<BrowserContentRequest, { operation: "scroll" }>, frameId: number): BrowserContentResponse {
   const state = currentState(document, request.identity, frameId);
   if (!state) return failure(request, "stale-capture", "That page content capture is no longer current.");
+  if ("contentId" in request) {
+    const entry = state.blocks.get(request.contentId);
+    if (!entry || entry.kind !== request.kind || !entry.element.isConnected || excluded(entry.element) || !isVisible(entry.element)) {
+      return failure(request, "not-found", "That visible content target is no longer available.");
+    }
+    try {
+      const beforeTop = entry.element.getBoundingClientRect().top;
+      entry.element.scrollIntoView({ behavior: "auto", block: "center" });
+      return {
+        t: "browser-content.result",
+        operation: "scroll",
+        result: { identity: state.identity, moved: entry.element.getBoundingClientRect().top !== beforeTop },
+      };
+    } catch {
+      return failure(request, "exception", "The selected content target could not be scrolled into view.");
+    }
+  }
   const view = document.defaultView;
   if (!view) return failure(request, "exception", "The current page cannot be scrolled.");
   const before = view.scrollY;
