@@ -17,3 +17,5 @@ fixtures/demo/profile.json
 .demo-pid
 .demo-ready
 .local-stt/
+.claude/
+*.bundle
