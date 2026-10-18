@@ -37,6 +37,7 @@ gaps:
 - `npm test` after the follow-up changes: 114 files passed, 16 skipped; 1,194 tests passed, 27 skipped.
 - Latest `npm test` after the repair diagnostic/cache-refresh changes: 114 files passed, 16 skipped; 1,196 tests passed, 27 skipped.
 - `npm run typecheck`: passed; `npm run ext:build` and `npm run build --workspace @blip/voice`: passed.
+- `npm run ext:smoke` (2026-10-18): passed in a fresh isolated Edge profile and observed the pinned production extension connect to the loopback server. This is extension/server-only evidence; the full `npm run demo -- --brain=fake --smoke` remains inconclusive because its dedicated installed profile was already in use.
 - `npx vitest run apps/server/test/voice-gate-adapter.test.ts apps/server/test/gated-flow.test.ts apps/server/test/act-path.test.ts --maxWorkers=1`: 3 files and 32 tests passed. Covers core-owned tracked read-back, exact `submit survey`, one-use grant-bound dispatch, grant-specific clear, and cancel/stop/repeat/page-change invalidation.
 - `BLIP_E2E_BROWSER=1` with `BLIP_BROWSER` set to Edge, then `npx vitest run apps/extension/test/e2e/demo-form.e2e.test.ts --maxWorkers=1`: passed against the local synthetic form after the adapter change.
 - Opt-in Edge suite `npx vitest run apps/extension/test/e2e --maxWorkers=1`: 15 files passed, 2 separately gated tests skipped; 25 tests passed, 2 skipped. The suite used only harness-owned browser profiles.

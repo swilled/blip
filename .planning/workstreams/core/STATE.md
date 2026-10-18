@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: AGY hostile-page, full I3, launcher-cache, fake browser E2E, full test, and build acceptance pass on integration/ho8-voice-gate. Written M0 protocol sign-off, teammate review, and mainline promotion remain before demo-safe tagging. Public-form DEMO-03 is deferred because this hackathon has no URL.
 stopped_at: Reconciled Phase 5 after AGY hostile check 05-13, full I3 05-26, launcher-cache refresh 05-27 and fresh reload 05-29, plus current full tests. See RELEASE-CHECKLIST.md.
-last_updated: "2026-10-18T01:47:01Z"
+last_updated: "2026-10-18T01:51:43Z"
 progress:
   total_phases: 5
   completed_phases: 3
@@ -163,6 +163,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T01:47:01Z
-Stopped at: Reconciled Phase 5 AGY evidence and reran the full test suite, typecheck, extension/voice builds, and fake-browser E2Es. Commit 25015c7 is pushed to the integration branch for teammate review. Hostile refusal, full I3, launcher cache, and technical acceptance pass. Written M0 sign-off, teammate review, mainline promotion, and tagging remain.
+Last session: 2026-10-18T01:51:43Z
+Stopped at: Reconciled Phase 5 AGY evidence and reran the full test suite, typecheck, extension/voice builds, fake-browser E2Es, and isolated extension/server smoke. Commits 25015c7 and c6dacf7 are pushed to the integration branch for teammate review. Hostile refusal, full I3, launcher cache, and technical acceptance pass. Written M0 sign-off, teammate review, mainline promotion, tagging, and a fresh full launcher smoke remain.
 Resume file: None

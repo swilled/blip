@@ -1,11 +1,11 @@
 # Core Release Checklist
 
-**Updated:** 2026-10-18 01:47 UTC
+**Updated:** 2026-10-18 01:51 UTC
 **Branch:** `integration/ho8-voice-gate`
 **Branch tip at reconciliation start:** `ac4fb1c`
 **Release state:** Technical Phase 5 acceptance is ready for human review. Do not tag or merge until the remaining written sign-off and teammate review gates are complete.
 
-This checklist records the current evidence and separates it from the remaining human/repository gates. The checks used only loopback fixtures, fictional values, isolated browser profiles, and temporary caches. No credentials or auth state were inspected. Commit `25015c7` is pushed to `origin/integration/ho8-voice-gate` for teammate review. It has not been merged or tagged.
+This checklist records the current evidence and separates it from the remaining human/repository gates. The checks used only loopback fixtures, fictional values, isolated browser profiles, and temporary caches. No credentials or auth state were inspected. Commits `25015c7` and `c6dacf7` are pushed to `origin/integration/ho8-voice-gate` for teammate review. The branch has not been merged or tagged.
 
 ## Core acceptance
 
@@ -22,6 +22,7 @@ This checklist records the current evidence and separates it from the remaining 
 - [x] `npm run typecheck`.
 - [x] `npm run ext:build`.
 - [x] `npm run build --workspace @blip/voice`.
+- [x] `npm run ext:smoke` — fresh isolated Edge profile connected the production extension to the local server. This verifies the extension/server handshake and does not replace the outstanding full demo-launcher smoke.
 - [x] Focused repair diagnostics and cache-refresh tests - 8 passed; 2 browser-gated tests skipped in the non-live run.
 - [x] Offline I3 preflight for 05-29 - passed with the fake brain, zero provider prompts, and an isolated empty cache.
 - [x] Bounded live AGY checks 05-13 (hostile refusal), 05-26 (full I3), and 05-29 (launcher-cache reload) passed.
