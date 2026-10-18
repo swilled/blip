@@ -37,5 +37,14 @@ Next action: Obtain the exact caption plus current capture duration/level and se
 
 Root cause: Not yet established for the user's physical microphone.
 Status: Implementation and synthetic regression checks pass; actual user accuracy remains unverified. Do not mark this debug session resolved or Phase 4 complete from synthetic tests.
-Current runtime: b6de2d3-2026-10-18T05:58:58.810Z, tool session 32329. Demo reported local small.en, global hold ready, extension and voice connected, DEMO_READY. Selectable output voices are restricted to local English voices; the final voice-selection regression passed five tests. Current physical microphone evidence remains pending.
+Last known runtime before this follow-up: b6de2d3-2026-10-18T05:58:58.810Z, tool session 32329. Demo reported local small.en, global hold ready, extension and voice connected, DEMO_READY. Selectable output voices are restricted to local English voices; the final voice-selection regression passed five tests. Current physical microphone evidence remains pending.
 Research: ../workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-ACCURACY-RESEARCH.md
+
+## Latest implementation follow-up — 2026-10-18
+
+- The current rebuilt voice page now offers a five-second local recognition check. It transcribes through the local loopback Whisper endpoint and displays the words without sending an utterance to the dialogue runner or action gate.
+- The live level meter now reports a 200 ms aggregate instead of one render block. Capture summaries include the effective channel count, source/context sample rates, echo cancellation, noise suppression, and automatic gain control from `MediaStreamTrack.getSettings()`; no device ID, raw audio, or transcript is written to diagnostics.
+- AudioWorklet now mixes every input channel to mono rather than taking only `inputs[0][0]`. This fixes a code-level loss risk, but there is no evidence yet that the user's selected microphone returns multiple channels.
+- Echo cancellation, noise suppression, and automatic gain are now independent controls. Automatic gain starts enabled; a real capture can compare each setting. Final captions remain visible for eight seconds.
+- The repository still contains an older public voice client that uses Chrome `SpeechRecognition`. The current built page identifies local Whisper in its microphone panel. Confirm the current page/build before attributing behavior to Chrome's recognition service.
+- Root cause remains unconfirmed. TypeScript typecheck and the production voice build pass. No physical microphone capture has been supplied or performed, so do not mark recognition accuracy resolved based on these changes or synthetic coverage.

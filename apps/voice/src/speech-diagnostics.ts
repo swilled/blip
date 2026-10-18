@@ -11,6 +11,12 @@ export interface DiagnosticEvent {
   durationSeconds?: number;
   rms?: number;
   peak?: number;
+  inputChannels?: number;
+  inputSampleRate?: number;
+  captureSampleRate?: number;
+  echoCancellation?: boolean | string;
+  noiseSuppression?: boolean;
+  autoGainControl?: boolean;
 }
 const errorCodes = new Set(["no-speech", "aborted", "audio-capture", "network", "not-allowed", "service-not-allowed", "language-not-supported", "interrupted", "canceled", "synthesis-failed", "audio-busy"]);
 export function createSpeechDiagnostics(now = () => performance.now()) {
@@ -32,6 +38,13 @@ export function createSpeechDiagnostics(now = () => performance.now()) {
       if (Number.isFinite(input.durationSeconds)) row.durationSeconds = Math.max(0, Math.min(10, input.durationSeconds!));
       if (Number.isFinite(input.rms)) row.rms = Math.max(0, Math.min(1, input.rms!));
       if (Number.isFinite(input.peak)) row.peak = Math.max(0, Math.min(1, input.peak!));
+      if (Number.isFinite(input.inputChannels)) row.inputChannels = Math.max(1, Math.min(8, Math.round(input.inputChannels!)));
+      if (Number.isFinite(input.inputSampleRate)) row.inputSampleRate = Math.max(8000, Math.min(384000, Math.round(input.inputSampleRate!)));
+      if (Number.isFinite(input.captureSampleRate)) row.captureSampleRate = Math.max(8000, Math.min(384000, Math.round(input.captureSampleRate!)));
+      if (typeof input.echoCancellation === "boolean") row.echoCancellation = input.echoCancellation;
+      else if (input.echoCancellation === "all" || input.echoCancellation === "remote-only") row.echoCancellation = input.echoCancellation;
+      if (typeof input.noiseSuppression === "boolean") row.noiseSuppression = input.noiseSuppression;
+      if (typeof input.autoGainControl === "boolean") row.autoGainControl = input.autoGainControl;
       rows.push(row);
       if (rows.length > 100) rows.shift();
     },

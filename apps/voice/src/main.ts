@@ -13,7 +13,7 @@ import { createSocket, type VoiceSocket } from "./socket";
 import { createSpeakBridge } from "./speak-bridge";
 import { createSpeechRate, createRateCommandController, parseSpeechRateCommand } from "./speech-rate";
 import { createVoiceState } from "./state";
-import { createRecordedStt, createLocalTranscriber, openPcmMicrophone } from "./recorded-stt";
+import { createRecordedStt, createLocalTranscriber, encodeWav, openPcmMicrophone, summarizePcm } from "./recorded-stt";
 import { createTalkController } from "./talk-controller";
 import { checkMicrophone, createSpeechDiagnostics } from "./speech-diagnostics";
 import { createTts } from "./tts";
@@ -22,7 +22,7 @@ import { microphoneConstraints, microphoneLevelHint } from "./microphone";
 import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log";
 
 const CLIENT_VERSION = "0.0.0";
-const CAPTION_CLEAR_MS = 1000;
+const CAPTION_CLEAR_MS = 8000;
 declare const __BLIP_BUILD_ID__: string;
 const diagnostics = createSpeechDiagnostics();
 let nativeRecognitionId = 0;
@@ -49,6 +49,61 @@ document.getElementById("check-microphone")!.addEventListener("click", async () 
   button.disabled = false;
   await refreshMicrophones();
 });
+const recognitionTestButton = el<HTMLButtonElement>("test-recognition");
+const recognitionTestStatus = el("recognition-test-status");
+let recognitionTest: AbortController | null = null;
+window.addEventListener("pagehide", () => recognitionTest?.abort());
+recognitionTestButton.addEventListener("click", async () => {
+  if (recognitionTest) { recognitionTest.abort(); return; }
+  const controller = new AbortController();
+  recognitionTest = controller;
+  el<HTMLButtonElement>("check-microphone").disabled = true;
+  recognitionTestButton.textContent = "Cancel speech test";
+  recognitionTestStatus.textContent = "Opening the selected microphone…";
+  let recording: Awaited<ReturnType<typeof openPcmMicrophone>> | undefined;
+  try {
+    const generation = ++nativeRecognitionId;
+    recording = await openPcmMicrophone(controller.signal, { constraints: selectedMicrophoneConstraints(), onLevel: level => {
+      el<HTMLMeterElement>("microphone-level").value = Math.min(1, level.rms * 5);
+      el("microphone-level-hint").textContent = microphoneLevelHint(level.rms, level.peak);
+    } });
+    if (controller.signal.aborted) return;
+    recognitionTestStatus.textContent = 'Listening for five seconds. Say “read the form.” This test will not send a command.';
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => { controller.signal.removeEventListener("abort", cancel); resolve(); }, 5000);
+      const cancel = () => { clearTimeout(timer); reject(new DOMException("Cancelled", "AbortError")); };
+      controller.signal.addEventListener("abort", cancel, { once: true });
+      if (controller.signal.aborted) cancel();
+    });
+    if (controller.signal.aborted) return;
+    const chunks = await recording.stop();
+    const summary = summarizePcm(chunks, recording.sampleRate, recording.inputSettings);
+    el("microphone-capture-summary").textContent = `Test recorded ${summary.durationSeconds.toFixed(1)} seconds. ${microphoneLevelHint(summary.rms, summary.peak)} ${captureSettingsText(summary.sampleRate, summary.inputSettings)}`;
+    recordSpeechEvent({ event: "capture-summary", generation, durationSeconds: summary.durationSeconds, rms: summary.rms, peak: summary.peak,
+      inputChannels: summary.inputSettings?.channels, inputSampleRate: summary.inputSettings?.sampleRate, captureSampleRate: summary.sampleRate,
+      echoCancellation: summary.inputSettings?.echoCancellation, noiseSuppression: summary.inputSettings?.noiseSuppression, autoGainControl: summary.inputSettings?.autoGainControl });
+    recording = undefined;
+    recognitionTestStatus.textContent = "Transcribing locally… no command will be sent.";
+    const text = await createLocalTranscriber()(encodeWav(chunks, summary.sampleRate), controller.signal);
+    if (!controller.signal.aborted) recognitionTestStatus.textContent = text
+      ? `Local test heard: “${text}”. No command was sent.`
+      : "The microphone recorded, but Whisper heard no words. No command was sent.";
+  } catch (error) {
+    if (controller.signal.aborted) recognitionTestStatus.textContent = "Speech test cancelled. No command was sent.";
+    else {
+      const name = error instanceof Error ? error.name : "";
+      recognitionTestStatus.textContent = name === "NotAllowedError"
+        ? "Microphone access is blocked. Allow it for this Blip window, then retry."
+        : name === "NotFoundError" ? "No microphone was found. Choose a connected microphone, then retry."
+        : "The local speech test failed. Check the microphone status and restart Blip if local recognition is unavailable.";
+    }
+  } finally {
+    recording?.cancel();
+    if (recognitionTest === controller) recognitionTest = null;
+    el<HTMLButtonElement>("check-microphone").disabled = false;
+    recognitionTestButton.textContent = "Test speech recognition (5 seconds)";
+  }
+});
 
 function el<T extends HTMLElement>(id: string): T {
   const e = document.getElementById(id);
@@ -67,7 +122,13 @@ renderVoices();
 window.speechSynthesis.addEventListener("voiceschanged", renderVoices);
 el<HTMLSelectElement>("speech-voice").addEventListener("change", event => { nativeSynth.setVoice((event.target as HTMLSelectElement).value || null); el("output-mode-status").textContent = "The selected voice will read the next reply."; });
 function selectedMicrophoneConstraints(): MediaStreamConstraints {
-  return microphoneConstraints(el<HTMLSelectElement>("microphone-device").value, el<HTMLInputElement>("microphone-filter").checked);
+  return microphoneConstraints(el<HTMLSelectElement>("microphone-device").value, el<HTMLInputElement>("microphone-echo-cancel").checked, el<HTMLInputElement>("microphone-auto-gain").checked, el<HTMLInputElement>("microphone-noise-suppress").checked);
+}
+function captureSettingsText(sampleRate: number, settings: import("./microphone").MicrophoneInputSettings | undefined): string {
+  const channelText = settings?.channels === undefined ? "channel count unknown" : `${settings.channels} input channel${settings.channels === 1 ? "" : "s"} (mixed to mono)`;
+  const inputRate = settings?.sampleRate === undefined ? "input rate unknown" : `${Math.round(settings.sampleRate / 100) / 10} kHz input`;
+  const flag = (name: string, value: boolean | string | undefined) => `${name} ${value === undefined ? "unknown" : typeof value === "boolean" ? value ? "on" : "off" : value}`;
+  return `${channelText}; ${inputRate} → ${Math.round(sampleRate / 100) / 10} kHz for recognition; ${flag("echo cancellation", settings?.echoCancellation)}, ${flag("noise suppression", settings?.noiseSuppression)}, ${flag("auto gain", settings?.autoGainControl)}`;
 }
 async function refreshMicrophones(): Promise<void> {
   try {
@@ -308,8 +369,10 @@ talk = createTalkController({
       },
       transcribe: createLocalTranscriber(),
       onCapture: summary => {
-        recordSpeechEvent({ event: "capture-summary", generation: nativeRecognitionId, ...summary });
-        el("microphone-capture-summary").textContent = `Recorded ${summary.durationSeconds.toFixed(1)} seconds. ${microphoneLevelHint(summary.rms, summary.peak)}`;
+        recordSpeechEvent({ event: "capture-summary", generation: nativeRecognitionId, durationSeconds: summary.durationSeconds, rms: summary.rms, peak: summary.peak,
+          inputChannels: summary.inputSettings?.channels, inputSampleRate: summary.inputSettings?.sampleRate, captureSampleRate: summary.sampleRate,
+          echoCancellation: summary.inputSettings?.echoCancellation, noiseSuppression: summary.inputSettings?.noiseSuppression, autoGainControl: summary.inputSettings?.autoGainControl });
+        el("microphone-capture-summary").textContent = `Recorded ${summary.durationSeconds.toFixed(1)} seconds. ${microphoneLevelHint(summary.rms, summary.peak)} ${captureSettingsText(summary.sampleRate, summary.inputSettings)}`;
       },
       onFinal: final => { recordSpeechEvent({ event: "result", generation: nativeRecognitionId, results: 1 }); h.onFinal(final); },
       onError: error => { recordSpeechEvent({ event: "error", generation: nativeRecognitionId, code: error.kind }); h.onError(error); },
@@ -342,9 +405,10 @@ const holdOwner = createHoldOwner((s, reason) => {
   talk.onHold(s, reason);
 });
 const holdButton = el<HTMLButtonElement>("hold-to-talk");
-for (const id of ["microphone-device", "microphone-filter"]) el(id).addEventListener("change", () => {
+for (const id of ["microphone-device", "microphone-echo-cancel", "microphone-noise-suppress", "microphone-auto-gain"]) el(id).addEventListener("change", () => {
+  recognitionTest?.abort();
   holdOwner.cancel(); talk.cancelCapture();
-  el("microphone-level-hint").textContent = "Microphone changed. Start a fresh hold.";
+  el("microphone-level-hint").textContent = "Microphone settings changed. Start a fresh hold.";
 });
 function renderHoldButton(): void {
   const owner = holdOwner.get();
@@ -358,6 +422,7 @@ function renderHoldButton(): void {
 }
 
 function setManualHold(active: boolean, reason?: string): void {
+  if (active) recognitionTest?.abort();
   holdOwner.update("manual", active, reason);
   renderHoldButton();
 }
@@ -371,6 +436,7 @@ const holdWire = createHoldClient({
       : "The global shortcut is unavailable. Use Hold to talk, or type a command.";
   },
   onHold: (h, reason) => {
+    if (h === "start") recognitionTest?.abort();
     holdOwner.update("global", h === "start", reason);
     renderHoldButton();
   },

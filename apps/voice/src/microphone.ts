@@ -1,5 +1,13 @@
-export function microphoneConstraints(deviceId: string, filterNoise: boolean): MediaStreamConstraints {
-  return { audio: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), channelCount: { ideal: 1 }, echoCancellation: filterNoise, noiseSuppression: filterNoise, autoGainControl: false } };
+export interface MicrophoneInputSettings {
+  channels?: number;
+  sampleRate?: number;
+  echoCancellation?: boolean | string;
+  noiseSuppression?: boolean;
+  autoGainControl?: boolean;
+}
+
+export function microphoneConstraints(deviceId: string, echoCancellation: boolean, autoGainControl = false, noiseSuppression = echoCancellation): MediaStreamConstraints {
+  return { audio: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), channelCount: { ideal: 1 }, echoCancellation, noiseSuppression, autoGainControl } };
 }
 export function audioLevel(data: Float32Array): { rms: number; peak: number; clipped: number } {
   let energy = 0, peak = 0, clipped = 0;

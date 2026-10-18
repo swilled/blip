@@ -49,12 +49,16 @@
       <fieldset id="microphone-controls">
       <legend>Microphone input</legend>
       <button id="check-microphone" type="button">Check microphone</button>
+      <button id="test-recognition" type="button">Test speech recognition (5 seconds)</button>
       <label for="microphone-device">Microphone</label>
       <select id="microphone-device"><option value="">Windows default microphone</option></select>
-      <label><input id="microphone-filter" type="checkbox" checked /> Filter background noise</label>
+      <label><input id="microphone-echo-cancel" type="checkbox" checked /> Echo cancellation</label>
+      <label><input id="microphone-noise-suppress" type="checkbox" checked /> Noise suppression</label>
+      <label><input id="microphone-auto-gain" type="checkbox" checked /> Automatically adjust microphone volume</label>
       <meter id="microphone-level" min="0" max="1" value="0" aria-label="Microphone sound level"></meter>
       <p id="microphone-level-hint" aria-live="off">Hold to talk to check the sound level.</p>
       <p id="microphone-capture-summary" class="label muted"></p>
+      <p id="recognition-test-status" role="status" aria-live="polite">The speech test transcribes locally and never sends a command.</p>
       <p>Speech recognition: local Whisper. Hold to record; release to transcribe.</p>
       <p id="microphone-check-status" role="status"></p>
       </fieldset>

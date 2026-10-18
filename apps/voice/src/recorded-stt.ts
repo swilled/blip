@@ -1,11 +1,23 @@
 import { MAX_TEXT_CHARS, MSG_CAPTURE_LIMIT, MSG_DIDNT_CATCH, MSG_MIC, MSG_MIC_MISSING, type Stt, type SttError, type SttOptions } from "./stt";
-import { audioLevel } from "./microphone";
+import { audioLevel, type MicrophoneInputSettings } from "./microphone";
 
-export interface PcmRecording { stop(): Promise<Float32Array[]>; cancel(): void; sampleRate: number }
+export interface PcmRecording { stop(): Promise<Float32Array[]>; cancel(): void; sampleRate: number; inputSettings?: MicrophoneInputSettings }
+export interface PcmCaptureSummary { durationSeconds: number; rms: number; peak: number; sampleRate: number; inputSettings?: MicrophoneInputSettings }
 export interface RecordedSttOptions extends Pick<SttOptions, "onFinal" | "onError" | "onStage"> {
   open(signal: AbortSignal): Promise<PcmRecording>;
   transcribe(wav: Uint8Array, signal: AbortSignal): Promise<string>;
-  onCapture?: (summary: { durationSeconds: number; rms: number; peak: number }) => void;
+  onCapture?: (summary: PcmCaptureSummary) => void;
+}
+
+export function summarizePcm(chunks: Float32Array[], sampleRate: number, inputSettings?: MicrophoneInputSettings): PcmCaptureSummary {
+  const total = chunks.reduce((count, chunk) => count + chunk.length, 0);
+  let energy = 0, peak = 0;
+  for (const chunk of chunks) {
+    const level = audioLevel(chunk);
+    energy += level.rms ** 2 * chunk.length;
+    peak = Math.max(peak, level.peak);
+  }
+  return { durationSeconds: total / sampleRate, rms: total ? Math.sqrt(energy / total) : 0, peak, sampleRate, inputSettings };
 }
 
 export function encodeWav(chunks: Float32Array[], inputRate: number): Uint8Array {
@@ -49,10 +61,7 @@ export function createRecordedStt(options: RecordedSttOptions): Stt {
       const chunks = await capture.recording.stop();
       if (active !== capture) return;
       const wav = encodeWav(chunks, capture.recording.sampleRate);
-      const total = chunks.reduce((n, chunk) => n + chunk.length, 0);
-      let energy = 0, peak = 0;
-      for (const chunk of chunks) { const level = audioLevel(chunk); energy += level.rms ** 2 * chunk.length; peak = Math.max(peak, level.peak); }
-      options.onCapture?.({ durationSeconds: total / capture.recording.sampleRate, rms: Math.sqrt(energy / total), peak });
+      options.onCapture?.(summarizePcm(chunks, capture.recording.sampleRate, capture.recording.inputSettings));
       const text = (await options.transcribe(wav, capture.abort.signal)).trim();
       if (active !== capture) return;
       if (!text) { settle(capture, { kind: "no-speech", message: MSG_DIDNT_CATCH }); return; }
@@ -90,13 +99,22 @@ export function createRecordedStt(options: RecordedSttOptions): Stt {
 /** Raw microphone capture only: no SpeechRecognition, silence endpointing or cloud service. */
 export async function openPcmMicrophone(signal: AbortSignal, options: { constraints?: MediaStreamConstraints; onLevel?: (level: ReturnType<typeof audioLevel>) => void } = {}): Promise<PcmRecording> {
   const stream = await navigator.mediaDevices.getUserMedia(options.constraints ?? { audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
+  const track = stream.getAudioTracks()[0];
+  const selectedSettings = track?.getSettings();
+  const inputSettings: MicrophoneInputSettings = {
+    ...(selectedSettings?.channelCount !== undefined ? { channels: selectedSettings.channelCount } : {}),
+    ...(selectedSettings?.sampleRate !== undefined ? { sampleRate: selectedSettings.sampleRate } : {}),
+    ...(selectedSettings?.echoCancellation !== undefined ? { echoCancellation: selectedSettings.echoCancellation } : {}),
+    ...(selectedSettings?.noiseSuppression !== undefined ? { noiseSuppression: selectedSettings.noiseSuppression } : {}),
+    ...(selectedSettings?.autoGainControl !== undefined ? { autoGainControl: selectedSettings.autoGainControl } : {}),
+  };
   let context: AudioContext;
   try { context = new AudioContext({ sampleRate: 16000 }); }
   catch (error) { for (const track of stream.getTracks()) track.stop(); throw error; }
   const chunks: Float32Array[] = [];
   let source: MediaStreamAudioSourceNode | undefined, worklet: AudioWorkletNode | undefined;
   let closed = false, stopping = false, samples = 0;
-  let levelAt = -Infinity;
+  let levelAt = -Infinity, meterSamples = 0, meterEnergy = 0, meterPeak = 0, meterClipped = 0;
   let ready!: () => void, flush!: () => void;
   const started = new Promise<void>(resolve => { ready = resolve; });
   const flushed = new Promise<void>(resolve => { flush = resolve; });
@@ -111,7 +129,17 @@ export async function openPcmMicrophone(signal: AbortSignal, options: { constrai
   if (signal.aborted) { cleanup(); throw new DOMException("Cancelled", "AbortError"); }
   const url = URL.createObjectURL(new Blob([`class BlipPcm extends AudioWorkletProcessor {
     constructor() { super(); this.done = false; this.port.onmessage = () => { this.done = true; this.port.postMessage(null); }; }
-    process(inputs) { if (this.done) return false; const data = inputs[0]?.[0]; if (data) { const copy = data.slice(); this.port.postMessage(copy, [copy.buffer]); } return true; }
+    process(inputs) {
+      if (this.done) return false;
+      const channels = inputs[0];
+      if (!channels || channels.length === 0 || !channels[0]) return true;
+      const count = channels[0].length, mono = new Float32Array(count), scale = 1 / channels.length;
+      // Chrome may return more than one channel even when mono is requested as ideal.
+      // Mix every channel so speech on a non-first microphone channel is not discarded.
+      for (const channel of channels) for (let i = 0; i < count; i++) mono[i] += (channel[i] || 0) * scale;
+      this.port.postMessage({ samples: mono, channels: channels.length }, [mono.buffer]);
+      return true;
+    }
   } registerProcessor('blip-pcm', BlipPcm);`], { type: "text/javascript" }));
   try {
     await context.audioWorklet.addModule(url);
@@ -121,10 +149,17 @@ export async function openPcmMicrophone(signal: AbortSignal, options: { constrai
     worklet.port.onmessage = event => {
       if (closed) return;
       if (event.data === null) { flush(); return; }
-      if (!(event.data instanceof Float32Array)) return;
-      if (performance.now() - levelAt >= 200) { levelAt = performance.now(); options.onLevel?.(audioLevel(event.data)); }
-      samples += event.data.length;
-      if (samples <= context.sampleRate * 10) chunks.push(event.data);
+      if (typeof event.data !== "object" || event.data === null || !(event.data.samples instanceof Float32Array)) return;
+      const data = event.data.samples as Float32Array;
+      const level = audioLevel(data);
+      meterSamples += data.length; meterEnergy += level.rms ** 2 * data.length; meterPeak = Math.max(meterPeak, level.peak); meterClipped += level.clipped;
+      if (performance.now() - levelAt >= 200) {
+        levelAt = performance.now();
+        options.onLevel?.({ rms: Math.sqrt(meterEnergy / Math.max(1, meterSamples)), peak: meterPeak, clipped: meterClipped });
+        meterSamples = 0; meterEnergy = 0; meterPeak = 0; meterClipped = 0;
+      }
+      samples += data.length;
+      if (samples <= context.sampleRate * 10) chunks.push(data);
       else { cleanup(); flush(); }
       ready();
     };
@@ -136,6 +171,7 @@ export async function openPcmMicrophone(signal: AbortSignal, options: { constrai
     finally { clearTimeout(timeout!); }
     return {
       sampleRate: context.sampleRate,
+      inputSettings,
       async stop() {
         if (closed || stopping || context.state !== "running") { cleanup(); throw new Error("recording-cancelled"); }
         stopping = true; worklet!.port.postMessage("flush");
