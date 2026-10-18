@@ -6,6 +6,8 @@ M0 approval: pending
 
 The freeze is provisional until the M0 PR is approved in writing by the voice developer. When that approval arrives, replace the line above with `M0 approval: received (<where the written approval lives>)` in the same PR, before it merges. Never write `received` without a location.
 
+Local browser-control contract status: proposed additive messages on the core branch, pending written voice-owner review of the exact shared diff. This is local implementation status only; it does not authorize merging or pushing the protocol change. Existing v1 voice and form message semantics remain unchanged.
+
 The registry in `packages/protocol/src/messages.ts` is the source of truth. A test (`packages/protocol/test/protocol-md.test.ts`) fails if a message type or its from/to columns differ between this file and the registry.
 
 ## Transport
@@ -30,7 +32,7 @@ Every frame is an envelope:
 
 ## Messages
 
-In the tables below `from` is the role allowed to put the frame on the wire and `to` is the role that receives it. Roles are `extension`, `voice` and `server`. There are 25 types. The server enforces `from` per connection (D-04): a frame whose type the connection's role may not send is answered with a `role-violation` error and never routed.
+In the tables below `from` is the role allowed to put the frame on the wire and `to` is the role that receives it. Roles are `extension`, `voice` and `server`. There are 27 types. The server enforces `from` per connection (D-04): a frame whose type the connection's role may not send is answered with a `role-violation` error and never routed.
 
 ### Handshake and shared
 
@@ -50,6 +52,8 @@ Includes the server-to-extension requests, listed next to the replies they expec
 | `snapshot.result` | extension | server | `{ ok: true, snapshot }` or `{ ok: false, error: { code, message } }` | `ok`-discriminated union; `Snapshot.untrustedInstructionDetected?` is an optional warning-only boolean |
 | `act.request` | server | extension | `ActRequest` (see below) | the extension replies `act.result` (timeout 5 s) |
 | `act.result` | extension | server | `ActResult` (see below) | carries `observedValue` for verify-after-write |
+| `browser.request` | server | extension | `BrowserRequestPayload` (see below) | additive browser operation request; bounded and role-validated |
+| `browser.result` | extension | server | `BrowserResultPayload` (see below) | matches the request ID and operation; stale results are discarded |
 | `page.changed` | extension | server | `{ tabId: int, url, reason: navigation, mutation or tab-activated, structuralHash? }` | debounced 500 ms; the server decides whether to re-snapshot |
 | `announce` | server | extension | `{ text (max 500), politeness: polite or assertive }` | in-page live region for NVDA mode |
 | `highlight` | server | extension | `{ targetId: string or null }` | visual aid for a sighted audience; null clears |
@@ -75,6 +79,37 @@ Includes the server-to-voice pushes.
 | `confirm.cleared` | server | voice | `{ grantId, reason: executed, cancelled, expired, page-changed or value-changed }` | |
 | `state` | server | voice | `{ dialogue: DialogueStateName, page: object or null, focusFieldId?, busy, extensionConnected, brain }` | pushed on every change; `page` is `{ url, title, step?, fieldCount: int, requiredEmpty: int, untrustedInstructionDetected?: boolean }` |
 | `transcript` | server | voice | `{ utteranceId, heardAs, routedTo: grammar or model }` | debug and demo panel |
+
+## BrowserRequestPayload and BrowserResultPayload
+
+The proposed `browser.request` message is server-to-extension and `browser.result` is extension-to-server. Both are separate from `Snapshot`, `ActRequest`, and `Intent`; no existing snapshot limits or action semantics change. These messages are additive local work pending written voice-owner review of the exact diff, and that review is required before the protocol change is merged or pushed.
+
+`BrowserRequestPayload` contains a bounded `requestId`, optional current `tabId`, and a closed `operation` union. IDs are 1–64 ASCII letters, digits, dots, underscores, colons, or hyphens, beginning with a letter or digit. Tab IDs are non-negative 32-bit integers. Operation fields are typed:
+
+| `op` | Fields |
+|---|---|
+| `location` | none |
+| `capture` | none |
+| `navigate` | canonical HTTP(S) `url` without credentials; required non-empty one-use `authorizationId` |
+| `history` | `direction: back or forward` |
+| `reload` | none |
+| `search` | `route: site or browser-default`, user-derived `query` (1–500 Unicode code points), and required one-use `authorizationId` |
+| `tabs` | `action: list or switch`; `targetTabId` is required only for `switch` |
+| `list-links` | none |
+| `read-content` | `kind: heading or paragraph`, user-derived `target`, and captured `identity` |
+| `open-link` | stable `linkId`, captured `identity`, and required one-use `authorizationId` |
+| `scroll` | `direction: up or down`, `pixels: 1–2000` |
+| `find` | user-derived `query` (1–500 Unicode code points) |
+
+The protocol validates shape only. Deterministic server code must keep URLs and queries sourced from the user's words, resolve links from a uniquely selected visible live candidate, and authorize gated work before dispatch. Page text and model output cannot invent or rewrite a destination, query, link, tab, or action target. The required authorization IDs do not add confirmation authority to `Intent`.
+
+`BrowserResultPayload` has `ok: true` and a typed result for its `operation`, or `ok: false` with the same bounded `requestId`, operation, and a closed error code plus a message of at most 300 Unicode code points. Successful location results distinguish `supported` from `restricted` pages. Tab results expose at most 50 entries, with a bounded title and host hint rather than a navigable URL.
+
+Content and link results carry an independent `captureId`, positive `captureRevision`, `tabId`, and canonical `pageUrl`. Page URLs may use HTTP(S), `about:`, `chrome:`, or `chrome-extension:` so restricted pages can be identified; navigation destinations accept HTTP(S) only and reject credentials and unsupported schemes. Content blocks are visible heading/paragraph text, at most 20 blocks, 400 Unicode code points per block and 4,000 total. Their `truncated` flag describes only this content excerpt and does not alter `Snapshot.truncated`. A restricted result carries no blocks or links, distinct from a supported empty result. Link lists contain at most 100 records; each record exposes only a bounded stable `linkId`, visible label (at most 200 code points), and safe host hint, never an `href`.
+
+Content/link references are bound to the captured tab, canonical page URL, and capture revision. `read-content` and `open-link` carry that identity; the server and extension discard references and late results when the tab, URL, page, capture revision, request, or active session changes, and clear pending IDs on cancellation or timeout. A refreshed capture creates new IDs. Back/forward still must be refused when the next destination cannot be established before dispatch; a valid schema does not make an operation safe by itself.
+
+The new registry entries allow only the server to send `browser.request` to the extension and only the extension to send `browser.result` to the server. They do not alter voice message permissions. `Intent` remains a closed 16-variant union without `confirm`, `approve`, or `submit_now`.
 
 ## ActOp, ActRequest and ActResult
 

@@ -13,6 +13,7 @@ import {
   SnapshotRequestPayload,
   SnapshotResultPayload,
 } from "./payloads-extension";
+import { BrowserRequestPayload, BrowserResultPayload } from "./payloads-browser";
 import {
   ConfirmArmedPayload,
   ConfirmClearedPayload,
@@ -73,6 +74,8 @@ export const MESSAGES = {
   "snapshot.result": { senders: ["extension"], receivers: ["server"], payload: SnapshotResultPayload },
   "act.request": { senders: ["server"], receivers: ["extension"], payload: ActRequest },
   "act.result": { senders: ["extension"], receivers: ["server"], payload: ActResult },
+  "browser.request": { senders: ["server"], receivers: ["extension"], payload: BrowserRequestPayload },
+  "browser.result": { senders: ["extension"], receivers: ["server"], payload: BrowserResultPayload },
   "page.changed": { senders: ["extension"], receivers: ["server"], payload: PageChangedPayload },
   announce: { senders: ["server"], receivers: ["extension"], payload: AnnouncePayload },
   highlight: { senders: ["server"], receivers: ["extension"], payload: HighlightPayload },
@@ -119,6 +122,8 @@ export const Message = z.discriminatedUnion("type", [
   frame("snapshot.result", MESSAGES["snapshot.result"].payload),
   frame("act.request", MESSAGES["act.request"].payload),
   frame("act.result", MESSAGES["act.result"].payload),
+  frame("browser.request", MESSAGES["browser.request"].payload),
+  frame("browser.result", MESSAGES["browser.result"].payload),
   frame("page.changed", MESSAGES["page.changed"].payload),
   frame("announce", MESSAGES.announce.payload),
   frame("highlight", MESSAGES.highlight.payload),
