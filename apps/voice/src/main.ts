@@ -168,6 +168,12 @@ socket = createSocket({
         refreshConnection();
         break;
       }
+      case "error": {
+        if (m.payload.code === "nvda-completion-unavailable") {
+          el("status-hint").textContent = m.payload.message;
+        }
+        break;
+      }
       default:
         // Transcript and other informational frames are not rendered in the voice window.
         break;

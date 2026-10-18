@@ -242,9 +242,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       };
       clearPendingThroughVoiceGate(gatedContext, "cancelled", "output-mode-changed");
       // An empty interrupt frame cancels current browser speech without adding a new spoken line.
-      // In NVDA modes Hub routes the same frame through cancelSpeech before its empty payload.
       h.send("voice", "speak", { speakId: newId(), text: "", category: "answer", interrupt: true });
-      s.outputMode = message.payload.outputMode;
+      h.setOutputMode(message.payload.outputMode);
     },
     ptt: ({ message, hub: h, session: s }) => {
       if (message.type !== "ptt" || message.payload.state !== "start") return;

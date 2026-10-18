@@ -201,17 +201,10 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
   ): Promise<void> {
     switch (effect.kind) {
       case "speak": {
-        const sent = sendSpeakEffect(hub, effect, session);
+        sendSpeakEffect(hub, effect, session);
         if (effect.category !== "filler") session.lastSpoken = effect.text;
-        if (sent && session.outputMode !== "agent-voice") {
-          // The selected path accepted the speech but has no completion callback. Retire its local
-          // reducer ID as interrupted so outstanding IDs do not accumulate and read-back cannot arm.
-          session.abandonSpeech(effect.speakId);
-          await dispatch({
-            type: "speak.done",
-            done: { speakId: effect.speakId, interrupted: true },
-          }, context);
-        }
+        // NVDA dispatch acceptance is not completion. Hub falls back to agent voice before sending
+        // when NVDA cannot provide a safe signal; only the voice client's real done/cancel settles it.
         return;
       }
       case "earcon":
@@ -229,13 +222,6 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         });
         if (sent) {
           session.trackSpeech(effect.speakId, "answer");
-          if (session.outputMode !== "agent-voice") {
-            session.abandonSpeech(effect.speakId);
-            await dispatch({
-              type: "speak.done",
-              done: { speakId: effect.speakId, interrupted: true },
-            }, context);
-          }
         }
         return;
       case "parseIntent":
@@ -455,7 +441,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         // Cancel speech and clear any armed/read-back state through GatePort while the old output
         // route is still active, then apply the new setting to this session.
         await dispatch({ type: "control", cmd: "stop" }, context);
-        context.session.outputMode = nextMode;
+        context.hub.setOutputMode(nextMode);
       });
     },
     "page.changed"(context) {

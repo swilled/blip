@@ -17,6 +17,7 @@ import {
   HELLO_TIMEOUT_MS,
   isMessageType,
   MAX_FRAME_BYTES,
+  newId,
   parseFrame,
   WS_PATH,
   type BuildOpts,
@@ -27,7 +28,7 @@ import {
   type Role,
 } from "@blip/protocol";
 import { log } from "../log";
-import { SERVER_VERSION, type Session } from "../session/session";
+import { SERVER_VERSION, type OutputMode, type Session } from "../session/session";
 import { nvdaCancel, nvdaSpeak } from "../voice/nvda";
 import { routeSpeech, type SpeechOutput } from "../voice/speech-routing";
 import { hostAllowed, rolesForOrigin } from "./guard";
@@ -64,8 +65,8 @@ export class HubRequestError extends Error {
 export type Hub = {
   /**
    * Send a validated frame to the live connection of `role`. `speak` uses the owning session's
-   * output mode and may route through NVDA instead. Throws when the role may not receive the type;
-   * returns false when the selected output is unavailable.
+   * output mode and falls back to agent voice when NVDA cannot provide completion evidence. Throws
+   * when the role may not receive the type; returns false when the selected output is unavailable.
    */
   send<T extends MessageType>(role: Role, type: T, payload: PayloadOf<T>, opts?: BuildOpts): boolean;
   /** Send and wait for a reply carrying the matching replyTo and the expected type. */
@@ -77,6 +78,8 @@ export type Hub = {
   ): Promise<Extract<Message, { type: E }>>;
   /** Push the session's current state payload to the voice connection, if one is bound. */
   pushState(): boolean;
+  /** Select an output mode; unavailable NVDA completion safely resolves to agent voice. */
+  setOutputMode(mode: OutputMode): void;
   close(): void;
 };
 
@@ -118,11 +121,49 @@ export function createHub(options: HubOptions): Hub {
   const extId = options.extensionId ?? EXTENSION_ID;
   const helloTimeoutMs = options.helloTimeoutMs ?? HELLO_TIMEOUT_MS;
   const handlers: Handlers = options.handlers ?? {};
-  const speechOutput = options.speechOutput ?? { speak: nvdaSpeak, cancel: nvdaCancel };
+  const speechOutput: SpeechOutput = options.speechOutput ?? {
+    speak: nvdaSpeak,
+    cancel: nvdaCancel,
+    completionSignal: "unavailable",
+  };
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
   const slots: Partial<Record<Role, Conn>> = {};
   const conns = new Set<Conn>();
   const pending = new Map<string, Pending>();
+  let nvdaUnavailableAnnounced = false;
+  const nvdaUnavailableMessage = "NVDA speech completion is unavailable. Using agent voice.";
+
+  function announceNvdaUnavailable(): void {
+    const voiceConn = slots.voice;
+    if (
+      nvdaUnavailableAnnounced || voiceConn === undefined ||
+      voiceConn.ws.readyState !== voiceConn.ws.OPEN
+    ) return;
+
+    nvdaUnavailableAnnounced = true;
+    log("warn", { msg: "NVDA speech completion unavailable; switched to agent voice", code: "nvda-completion-unavailable" });
+    sendTo(voiceConn, "error", {
+      code: "nvda-completion-unavailable",
+      message: nvdaUnavailableMessage,
+      fatal: false,
+    });
+
+    // The warning uses ordinary agent speech with a tracked ID. It precedes subsequent speech in
+    // the browser TTS queue, so both IDs settle only from real TTS done/cancel callbacks.
+    const warningSpeakId = newId();
+    session.trackSpeech(warningSpeakId, "error");
+    sendTo(voiceConn, "speak", {
+      speakId: warningSpeakId,
+      text: nvdaUnavailableMessage,
+      category: "error",
+      interrupt: false,
+    });
+  }
+
+  function fallBackToAgentVoice(): void {
+    session.outputMode = "agent-voice";
+    announceNvdaUnavailable();
+  }
 
   const rules = () => ({
     extId,
@@ -358,12 +399,16 @@ export function createHub(options: HubOptions): Hub {
       if (role === "voice" && type === "speak") {
         if (session.outputMode !== "agent-voice" && !session.voiceConnected) return false;
         const voicePayload = payload as PayloadOf<"speak">;
-        return routeSpeech(session.outputMode, voicePayload, () => {
+        const sendAgentVoice = (): boolean => {
           const voiceConn = slots.voice;
           if (voiceConn === undefined) return false;
           sendTo(voiceConn, type, payload, opts);
           return true;
-        }, speechOutput);
+        };
+        const route = routeSpeech(session.outputMode, voicePayload, sendAgentVoice, speechOutput);
+        if (route.kind === "agent-voice") return route.accepted;
+        fallBackToAgentVoice();
+        return sendAgentVoice();
       }
       const conn = slots[role];
       if (conn === undefined) return false;
@@ -392,6 +437,16 @@ export function createHub(options: HubOptions): Hub {
 
     pushState() {
       return hub.send("voice", "state", session.statePayload());
+    },
+
+    setOutputMode(mode) {
+      if (mode === "agent-voice") {
+        session.outputMode = mode;
+        return;
+      }
+      // NVDA Controller Client cannot report speech completion. Select agent voice before speech
+      // is sent so a tracked ID only settles from the browser's actual done/cancel signal.
+      fallBackToAgentVoice();
     },
 
     close() {

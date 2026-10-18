@@ -5,23 +5,26 @@ export type SpeechOutput = {
   /** NVDA Controller Client returns zero when it accepted the request. */
   speak: (text: string) => number;
   cancel: () => number;
+  /** The Controller Client has no safe per-utterance completion callback. */
+  completionSignal: "unavailable";
 };
+
+export type SpeechRoute =
+  | { kind: "agent-voice"; accepted: boolean }
+  | { kind: "nvda-unavailable" };
 
 /** Route one server speech frame according to the owning voice session's selected output mode. */
 export function routeSpeech(
   outputMode: OutputMode,
-  payload: PayloadOf<"speak">,
+  _payload: PayloadOf<"speak">,
   sendAgentVoice: () => boolean,
   screenReader: SpeechOutput,
-): boolean {
-  if (outputMode === "agent-voice") return sendAgentVoice();
+): SpeechRoute {
+  if (outputMode === "agent-voice") return { kind: "agent-voice", accepted: sendAgentVoice() };
 
-  if (payload.interrupt && screenReader.cancel() !== 0) return false;
-  const screenReaderAccepted = screenReader.speak(payload.text) === 0;
-  if (outputMode === "screen-reader") return screenReaderAccepted;
+  // A zero return from nvdaController_speakText means only that dispatch was accepted. Without a
+  // completion signal, sending speech there would strand its speakId and leave read-back unsafe.
+  if (screenReader.completionSignal === "unavailable") return { kind: "nvda-unavailable" };
 
-  // "both" is best-effort for delivery, but has no single trustworthy completion signal.
-  // Session tracking therefore refuses speak.done for this mode and keeps gated actions closed.
-  const agentVoiceAccepted = sendAgentVoice();
-  return screenReaderAccepted || agentVoiceAccepted;
+  return { kind: "nvda-unavailable" };
 }
