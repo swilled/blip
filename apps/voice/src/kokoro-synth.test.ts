@@ -80,6 +80,51 @@ describe("Kokoro browser speech synthesis", () => {
     expect(h.ttsHandlers.onstart).not.toHaveBeenCalled();
   });
 
+  it("speaks with the Windows voice while the model is still downloading, then switches to Kokoro", async () => {
+    let resolveModel!: (model: KokoroModel) => void;
+    const modelPending = new Promise<KokoroModel>(resolve => { resolveModel = resolve; });
+    const native = { speak: vi.fn(), cancel: vi.fn(), setVoice: vi.fn(), dispose: vi.fn() };
+    const source = { buffer: null, onended: null as ((event: Event) => void) | null, connect: vi.fn(), disconnect: vi.fn(), start: vi.fn(), stop: vi.fn() };
+    const context = {
+      state: "running", destination: {},
+      createBuffer: vi.fn(() => ({ copyToChannel: vi.fn() })), createBufferSource: vi.fn(() => source),
+      resume: vi.fn(async () => {}), close: vi.fn(async () => {}),
+    };
+    const status = vi.fn();
+    let progress!: (percent: number) => void;
+    const synth = createKokoroSynth({
+      native: native as never,
+      loadModel: async (onProgress) => { progress = onProgress; return modelPending; },
+      createAudioContext: () => context as never,
+      onStatus: status,
+      loadingGraceMs: 5,
+    });
+
+    const first: SynthHandlers = { onstart: vi.fn(), onend: vi.fn(), onerror: vi.fn() };
+    synth.speak("While loading.", first, 1);
+    await vi.waitFor(() => expect(native.speak).toHaveBeenCalledOnce());
+    expect(native.speak.mock.calls[0]![0]).toBe("While loading.");
+    native.speak.mock.calls[0]![1].onend();
+    expect(first.onend).toHaveBeenCalledOnce();
+
+    progress(42);
+    progress(45);
+    expect(status).toHaveBeenCalledWith("Downloading Blip's natural voice: 45%. The Windows voice speaks until it is ready.");
+    expect(status).not.toHaveBeenCalledWith(expect.stringContaining("42%"));
+
+    resolveModel(modelWithSpy().model);
+    const second: SynthHandlers = { onstart: vi.fn(), onend: vi.fn(), onerror: vi.fn() };
+    await vi.waitFor(async () => {
+      synth.cancel();
+      synth.speak("After loading.", second, 1);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(source.start).toHaveBeenCalled();
+    });
+    expect(native.speak).toHaveBeenCalledOnce();
+    synth.dispose();
+  });
+
   it("routes an explicit native voice selection through the browser fallback", () => {
     const { model } = modelWithSpy();
     const h = makeHarness(model);

@@ -14,18 +14,33 @@ export type KokoroModel = {
 type AudioContextLike = Pick<AudioContext, "createBuffer" | "createBufferSource" | "destination" | "resume" | "close" | "state">;
 type KokoroSynthOptions = {
   native: Synth & { dispose?: () => void; setVoice?: (uri: string | null) => void };
-  loadModel?: () => Promise<KokoroModel>;
+  /** Loads the model; reports overall download progress from 0 to 100 when it is known. */
+  loadModel?: (onProgress: (percent: number) => void) => Promise<KokoroModel>;
   createAudioContext?: () => AudioContextLike;
   onStatus?: (message: string) => void;
+  /** How long a reply waits for a still-loading model before using the Windows voice instead. */
+  loadingGraceMs?: number;
 };
 
-async function loadBrowserModel(): Promise<KokoroModel> {
+async function loadBrowserModel(onProgress: (percent: number) => void): Promise<KokoroModel> {
   const { KokoroTTS } = await import("kokoro-js");
+  const files = new Map<string, { loaded: number; total: number }>();
   // Always use the quantized WASM model. WebGPU fp32 loads without error on some integrated GPUs
   // (seen on an AMD Radeon 780M in Edge) but produces unintelligible audio, which a blind user
   // cannot detect or work around. WASM q8 sounds the same everywhere and is a 92 MB download
   // instead of 326 MB.
-  const tts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, { dtype: "q8", device: "wasm" });
+  const tts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, {
+    dtype: "q8",
+    device: "wasm",
+    progress_callback: (info) => {
+      if (info.status !== "progress" || !info.total) return;
+      files.set(info.file, { loaded: info.loaded, total: info.total });
+      let loaded = 0;
+      let total = 0;
+      for (const file of files.values()) { loaded += file.loaded; total += file.total; }
+      if (total > 0) onProgress(Math.min(100, Math.floor((loaded / total) * 100)));
+    },
+  });
   return {
     async generate(text, options) {
       const raw = await tts.generate(text, options);
@@ -51,6 +66,7 @@ export function createKokoroSynth(options: KokoroSynthOptions): Synth & {
 } {
   const loadModel = options.loadModel ?? loadBrowserModel;
   const createContext = options.createAudioContext ?? makeAudioContext;
+  const loadingGraceMs = options.loadingGraceMs ?? 1_500;
   const startupTimeoutMs = 180_000;
   let modelPromise: Promise<KokoroModel> | null = null;
   let context: AudioContextLike | null = null;
@@ -59,14 +75,26 @@ export function createKokoroSynth(options: KokoroSynthOptions): Synth & {
   let selectedVoice: KokoroVoice = KOKORO_DEFAULT_VOICE;
   let preferNative = false;
   let modelFailed = false;
+  let modelReady = false;
+  let lastPercent = -1;
 
   function ensureContext(): AudioContextLike {
     return context ??= createContext();
   }
 
+  function reportProgress(percent: number): void {
+    // Only 5% steps, so a screen reader is not flooded with updates.
+    if (modelReady || percent === lastPercent || percent % 5 !== 0) return;
+    lastPercent = percent;
+    options.onStatus?.(`Downloading Blip's natural voice: ${percent}%. The Windows voice speaks until it is ready.`);
+  }
+
   function getModel(): Promise<KokoroModel> {
     if (modelFailed) return Promise.reject(new Error("Kokoro model is unavailable."));
-    modelPromise ??= loadModel().catch((error: unknown) => {
+    modelPromise ??= loadModel(reportProgress).then((model) => {
+      modelReady = true;
+      return model;
+    }, (error: unknown) => {
       modelPromise = null;
       modelFailed = true;
       options.onStatus?.("Kokoro could not load. Using the browser's voice instead.");
@@ -76,21 +104,48 @@ export function createKokoroSynth(options: KokoroSynthOptions): Synth & {
   }
 
   async function warmup(): Promise<void> {
-    if (preferNative || modelFailed) return;
-    options.onStatus?.("Loading the local Kokoro voice. The first run downloads its voice model.");
+    if (preferNative || modelFailed || modelReady) return;
+    options.onStatus?.("Loading Blip's natural voice. The Windows voice speaks until it is ready.");
     try {
       await getModel();
-      if (!modelFailed) options.onStatus?.("Kokoro natural voice is ready on this device.");
+      if (!modelFailed) options.onStatus?.("Blip's natural voice is ready.");
     } catch {
       // The speech call falls back to the built-in local voice.
     }
   }
 
+  /** The model if it is ready now or within the grace period; null while it is still loading. */
+  async function modelOrNull(): Promise<KokoroModel | null> {
+    const loading = getModel();
+    if (modelReady) return loading;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const grace = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), loadingGraceMs); });
+    try {
+      return await Promise.race([loading, grace]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function speakNative(text: string, handlers: SynthHandlers, rate: number, item: NonNullable<typeof active>): void {
+    item.fallback = true;
+    options.native.speak(text, {
+      onstart: handlers.onstart,
+      onend: () => { if (active === item) active = null; handlers.onend(); },
+      onerror: (reason) => { if (active === item) active = null; handlers.onerror(reason); },
+    }, rate);
+  }
+
   async function speakKokoro(text: string, handlers: SynthHandlers, rate: number, item: NonNullable<typeof active>): Promise<void> {
     try {
       const audioContext = ensureContext();
-      const model = await getModel();
+      const model = await modelOrNull();
       if (active !== item || generation !== item.generation) return;
+      if (model === null) {
+        // Still downloading: speak now with the Windows voice instead of leaving the user in silence.
+        speakNative(text, handlers, rate, item);
+        return;
+      }
       const audio = await model.generate(text, { voice: selectedVoice, speed: rate });
       if (active !== item || generation !== item.generation) return;
       if (audioContext.state === "suspended") await audioContext.resume();
