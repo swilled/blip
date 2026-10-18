@@ -31,6 +31,7 @@ Implement generic multi-step tasks over supported web pages. Blip can locate and
 - **D-11:** Use synthetic, email-like and generic content fixtures for end-to-end acceptance. Do not use a real Gmail login, personal mailbox, or private user content in tests.
 - **D-12:** Preserve the current voice output contract and do not edit voice-owned implementation files. Core may implement protocol/server/extension support locally; shared protocol or policy changes need written voice-owner review before merge.
 - **D-13:** Add deterministic context-specific phrases to the existing exact-phrase vocabulary. Existing submit/result semantics, one-second guard, tracked speech, the bare-yes prohibition, and single Executor remain in force.
+- **D-14:** Acceptance tests must show that a bare “yes” or other general affirmation is rejected even immediately after the exact-phrase prompt. Only the matching context-specific spoken phrase may redeem its bound one-use grant after read-back and the guard; wrong, stale, or mismatched phrases must not dispatch.
 
 ### the agent's Discretion
 - Implement a bounded task/session state machine with explicit user-visible next steps and a clear cancel path.
