@@ -1,57 +1,28 @@
 import type { Synth, SynthHandlers } from "./tts";
 import type { GenerateOptions } from "kokoro-js";
+import { loadKokoroWorker } from "./kokoro-worker-client";
+export { KOKORO_MODEL_ID } from "./kokoro-worker-protocol";
 
 export const KOKORO_DEFAULT_VOICE = "af_heart";
-export const KOKORO_MODEL_ID = "onnx-community/Kokoro-82M-v1.0-ONNX";
 const KOKORO_VOICES = new Set<KokoroVoice>(["af_heart", "am_michael"]);
 
 export type KokoroAudio = { audio: Float32Array; sampling_rate: number };
 type KokoroVoice = NonNullable<GenerateOptions["voice"]>;
 export type KokoroModel = {
   generate(text: string, options: { voice: KokoroVoice; speed: number }): Promise<KokoroAudio>;
+  dispose?(): void;
 };
 
 type AudioContextLike = Pick<AudioContext, "createBuffer" | "createBufferSource" | "destination" | "resume" | "close" | "state">;
 type KokoroSynthOptions = {
   native: Synth & { dispose?: () => void; setVoice?: (uri: string | null) => void };
   /** Loads the model; reports overall download progress from 0 to 100 when it is known. */
-  loadModel?: (onProgress: (percent: number) => void) => Promise<KokoroModel>;
+  loadModel?: (onProgress: (percent: number) => void, signal?: AbortSignal) => Promise<KokoroModel>;
   createAudioContext?: () => AudioContextLike;
   onStatus?: (message: string) => void;
   /** How long a reply waits for a still-loading model before using the Windows voice instead. */
   loadingGraceMs?: number;
 };
-
-async function loadBrowserModel(onProgress: (percent: number) => void): Promise<KokoroModel> {
-  const { KokoroTTS } = await import("kokoro-js");
-  const files = new Map<string, { loaded: number; total: number }>();
-  // Always use the quantized WASM model. WebGPU fp32 loads without error on some integrated GPUs
-  // (seen on an AMD Radeon 780M in Edge) but produces unintelligible audio, which a blind user
-  // cannot detect or work around. WASM q8 sounds the same everywhere and is a 92 MB download
-  // instead of 326 MB.
-  const tts = await KokoroTTS.from_pretrained(KOKORO_MODEL_ID, {
-    dtype: "q8",
-    device: "wasm",
-    progress_callback: (info) => {
-      if (info.status !== "progress" || !info.total) return;
-      files.set(info.file, { loaded: info.loaded, total: info.total });
-      let loaded = 0;
-      let total = 0;
-      for (const file of files.values()) { loaded += file.loaded; total += file.total; }
-      if (total > 0) onProgress(Math.min(100, Math.floor((loaded / total) * 100)));
-    },
-  });
-  return {
-    async generate(text, options) {
-      const raw = await tts.generate(text, options);
-      const samples = raw.audio;
-      return {
-        audio: Array.isArray(samples) ? samples[0] ?? new Float32Array() : samples,
-        sampling_rate: raw.sampling_rate,
-      };
-    },
-  };
-}
 
 function makeAudioContext(): AudioContextLike {
   return new AudioContext();
@@ -64,7 +35,8 @@ export function createKokoroSynth(options: KokoroSynthOptions): Synth & {
   setVoice(selection: string): void;
   dispose(): void;
 } {
-  const loadModel = options.loadModel ?? loadBrowserModel;
+  const loadModel = options.loadModel ?? loadKokoroWorker;
+  const lifetime = new AbortController();
   const createContext = options.createAudioContext ?? makeAudioContext;
   const loadingGraceMs = options.loadingGraceMs ?? 1_500;
   const startupTimeoutMs = 180_000;
@@ -91,7 +63,8 @@ export function createKokoroSynth(options: KokoroSynthOptions): Synth & {
 
   function getModel(): Promise<KokoroModel> {
     if (modelFailed) return Promise.reject(new Error("Kokoro model is unavailable."));
-    modelPromise ??= loadModel(reportProgress).then((model) => {
+    modelPromise ??= loadModel(reportProgress, lifetime.signal).then((model) => {
+      if (lifetime.signal.aborted) { model.dispose?.(); throw new Error("Voice disposed."); }
       modelReady = true;
       return model;
     }, (error: unknown) => {
@@ -167,6 +140,7 @@ export function createKokoroSynth(options: KokoroSynthOptions): Synth & {
     } catch {
       if (active !== item || generation !== item.generation) return;
       modelFailed = true;
+      void modelPromise?.then(model => model.dispose?.(), () => {});
       active = { generation: item.generation, fallback: true };
       item.fallback = true;
       options.onStatus?.("Kokoro could not play. Using the browser's voice instead.");
@@ -232,6 +206,8 @@ export function createKokoroSynth(options: KokoroSynthOptions): Synth & {
     },
     dispose() {
       synth.cancel();
+      lifetime.abort();
+      void modelPromise?.then(model => model.dispose?.(), () => {});
       options.native.dispose?.();
       if (context !== null && context.state !== "closed") void context.close().catch(() => {});
       context = null;

@@ -63,6 +63,26 @@ describe("voice safety protocol helpers", () => {
     });
   });
 
+  it("accepts yes/no only as voice replies to the task-bound email send question", () => {
+    const reducer = new ConfirmationReducer();
+    reducer.arm({ grantId: "email-grant", speakId: "email-readback", phrase: "send this email" });
+
+    expect(reducer.redeem("yes!", "voice-yes", "voice")).toMatchObject({
+      grantId: "email-grant", speakId: "email-readback", phrase: "yes!", source: "voice",
+    });
+
+    const declineReducer = new ConfirmationReducer();
+    declineReducer.arm({ grantId: "email-grant-2", speakId: "email-readback-2", phrase: "send this email" });
+    expect(declineReducer.redeem("no thanks", "voice-no", "voice")).toMatchObject({ phrase: "no thanks", source: "voice" });
+
+    const typedReducer = new ConfirmationReducer();
+    typedReducer.arm({ grantId: "email-grant-3", speakId: "email-readback-3", phrase: "send this email" });
+    expect(typedReducer.redeem("yes", "typed-yes", "typed")).toBeNull();
+
+    reducer.arm({ grantId: "survey-grant", speakId: "survey-readback", phrase: "submit survey" });
+    expect(reducer.redeem("yes", "voice-survey-yes", "voice")).toBeNull();
+  });
+
   it("builds protocol v1 frames without changing the payload", () => {
     expect(makeFrame("speak.done", { speakId: "speech-3", interrupted: false }, "frame-1", 42)).toEqual({
       v: 1,

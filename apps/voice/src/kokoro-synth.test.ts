@@ -41,6 +41,18 @@ function modelWithSpy(generate = vi.fn(async (_text: string, _options: { voice: 
 }
 
 describe("Kokoro browser speech synthesis", () => {
+  it("falls back to Windows speech and releases the model after inference fails", async () => {
+    const model = { generate: vi.fn(async () => { throw new Error("Worker stopped"); }), dispose: vi.fn() };
+    const h = makeHarness(model);
+    h.synth.speak("A long summary.", h.ttsHandlers, 1);
+    await vi.waitFor(() => expect(h.native.speak).toHaveBeenCalledOnce());
+    expect(model.dispose).toHaveBeenCalledOnce();
+    h.native.speak.mock.calls[0]![1].onend();
+    expect(h.ttsHandlers.onend).toHaveBeenCalledOnce();
+    h.synth.speak("Next response.", h.ttsHandlers, 1);
+    expect(h.native.speak).toHaveBeenCalledTimes(2);
+    expect(model.generate).toHaveBeenCalledOnce();
+  });
   it("uses the natural default voice and applies the selected speech rate", async () => {
     const { model, generate } = modelWithSpy();
     const h = makeHarness(model);

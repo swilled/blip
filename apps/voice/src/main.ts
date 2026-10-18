@@ -602,7 +602,7 @@ dockOptions.addEventListener("click", (ev) => {
   if (edge !== "left" && edge !== "right" && edge !== "top") return;
   setDockOptionsOpen(false);
   dockButton.focus();
-  if (edge !== dockEdge) dock.dock(edge);
+  dock.dock(edge);
 });
 document.addEventListener("keydown", (ev) => {
   if (ev.key !== "Escape") return;

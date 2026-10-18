@@ -64,7 +64,22 @@ function splitSentences(text: string): string[] {
     parts.push(text.slice(start, i + 1).trim()); start = i + 1;
   }
   parts.push(text.slice(start).trim());
-  return parts.filter(Boolean);
+  // Keep a long, punctuation-free summary from creating one large inference.
+  // This bound applies to each synthesis call, not to the total spoken reply.
+  return parts.filter(Boolean).flatMap(part => {
+    const chunks: string[] = [];
+    let remaining = Array.from(part);
+    while (remaining.length > 220) {
+      let end = 220;
+      for (let i = 219; i >= 100; i--) {
+        if (/\s/u.test(remaining[i]!)) { end = i; break; }
+      }
+      chunks.push(remaining.slice(0, end).join("").trim());
+      remaining = Array.from(remaining.slice(end).join("").trim());
+    }
+    if (remaining.length) chunks.push(remaining.join(""));
+    return chunks;
+  });
 }
 
 function estimateMs(sentence: string, rate: number): number {

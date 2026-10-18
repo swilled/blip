@@ -65,6 +65,17 @@ function normalizeConfirmation(text) {
     .trim();
 }
 
+function normalizeEmailReply(text) {
+  return text.toLowerCase().replace(/[\p{P}]+/gu, " ").replace(/\s+/gu, " ").trim();
+}
+
+const EMAIL_SEND_AFFIRMATIONS = new Set([
+  "yes", "yeah", "yep", "sure", "okay", "ok", "go ahead", "send it", "yes please", "yes send it",
+]);
+const EMAIL_SEND_DECLINES = new Set([
+  "no", "nope", "no thanks", "no thank you", "keep it as a draft", "leave it as a draft",
+]);
+
 /** Client reducer for server-owned confirmation state; it never stores or dispatches a ConsumedGrant. */
 export class ConfirmationReducer {
   #pending = null;
@@ -95,11 +106,17 @@ export class ConfirmationReducer {
 
   redeem(text, utteranceId, source = "typed") {
     const pending = this.#pending;
+    const normalized = normalizeConfirmation(text);
+    const normalizedEmailReply = normalizeEmailReply(text);
+    const affirmativeEmailReply = pending?.phrase === "send this email" && source === "voice" &&
+      EMAIL_SEND_AFFIRMATIONS.has(normalizedEmailReply);
+    const negativeEmailReply = pending?.phrase === "send this email" && source === "voice" &&
+      EMAIL_SEND_DECLINES.has(normalizedEmailReply);
     if (
       pending === null || pending.redeeming ||
       typeof utteranceId !== "string" || utteranceId.length === 0 ||
       (source !== "voice" && source !== "typed") ||
-      normalizeConfirmation(text) !== pending.phrase
+      (normalized !== pending.phrase && !affirmativeEmailReply && !negativeEmailReply)
     ) return null;
 
     pending.redeeming = true;

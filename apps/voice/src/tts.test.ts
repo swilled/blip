@@ -31,6 +31,19 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe("tts", () => {
+  it("reads a long summary in bounded chunks and completes only after all audio ends", () => {
+    const t = setup();
+    const text = Array.from({ length: 150 }, (_, i) => `word${i}`).join(" ");
+    t.tts.speak(text, { speakId: "summary" });
+    for (let i = 0; i < t.handlers.length; i++) {
+      expect(Array.from(t.spoken[i]!).length).toBeLessThanOrEqual(220);
+      t.handlers[i]!.onend();
+    }
+    expect(t.spoken.join(" ")).toBe(text);
+    expect(t.done).toEqual([]);
+    vi.advanceTimersByTime(400);
+    expect(t.done).toEqual([{ speakId: "summary", interrupted: false }]);
+  });
   it("keeps decimals, abbreviations, dates, emails and URLs intact", () => {
     const t = setup();
     t.tts.speak("Dr. Smith has 1.2 points. Email ada@example.com on Oct. 18. Visit https://example.com.");

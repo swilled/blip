@@ -32,7 +32,12 @@ export async function startPttWire(port: number): Promise<() => Promise<void>> {
       onWindowRequest: (request) => {
         if (!windowDock) return;
         const report = (edge: "left" | "right" | "top" | null) => { if (edge) sidecar?.broadcastWindow({ docked: edge }); };
-        const failed = () => sidecar?.broadcastWindow({ dockAvailable: false });
+        const failed = (error?: unknown) => {
+          console.warn("blip: docking attempt failed", error instanceof Error ? error.message : "Blip window not found; try docking again");
+          // A window can be temporarily unavailable while Edge opens it. Keep the
+          // controls usable so the next attempt can recover without a reconnect.
+          sidecar?.broadcastWindow({ dockAvailable: true });
+        };
         if ("dock" in request) void windowDock.dock(request.dock).then((ok) => (ok ? report(request.dock) : failed()), failed);
         else if (request.drag === "start") void windowDock.dragStart((zone) => sidecar?.broadcastWindow({ zone }), report).catch(failed);
         else void (request.drag === "end" ? windowDock.dragEnd() : windowDock.dragCancel()).then(report, failed);
