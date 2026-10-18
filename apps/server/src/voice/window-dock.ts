@@ -18,17 +18,20 @@ const FOLD_MS = 150;
 const FRAME_MS = 16;
 const DRAG_LIMIT_MS = 30_000;
 
-export function dockLayout(edge: DockEdge, work: Rect, frame: Size): { blip: Rect; browser: Rect } {
+/** Rects are physical pixels; `scale` is the monitor's DPI / 96 and sizes Blip's CSS-pixel constants. */
+export function dockLayout(edge: DockEdge, work: Rect, frame: Size, scale = 1): { blip: Rect; browser: Rect } {
+  const gap = Math.round(GAP * scale);
   if (edge === "top") {
-    const w = STRIP.w + frame.w;
+    const w = Math.round(STRIP.w * scale) + frame.w;
     return {
-      blip: { x: Math.round(work.x + (work.w - w) / 2), y: work.y + GAP, w, h: STRIP.h + frame.h },
+      blip: { x: Math.round(work.x + (work.w - w) / 2), y: work.y + gap, w, h: Math.round(STRIP.h * scale) + frame.h },
       browser: { ...work },
     };
   }
-  const browserW = work.w - PANEL_WIDTH - GAP * 2;
-  const blip = { x: edge === "left" ? work.x + GAP : work.x + work.w - PANEL_WIDTH - GAP, y: work.y + GAP, w: PANEL_WIDTH, h: work.h - GAP * 2 };
-  const browser = { x: edge === "left" ? work.x + PANEL_WIDTH + GAP * 2 : work.x, y: work.y, w: browserW, h: work.h };
+  const panel = Math.round(PANEL_WIDTH * scale);
+  const browserW = work.w - panel - gap * 2;
+  const blip = { x: edge === "left" ? work.x + gap : work.x + work.w - panel - gap, y: work.y + gap, w: panel, h: work.h - gap * 2 };
+  const browser = { x: edge === "left" ? work.x + panel + gap * 2 : work.x, y: work.y, w: browserW, h: work.h };
   return { blip, browser };
 }
 
@@ -72,7 +75,9 @@ const SW_RESTORE = 9;
 const MONITOR_DEFAULTTONEAREST = 2;
 const DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-const MOVE_FLAGS = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS;
+const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4;
+const VK_LBUTTON = 0x01;
+const MOVE_FLAGS =SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS;
 
 interface WinRect { left: number; top: number; right: number; bottom: number }
 type Hwnd = unknown;
@@ -92,6 +97,9 @@ interface Win32 {
   MonitorFromPoint: (pt: { x: number; y: number }, flags: number) => unknown;
   GetMonitorInfoW: (mon: unknown, info: { cbSize: number; rcMonitor?: WinRect; rcWork?: WinRect; dwFlags?: number }) => boolean;
   GetCursorPos: (out: { x?: number; y?: number }) => boolean;
+  GetAsyncKeyState: (vk: number) => number;
+  GetDpiForWindow: (h: Hwnd) => number;
+  SetThreadDpiAwarenessContext: (ctx: number) => unknown;
   GetWindowThreadProcessId: (h: Hwnd, pid: number[]) => number;
   OpenProcess: (access: number, inherit: boolean, pid: number) => unknown;
   QueryFullProcessImageNameW: (proc: unknown, flags: number, buf: Buffer, size: number[]) => boolean;
@@ -126,6 +134,9 @@ function load(): Win32 {
     MonitorFromPoint: user32.func("void * __stdcall MonitorFromPoint(BlipDockPoint pt, uint32_t flags)"),
     GetMonitorInfoW: user32.func("bool __stdcall GetMonitorInfoW(void *mon, _Inout_ BlipDockMonitorInfo *info)"),
     GetCursorPos: user32.func("bool __stdcall GetCursorPos(_Out_ BlipDockPoint *pt)"),
+    GetAsyncKeyState: user32.func("int16_t __stdcall GetAsyncKeyState(int vk)"),
+    GetDpiForWindow: user32.func("uint32_t __stdcall GetDpiForWindow(void *hwnd)"),
+    SetThreadDpiAwarenessContext: user32.func("void * __stdcall SetThreadDpiAwarenessContext(intptr_t ctx)"),
     GetWindowThreadProcessId: user32.func("uint32_t __stdcall GetWindowThreadProcessId(void *hwnd, _Out_ uint32_t *pid)"),
     OpenProcess: kernel32.func("void * __stdcall OpenProcess(uint32_t access, bool inherit, uint32_t pid)"),
     QueryFullProcessImageNameW: kernel32.func("bool __stdcall QueryFullProcessImageNameW(void *proc, uint32_t flags, _Out_ uint16_t *buf, _Inout_ uint32_t *size)"),
@@ -133,6 +144,9 @@ function load(): Win32 {
     DwmGetWindowAttribute: dwmapi.func("long __stdcall DwmGetWindowAttribute(void *hwnd, uint32_t attr, _Out_ BlipDockRect *out, uint32_t size)"),
     proto,
   } as Win32;
+  // Work in physical pixels. A DPI-unaware caller gets scaled window rects but unscaled DWM frame
+  // bounds, which misplaces every window on a scaled display.
+  win32.SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   return win32;
 }
 
@@ -208,6 +222,11 @@ function frameSize(u: Win32, h: Hwnd): Size {
   return { w: Math.max(0, seen.w - (client.right - client.left)), h: Math.max(0, seen.h - (client.bottom - client.top)) };
 }
 
+function dpiScale(u: Win32, h: Hwnd): number {
+  const dpi = u.GetDpiForWindow(h);
+  return dpi > 0 ? dpi / 96 : 1;
+}
+
 function workArea(u: Win32, monitor: unknown): Rect {
   const info = { cbSize: 40 } as { cbSize: number; rcWork?: WinRect };
   u.GetMonitorInfoW(monitor, info);
@@ -234,7 +253,8 @@ async function animate(u: Win32, moves: { h: Hwnd; from: Rect; to: Rect; inset: 
 
 export interface WindowDock {
   dock(edge: DockEdge): Promise<boolean>;
-  dragStart(onZone: (zone: DockEdge | null) => void): Promise<boolean>;
+  /** onDocked fires when the server ends the drag itself (button released without a page event). */
+  dragStart(onZone: (zone: DockEdge | null) => void, onDocked?: (edge: DockEdge | null) => void): Promise<boolean>;
   /** Ends a drag: snaps to the zone under the cursor, or back to the last dock when there is none. */
   dragEnd(): Promise<DockEdge | null>;
   dragCancel(): Promise<DockEdge | null>;
@@ -261,7 +281,7 @@ export function createWindowDock(opts: { title?: string } = {}): WindowDock {
     if (!blip) return false;
     if (u.IsZoomed(blip)) u.ShowWindow(blip, SW_RESTORE);
     const work = workArea(u, u.MonitorFromWindow(blip, MONITOR_DEFAULTTONEAREST));
-    const layout = dockLayout(target, work, frameSize(u, blip));
+    const layout = dockLayout(target, work, frameSize(u, blip), dpiScale(u, blip));
     const moves = [{ h: blip, from: visibleRect(u, blip), to: layout.blip, inset: frameInset(u, blip) }];
     if (browser) {
       if (u.IsZoomed(browser)) u.ShowWindow(browser, SW_RESTORE);
@@ -285,7 +305,7 @@ export function createWindowDock(opts: { title?: string } = {}): WindowDock {
   return {
     get edge() { return edge; },
     dock: (target) => serial(() => doDock(target)),
-    dragStart: (onZone) => serial(async () => {
+    dragStart: (onZone, onDocked) => serial(async () => {
       if (drag) return true;
       const u = load();
       const { blip } = findWindows(u, title);
@@ -296,13 +316,22 @@ export function createWindowDock(opts: { title?: string } = {}): WindowDock {
       const cursor = { x: 0, y: 0 };
       u.GetCursorPos(cursor);
       // Keep the grip under the cursor: it sits near the left end of the folded puck.
-      const grab = { x: 30, y: frame.h + PUCK.h / 2 };
-      const puckAt = (c: { x: number; y: number }): Rect => ({ x: c.x - grab.x, y: c.y - grab.y, w: PUCK.w + frame.w, h: PUCK.h + frame.h });
+      const scale = dpiScale(u, blip);
+      const puck = { w: Math.round(PUCK.w * scale) + frame.w, h: Math.round(PUCK.h * scale) + frame.h };
+      const grab = { x: Math.round(30 * scale), y: frame.h + Math.round((PUCK.h * scale) / 2) };
+      const puckAt = (c: { x: number; y: number }): Rect => ({ x: c.x - grab.x, y: c.y - grab.y, ...puck });
       await animate(u, [{ h: blip, from: visibleRect(u, blip), to: puckAt(cursor), inset }], FOLD_MS);
       u.SetWindowPos(blip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
       const state = {
         zone: null as DockEdge | null,
-        timer: setInterval(() => {
+        timer: setInterval(() => { try {
+          if (drag !== state) return;
+          // The button came up but the page never said so: snap anyway rather than leave a puck behind.
+          if ((u.GetAsyncKeyState(VK_LBUTTON) & 0x8000) === 0) {
+            const zone = stopDrag();
+            void serial(async () => ((await doDock(zone ?? edge)) ? zone ?? edge : null)).then((e) => onDocked?.(e), () => onDocked?.(null));
+            return;
+          }
           const c = { x: 0, y: 0 };
           if (!u.GetCursorPos(c)) return;
           const r = puckAt(c);
@@ -312,7 +341,7 @@ export function createWindowDock(opts: { title?: string } = {}): WindowDock {
             state.zone = zone;
             onZone(zone);
           }
-        }, FRAME_MS),
+        } catch { stopDrag(); } }, FRAME_MS), // a Win32 failure must never crash the server
         limit: setTimeout(() => { void serial(async () => { stopDrag(); await doDock(edge); }); }, DRAG_LIMIT_MS),
       };
       drag = state;

@@ -579,6 +579,8 @@ const dock = createDockClient({
     else if (event.kind === "zone") { if (dragging) setZone(event.zone); }
     else {
       setDockAvailable(true);
+      // The server can finish a drag on its own (button released outside the page).
+      if (dragging) { dragging = false; delete app.dataset.dragging; setZone(null); }
       if (dockGreeted) {
         renderDock(event.edge);
         return;

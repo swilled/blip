@@ -34,7 +34,7 @@ export async function startPttWire(port: number): Promise<() => Promise<void>> {
         const report = (edge: "left" | "right" | "top" | null) => { if (edge) sidecar?.broadcastWindow({ docked: edge }); };
         const failed = () => sidecar?.broadcastWindow({ dockAvailable: false });
         if ("dock" in request) void windowDock.dock(request.dock).then((ok) => (ok ? report(request.dock) : failed()), failed);
-        else if (request.drag === "start") void windowDock.dragStart((zone) => sidecar?.broadcastWindow({ zone })).catch(failed);
+        else if (request.drag === "start") void windowDock.dragStart((zone) => sidecar?.broadcastWindow({ zone }), report).catch(failed);
         else void (request.drag === "end" ? windowDock.dragEnd() : windowDock.dragCancel()).then(report, failed);
       },
     });

@@ -1,4 +1,4 @@
-/* Blip voice window: light "D" design. Layout follows the window shape: a normal window is the
+/* Blip voice window: light "D" design (light only, like the design).  Layout follows the window shape: a normal window is the
    sidebar (docked left or right); a short window is the strip (docked top) or the puck while it is
    being dragged. main.ts sets #app[data-layout] from the window height. */
 
@@ -38,28 +38,6 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #111214;
-    --sand: #1b1d21;
-    --line: #2c2f36;
-    --line-strong: #3d414a;
-    --ink: #f3f4f6;
-    --ink-2: #d2d5db;
-    --muted: #a6abb6;
-    --faint: #6d717a;
-    --accent: #8fb0ff;
-    --accent-ink: #b9ccff;
-    --accent-soft: #1d2a4d;
-    --lock: #ffb547;
-    --lock-ink: #ffd8a1;
-    --lock-soft: #3a2810;
-    --danger: #ff8a80;
-    --focus: #8fb0ff;
-    --on-ink: #111214;
-    color-scheme: dark;
-  }
-}
 
 * { box-sizing: border-box; }
 
@@ -502,11 +480,6 @@ meter { width: 100%; height: 10px; }
   background: var(--lock) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='7.6' y='11' width='8.8' height='6.4' rx='1.4' fill='%23fbfbf9'/%3E%3Cpath d='M9.6 11V9.2a2.4 2.4 0 0 1 4.8 0V11' fill='none' stroke='%23fbfbf9' stroke-width='1.6'/%3E%3C/svg%3E") center / cover no-repeat;
   animation: lock-pulse 2.4s var(--ease-in-out) .5s infinite;
 }
-@media (prefers-color-scheme: dark) {
-  #banner-slot [data-blocked="true"]::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='7.6' y='11' width='8.8' height='6.4' rx='1.4' fill='%23111214'/%3E%3Cpath d='M9.6 11V9.2a2.4 2.4 0 0 1 4.8 0V11' fill='none' stroke='%23111214' stroke-width='1.6'/%3E%3C/svg%3E");
-  }
-}
 
 /* ---------- Caption and conversation ---------- */
 
@@ -590,7 +563,7 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   background: #fff;
   transition: border-color var(--t-fast) var(--ease), box-shadow var(--t) var(--ease);
 }
-@media (prefers-color-scheme: dark) { #typed-input { background: var(--sand); } }
+
 #typed-input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
 #typed-input:focus-visible { outline: none; }
 #typed-input::placeholder { color: var(--muted); }
