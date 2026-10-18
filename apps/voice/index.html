@@ -46,6 +46,8 @@
       </section>
 
       <section id="banner-slot" aria-label="Notices"></section>
+      <fieldset id="microphone-controls">
+      <legend>Microphone input</legend>
       <button id="check-microphone" type="button">Check microphone</button>
       <label for="microphone-device">Microphone</label>
       <select id="microphone-device"><option value="">Windows default microphone</option></select>
@@ -55,6 +57,7 @@
       <p id="microphone-capture-summary" class="label muted"></p>
       <p>Speech recognition: local Whisper. Hold to record; release to transcribe.</p>
       <p id="microphone-check-status" role="status"></p>
+      </fieldset>
       <details id="speech-diagnostics">
         <summary>Speech troubleshooting</summary>
         <p id="build-identity"></p>

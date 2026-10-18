@@ -54,6 +54,11 @@ select {
 
 select { max-width: 100%; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-muted); }
 meter { width: 100%; min-height: 20px; }
+#microphone-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 0; padding: 8px 12px; min-width: 0; border: 1px solid var(--color-muted); border-radius: 8px; }
+#microphone-controls select { flex: 1; min-width: 160px; }
+#microphone-controls label { display: inline-flex; align-items: center; gap: 8px; }
+#microphone-controls input[type="checkbox"] { min-height: 20px; width: 20px; height: 20px; }
+#microphone-controls p { margin: 0; flex-basis: 100%; font-size: 14px; }
 
 .label {
   font-size: 14px;
