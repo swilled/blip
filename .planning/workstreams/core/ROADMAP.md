@@ -22,7 +22,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Gated Submit and Result Reading** - Submit-class actions run only through the Executor after read-back + exact phrase; Blip reads back what the page said (I2) (completed 2026-10-17)
 - [x] **Phase 4: AGY Subscription Brain and Label Repair** - Current runtime uses the locked-down Antigravity CLI with Gemini 3.8 Flash; provider checks and live synthetic startup/roundtrip passed (2026-10-17)
 - [ ] **Phase 5: Hostile Pages, Local Synthetic Web and Freeze** - AGY hostile, full I3, and launcher-cache acceptance pass; written M0 sign-off, teammate review, and mainline release gates remain
-- [x] **Phase 6: Browser Control Contract and Policy Proposal** - Proposal complete (2026-10-18); runtime implementation follows only after written voice-owner review
+- [x] **Phase 6: Browser Control Contract and Policy Proposal** - Proposal complete; core-owner authorized follow-on implementation, with voice-owner review still required before shared protocol or policy changes merge
+- [ ] **Phase 7: Generic Browser Control and Content Reading** - Add user-directed navigation, page reading, links, search, tabs, scrolling and find-on-page on supported sites
+- [ ] **Phase 8: Multi-Step Web Reading and Drafting** - Add generic page-grounded read, summarize, draft, revise and confirmation-gated actions
 
 ## Shared Milestones
 
@@ -199,7 +201,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase 5 technical acceptance; outstanding v1 release gates remain independent and unchanged.
+V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase 5 technical acceptance; Phases 7 and 8 build on the Phase 6 proposal. Outstanding v1 release gates remain independent and unchanged. Voice-owner review is required before shared protocol or live policy changes merge.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -208,7 +210,9 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. AGY Subscription Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
-| 6. Browser Control Contract and Policy Proposal | 2/2 | Proposal complete; written voice-owner review pending before implementation | 2026-10-18 |
+| 6. Browser Control Contract and Policy Proposal | 2/2 | Proposal complete; follow-on phases authorized, review pending before merge | 2026-10-18 |
+| 7. Generic Browser Control and Content Reading | 0/0 | Context captured; ready to plan | - |
+| 8. Multi-Step Web Reading and Drafting | 0/0 | Planned after Phase 7 | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 
@@ -216,13 +220,27 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 
 **Goal:** Define a teammate-reviewable, additive protocol and policy proposal for user-directed page reading, navigation, links, search, tabs, scrolling, and summaries. Preserve the existing form flow, privacy rules, and confirmation gates. This phase does not implement browser-control features. No contract change may merge before the voice owner approves it in writing.
 **Requirements**: TBD
-**Planning note:** Proposal-only phase; no v1 requirement IDs change. AGENT-01 remains deferred for a separate later phase.
+**Planning note:** Proposal-only phase; no v1 requirement IDs change. AGENT-01 and multi-step page workflows are scoped to Phase 8.
 **Depends on:** Phase 5 technical acceptance (passed); written v1 release gates remain independent.
 **Plans:** 2/2 plans executed
 
 Plans:
 - [x] 06-01-PLAN.md — Draft the additive contract and policy proposal
 - [x] 06-02-PLAN.md — Create the evidence matrix, adversarial cases, and approval gates
+
+### Phase 7: Generic browser control and content reading
+
+**Goal:** Implement core-owned browser primitives from the Phase 6 proposal so users can direct Blip from a new tab to supported sites, navigate, read bounded page content, follow selected links, search, switch tabs, scroll, and find text. Every target must come from the user's words or a user-selected live page item. Page text stays untrusted and actions remain in the Executor.
+**Requirements**: No shared requirement changes in this phase
+**Depends on:** Phase 6 proposal; core owner has authorized local implementation. Written voice-owner review remains required before shared protocol or live policy changes merge.
+**Plans:** 0 plans
+
+### Phase 8: Multi-step web reading and drafting
+
+**Goal:** Add generic, page-grounded workflows that can read requested content, summarize it on request, draft and revise text, read the final draft back, and carry out a send or other gated action only after explicit confirmation bound to that exact draft and page. Site names and the email example are not hardcoded.
+**Requirements**: No shared requirement changes in this phase
+**Depends on:** Phase 7
+**Plans:** 0 plans
 
 ---
 *Roadmap created: 2026-10-16*

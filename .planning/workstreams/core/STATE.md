@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready for review
-stopped_at: Verified Phase 6 browser-control proposal; written voice-owner review pending before implementation
-last_updated: "2026-10-18T04:41:23Z"
+status: Ready to plan
+stopped_at: Captured Phase 7 and Phase 8 context for generic browser control and multi-step page tasks
+last_updated: "2026-10-18T04:53:21Z"
 progress:
-  total_phases: 6
+  total_phases: 8
   completed_phases: 6
   total_plans: 78
   completed_plans: 63
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 6 — Browser control contract and policy proposal
+**Current focus:** Phase 7 — Generic browser control and content reading
 
 ## Current Position
 
-Phase: 6 (Browser control contract and policy proposal) — PROPOSAL COMPLETE; REVIEW PENDING
-Plan: 2 of 2
+Phase: 7 (Generic browser control and content reading) — READY TO PLAN
+Plan: Not planned
 
 ## Performance Metrics
 
@@ -154,11 +154,13 @@ None yet.
 - [Phase 1] `PROTOCOL.md` still has `M0 approval: pending`; written approval by the voice owner is a human gate before the protocol freeze can be closed.
 - [Phase 5] Technical AGY acceptance passes. Written M0 sign-off, teammate review, mainline promotion, and `demo-safe` tagging remain release gates.
 - [Phase 5] Teammate review and promotion of the integration branch to `main` are required before `demo-safe` tagging.
-- [Phase 6] Written voice-owner approval of the exact browser-control contract is required before any protocol or live-policy change; no approval artifact exists yet.
+- [Phase 6] Written voice-owner approval of the exact browser-control contract is required before shared protocol or live-policy changes merge; no approval artifact exists yet.
 
 ### Roadmap Evolution
 
 - Phase 6 added: Browser control contract and policy proposal.
+- Phase 7 added: Generic user-directed browser control and content reading.
+- Phase 8 added: Multi-step web reading, drafting, revision, and confirmed actions.
 
 ## Deferred Items
 
@@ -170,6 +172,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-18T04:41:23Z
-Stopped at: Verified Phase 6 proposal and corrected roadmap status; written voice-owner review remains pending
+Last session: 2026-10-18T04:53:21Z
+Stopped at: Added Phase 7 and 8 scopes and captured user decisions, including exact context-specific send phrases
 Resume file: None

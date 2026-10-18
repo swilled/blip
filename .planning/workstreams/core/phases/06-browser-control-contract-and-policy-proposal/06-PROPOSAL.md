@@ -4,8 +4,8 @@ This document is a proposal for review. It describes future additive shapes and 
 
 ## Status and approval
 
-- **Status:** proposal only. No implementation or merge is authorized by this document.
-- **Written voice-owner approval:** pending. The core owner reports that the teammate is comfortable with the direction, but no written decision on this exact contract has been recorded here. That report does not satisfy the approval gate. The **voice-owner approval pending** state remains until the exact contract is approved in writing.
+- **Status:** this remains a proposal, not a live protocol or policy change. The core owner has authorized follow-on implementation work in Phases 7 and 8.
+- **Written voice-owner approval:** pending. No written decision on this exact contract has been recorded here. Core implementation may proceed on the core branch; shared protocol and live-policy changes must remain unmerged until the voice owner approves the exact contract in writing.
 - **Live behavior:** unchanged. Existing form actions, link classification, confirmation grants, protocol schemas, and manifests remain authoritative until a separately reviewed change is approved.
 - **Scope:** the proposal covers browser control and page reading. It does not implement AGENT-01. Multi-step orchestration is a separate later phase after this contract and the basic browser primitives are reviewed.
 
