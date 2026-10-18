@@ -2,6 +2,8 @@
 
 Implementation passed its automated checks. Actual microphone/audio acceptance is pending. Stop at the first failed step and report its message; typing does not count as a microphone pass.
 
+**Current input update:** recognition now uses local whisper.cpp base.en; Chrome only records raw microphone audio through AudioWorklet. Read [04-LOCAL-STT-DECISION.md](04-LOCAL-STT-DECISION.md) for sources and actual native/browser tests. If setup is missing on another machine, run `npm.cmd run stt:setup` once. Hold through the whole phrase, release, then allow about a second for the final transcript; partial captions and Chrome recognition-service recovery messages are no longer expected on this path. The ten-second cap still applies.
+
 ## Start or reopen
 
 From `C:\Users\befit\Documents\formvoice`, use `npm.cmd run demo -- --brain=fake`. If a demo is already running, stop its terminal with Ctrl+C first. To reopen the same current demo without resetting the form, use `npm.cmd run demo -- --reopen-voice`. A build mismatch requires a restart. The launcher locates Chrome and uses `.chrome-profile/demo` for the form and `.chrome-profile/demo-voice` for Blip; no AppData directory selection is needed. If extension setup is requested, load unpacked from `apps\extension\dist` in the form's dedicated Chrome profile.

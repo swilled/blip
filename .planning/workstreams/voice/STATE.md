@@ -146,3 +146,11 @@ Resume file: .planning/workstreams/voice/phases/04-nvda-mode-and-demo-safe/04-RE
 - Old repository demo PID 45444 was identified and stopped. Updated fake-brain demo launched with global hook ready and both extension/voice connected. Runtime and disk identities agree: 8151ed9-2026-10-18T05:23:13.854Z.
 - Demo process is running through tool session 9366. Actual microphone/audio checks have not passed. First requested check: Check microphone, then hold button and complete read the form.
 - No connected browser automation surfaces are available; request content-free diagnostic trace copies for native timing measurements. No public form submitted, no push, and no demo-safe tag created.
+
+### Local recognition migration requested by user, 2026-10-18
+
+- Implementation c3ba227 replaces the live Chrome SpeechRecognition input path with raw AudioWorklet capture and a native Windows whisper.cpp base.en CPU process. Chrome remains microphone/UI; recordings stay in memory and are transcribed after release. Existing deterministic gate authority is unchanged.
+- Official release/model artifacts are installed locally and hash verified; setup is reproducible with npm.cmd run stt:setup. Research, comparisons, sources and exact artifact hashes: phases/04-nvda-mode-and-demo-safe/04-LOCAL-STT-DECISION.md.
+- Final full suite passed 125 files / 1,311 tests, with 16 files / 28 tests skipped. Typecheck and voice build passed. Five real native synthetic speech samples passed in about one second each.
+- A dedicated real Chrome synthetic-microphone test passed with Chrome SpeechRecognition explicitly disabled: actual AudioWorklet -> native model -> one finalized voice frame after release. This test is separate from the unavailable interactive browser connector and does not prove physical microphone/audio acceptance.
+- Existing 04-08 human checkpoint remains open. Both real hold routes, paused dictation, background form focus, output rates and local exact-phrase submission still need current-build user evidence. No phase-complete or freeze claim is made.
