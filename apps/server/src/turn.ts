@@ -6,7 +6,8 @@ import type { BrowserOperation, BrowserPageIdentity, BrowserContentBlock, Browse
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
-import { containsSensitiveUtterance, decideUtteranceForBrain } from "./brain/agy/privacy";
+import { containsSensitivePageText, containsSensitiveUtterance, decideUtteranceForBrain } from "./brain/agy/privacy";
+import { projectExplicitPageContentRequest } from "./brain/agy/content-projection";
 import { classifySensitiveShape } from "@blip/policy/sensitive-shapes";
 import { routeIntent, type IntentRoutePage } from "./brain/agy/intent-router";
 import type { AgyProvider } from "./brain/agy/provider";
@@ -58,8 +59,10 @@ export const MSG_FILLER = "One moment.";
 const MSG_FIELD_PHRASE_TOO_LONG = "That value is too long to fill.";
 const MSG_NO_CURRENT_ERRORS = "There are no errors currently detected.";
 const INTENT_WATCHDOG_MS = 4_000;
+const PAGE_CONTENT_WATCHDOG_MS = 4_000;
 
 const intentRecoveries = new WeakMap<AgyProvider, Promise<void>>();
+const contentRecoveries = new WeakMap<AgyProvider, Promise<void>>();
 
 function startIntentRoleRecovery(provider: AgyProvider): Promise<void> {
   const pending = intentRecoveries.get(provider);
@@ -77,6 +80,24 @@ function startIntentRoleRecovery(provider: AgyProvider): Promise<void> {
 
 async function waitForIntentRecovery(provider: AgyProvider): Promise<void> {
   await intentRecoveries.get(provider);
+}
+
+function startContentRoleRecovery(provider: AgyProvider): Promise<void> {
+  const pending = contentRecoveries.get(provider);
+  if (pending !== undefined) return pending;
+  const recovery = Promise.resolve()
+    .then(() => provider.abortRole("content"))
+    .catch(() => {})
+    .then(() => provider.recreateRole("content"));
+  contentRecoveries.set(provider, recovery);
+  void recovery.finally(() => {
+    if (contentRecoveries.get(provider) === recovery) contentRecoveries.delete(provider);
+  }).catch(() => {});
+  return recovery;
+}
+
+async function waitForContentRecovery(provider: AgyProvider): Promise<void> {
+  await contentRecoveries.get(provider);
 }
 
 type SpeakOptions = { interrupt?: boolean; record?: boolean };
@@ -185,6 +206,68 @@ function speakContent(ctx: TurnContext, blocks: BrowserContentBlock[], mode: "re
     return speak(ctx.hub, ctx.session, parts.length === 0 ? "I couldn't find a readable page summary." : "Page summary. " + parts.join(" ") + (privateBlocks.length > 0 ? " " + MSG_PRIVATE_PAGE_CONTENT : ""), "answer");
   }
   speak(ctx.hub, ctx.session, safeBlocks.map((block) => block.text).join(" ") + (privateBlocks.length > 0 ? " " + MSG_PRIVATE_PAGE_CONTENT : ""), "answer");
+}
+
+async function answerExplicitPageContent(
+  ctx: TurnContext,
+  command: Extract<BrowserCommand, { type: "summary" | "question" }>,
+  blocks: BrowserContentBlock[],
+  identity: BrowserPageIdentity,
+): Promise<void> {
+  const provider = ctx.agyProvider;
+  if (provider === undefined) {
+    return speakContent(ctx, blocks, command.type === "summary" ? "summary" : "question", command.type === "question" ? command.query : undefined);
+  }
+  const request = command.type === "summary"
+    ? { type: "summary" as const, identity }
+    : { type: "page-question" as const, identity, question: command.query };
+  const projection = projectExplicitPageContentRequest(request, blocks, identity);
+  const current = ctx.session.browserCapture?.identity;
+  if (projection === null) {
+    return speak(ctx.hub, ctx.session, "I couldn't safely prepare an answer from the current page. Please ask again.", "error");
+  }
+  if (current === undefined || !identityMatches(current, projection.identity)) {
+    return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+  }
+
+  ctx.hub.send("voice", "earcon", { name: "thinking" });
+  speak(ctx.hub, ctx.session, MSG_FILLER, "filler");
+  let timer: unknown;
+  let settled = false;
+  let rejectTimeout!: (error: Error) => void;
+  let controller: AbortController | undefined;
+  const watchdog = ctx.intentWatchdog ?? {
+    schedule: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs),
+    cancel: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  };
+  const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
+
+  try {
+    await waitForContentRecovery(provider);
+    controller = new AbortController();
+    timer = watchdog.schedule(() => {
+      if (settled) return;
+      controller?.abort(new Error("Agy page-content watchdog expired."));
+      void startContentRoleRecovery(provider).catch(() => {});
+      rejectTimeout(new Error("Agy page-content watchdog expired."));
+    }, PAGE_CONTENT_WATCHDOG_MS);
+    const answer = await Promise.race([provider.answerPageQuestion(projection, controller.signal), timeout]);
+    settled = true;
+    const latest = ctx.session.browserCapture?.identity;
+    if (latest === undefined || !identityMatches(latest, projection.identity)) {
+      return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+    }
+    if (containsSensitivePageText(answer)) {
+      return speak(ctx.hub, ctx.session, MSG_PRIVATE_PAGE_CONTENT, "error");
+    }
+    const incompleteNotice = projection.incomplete ? "I could read only part of the visible page. " : "";
+    speak(ctx.hub, ctx.session, incompleteNotice + answer.trim(), "answer");
+  } catch {
+    settled = true;
+    speak(ctx.hub, ctx.session, "I couldn't safely answer about the current page. Please ask again.", "error");
+  } finally {
+    if (timer !== undefined) watchdog.cancel(timer);
+  }
 }
 
 function authorizedPhrase(target: BrowserAuthorizationTarget, command?: BrowserCommand): string {
@@ -504,7 +587,10 @@ async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, sour
     if (capture.payload.result.status === "timeout") return speak(ctx.hub, ctx.session, "Page content took too long to read.", "error");
     if (capture.payload.result.status === "capture-failed") return speak(ctx.hub, ctx.session, MSG_BROWSER_READ_FAILED, "error");
     if (capture.payload.result.status === "empty") return speak(ctx.hub, ctx.session, "I couldn't find readable page content.", "answer");
-    return speakContent(ctx, capture.payload.result.blocks, command.type === "summary" ? "summary" : command.type === "question" ? "question" : "read", command.type === "question" ? command.query : undefined);
+    if (command.type === "summary" || command.type === "question") {
+      return answerExplicitPageContent(ctx, command, capture.payload.result.blocks, capture.payload.result);
+    }
+    return speakContent(ctx, capture.payload.result.blocks, "read");
   }
 
   if (command.type === "switch-tab") {

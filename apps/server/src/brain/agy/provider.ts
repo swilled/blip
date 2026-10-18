@@ -1,6 +1,7 @@
 import { Intent } from "@blip/protocol";
 import { z } from "zod";
 import type { IntentBrain } from "../fake-brain";
+import { serializePageContentProjectionForPrompt, type PageContentProjection } from "./content-projection";
 import {
   AgyRoleSessionManager,
   UnexpectedAgyToolCallError,
@@ -18,13 +19,16 @@ const RepairPatchSchema = z.object({
   }).strict()).max(250),
 }).strict();
 
+const PageAnswerSchema = z.object({ prose: z.string().min(1).max(1000) }).strict();
+
 export type RepairPatch = z.infer<typeof RepairPatchSchema>;
 
 export type AgyOutputFailureCategory =
   | "invalid_json"
   | "intent_schema_rejected"
   | "intent_shape_rejected"
-  | "repair_schema_rejected";
+  | "repair_schema_rejected"
+  | "content_schema_rejected";
 
 export class InvalidAgyOutputError extends Error {
   readonly role: AgyRole;
@@ -45,6 +49,8 @@ export class InvalidAgyOutputError extends Error {
 export type AgyProvider = IntentBrain & {
   parseIntent(prompt: string, signal?: AbortSignal): Promise<z.infer<typeof Intent>>;
   repairFormModel(prompt: string, signal?: AbortSignal): Promise<RepairPatch>;
+  /** Returns bounded prose only; page content cannot become a browser command or authorization. */
+  answerPageQuestion(projection: PageContentProjection, signal?: AbortSignal): Promise<string>;
   abortRole(role: AgyRole): Promise<void>;
   recreateRole(role: AgyRole): Promise<void>;
   close(): Promise<void>;
@@ -117,6 +123,12 @@ export async function createAgyProvider(options: AgyProviderOptions = {}): Promi
       const parsed = RepairPatchSchema.safeParse(parseJson("repair", await sessions.call("repair", prompt, signal)));
       if (!parsed.success) throw new InvalidAgyOutputError("repair", "repair_schema_rejected");
       return parsed.data;
+    },
+    async answerPageQuestion(projection, signal) {
+      const raw = await sessions.call("content", serializePageContentProjectionForPrompt(projection), signal);
+      const parsed = PageAnswerSchema.safeParse(parseJson("content", raw));
+      if (!parsed.success) throw new InvalidAgyOutputError("content", "content_schema_rejected");
+      return parsed.data.prose;
     },
     abortRole: (role) => sessions.abortRole(role),
     recreateRole: (role) => sessions.recreateRole(role),

@@ -52,6 +52,12 @@ export function containsSensitiveUtterance(text: string): boolean {
   return shapeInUtterance(text) !== null;
 }
 
+/** Detect sensitive shapes in captured page text and model prose before it crosses a boundary. */
+export function containsSensitivePageText(text: string): boolean {
+  return containsSensitiveUtterance(text) || classifySensitiveShape(text) !== null ||
+    /\b(?:password|passcode|secret|credential|api[\s_-]*key|access[\s_-]*token)\s*[:=]\s*\S+/iu.test(text);
+}
+
 function labelMatches(model: FormModel, requestedLabel: string): Field[] {
   const requested = requestedLabel.trim().toLocaleLowerCase();
   if (requested === "") return [];
