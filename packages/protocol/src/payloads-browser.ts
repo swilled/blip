@@ -176,7 +176,7 @@ export type BrowserRequestPayload = z.infer<typeof BrowserRequestPayload>;
 
 export const BrowserOperationName = z.enum([
   "location", "capture", "navigate", "history", "reload", "search", "tabs",
-  "list-links", "read-content", "open-link", "scroll", "find",
+  "list-links", "read-content", "open-link", "scroll", "find", "unknown",
 ]);
 
 const BrowserCommandResult = z.object({
@@ -218,7 +218,8 @@ const BrowserFindResult = z.object({
 const BrowserError = z.object({
   code: z.enum([
     "unsupported-page", "restricted-page", "stale-page", "stale-capture", "not-found",
-    "ambiguous", "unauthorized", "invalid-target", "timeout", "unavailable", "exception",
+    "ambiguous", "unauthorized", "invalid-target", "unsupported-destination-check", "invalid-request",
+    "timeout", "unavailable", "exception",
   ]),
   message: boundedText(300),
 });

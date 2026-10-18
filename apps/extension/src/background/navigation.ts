@@ -1,5 +1,6 @@
-import { findTargetTab, isSupportedTargetTab, rememberTargetTab, type TabRecord, type TargetTab } from "./tabs.js";
+import { findBrowserTargetTab, isBrowserTargetTab, rememberTargetTab, type BrowserTargetTab, type TabRecord } from "./tabs.js";
 import type { PageChange, PageChangeScheduler } from "./changes.js";
+import { snapshotVersions } from "./versions.js";
 
 type Event<T extends (...args: never[]) => void> = { addListener(listener: T): void; removeListener?(listener: T): void };
 type NavigationDetails = { tabId: number; frameId: number; url: string };
@@ -24,22 +25,22 @@ export type NavigationBrowserApi = {
 export type NavigationDependencies = {
   api?: NavigationBrowserApi;
   scheduler: PageChangeScheduler;
-  findTargetTab?: (tabId?: number) => Promise<TargetTab | undefined>;
+  findTargetTab?: (tabId?: number) => Promise<BrowserTargetTab | undefined>;
   rememberTargetTab?: (tab: TabRecord) => boolean;
 };
 
 async function selectedTarget(
   tabId: number,
-  getTarget: (tabId?: number) => Promise<TargetTab | undefined>,
-): Promise<TargetTab | undefined> {
+  getTarget: (tabId?: number) => Promise<BrowserTargetTab | undefined>,
+): Promise<BrowserTargetTab | undefined> {
   const [requested, selected] = await Promise.all([getTarget(tabId), getTarget()]);
   if (!requested || selected?.id !== tabId) return undefined;
   return requested;
 }
 
-function safePage(tabId: number, url: string): TargetTab | undefined {
+function safePage(tabId: number, url: string): BrowserTargetTab | undefined {
   const tab = { id: tabId, url };
-  return isSupportedTargetTab(tab) ? tab : undefined;
+  return isBrowserTargetTab(tab) ? tab : undefined;
 }
 
 /** Register service-worker event handlers synchronously; each async handler fails closed. */
@@ -48,7 +49,7 @@ export function registerNavigationListeners(dependencies: NavigationDependencies
   const tabs = api?.tabs;
   const webNavigation = api?.webNavigation;
   const windows = api?.windows;
-  const getTarget = dependencies.findTargetTab ?? findTargetTab;
+  const getTarget = dependencies.findTargetTab ?? findBrowserTargetTab;
   const rememberTarget = dependencies.rememberTargetTab ?? rememberTargetTab;
   const listeners: Array<() => void> = [];
 
@@ -60,6 +61,7 @@ export function registerNavigationListeners(dependencies: NavigationDependencies
 
   const emit = async (tabId: number, reason: PageChange["reason"], eventUrl?: string): Promise<void> => {
     if (!Number.isSafeInteger(tabId) || tabId < 0) return;
+    snapshotVersions.forget(tabId);
     const tab = await selectedTarget(tabId, getTarget);
     const url = eventUrl ?? tab?.url;
     if (!tab || typeof url !== "string" || !safePage(tabId, url)) return;
@@ -79,7 +81,10 @@ export function registerNavigationListeners(dependencies: NavigationDependencies
   register(tabs?.onActivated, ({ tabId }: { tabId: number }) => {
     void emit(tabId, "tab-activated");
   });
-  register(tabs?.onRemoved, (tabId: number) => dependencies.scheduler.cancel(tabId));
+  register(tabs?.onRemoved, (tabId: number) => {
+    snapshotVersions.forget(tabId);
+    dependencies.scheduler.cancel(tabId);
+  });
   register(windows?.onFocusChanged, (windowId: number) => {
     if (windowId === (windows?.WINDOW_ID_NONE ?? -1) || !tabs?.query) return;
     void tabs.query({ active: true, windowId }).then((activeTabs) => {

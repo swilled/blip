@@ -171,5 +171,17 @@ describe("BrowserResultPayload", () => {
       operation: "capture",
       error: { code: "anything", message: "No" },
     }).success).toBe(false);
+    expect(BrowserResultPayload.safeParse({
+      ok: false,
+      requestId: "request-1",
+      operation: "history",
+      error: { code: "unsupported-destination-check", message: "The next destination cannot be verified." },
+    }).success).toBe(true);
+    expect(BrowserResultPayload.safeParse({
+      ok: false,
+      requestId: "request-1",
+      operation: "unknown",
+      error: { code: "invalid-request", message: "The browser request is malformed." },
+    }).success).toBe(true);
   });
 });

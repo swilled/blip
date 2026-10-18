@@ -3,6 +3,7 @@ import type { Message } from "@blip/protocol";
 import { SOCKET_PONG_TIMEOUT_MS, SocketState } from "./socket-state.js";
 import { dispatchSnapshotRequest } from "./dispatch.js";
 import { dispatchActRequest } from "./acts.js";
+import { dispatchBrowserRequest } from "./browser.js";
 
 declare const __BLIP_WS_URL__: string;
 
@@ -113,6 +114,12 @@ function dispatch(message: Message, socketForReply: WebSocket): void {
   if (message.type === "snapshot.request") return dispatchSnapshotRequest(message, socketForReply);
   if (message.type === "act.request") {
     void dispatchActRequest(message, socketForReply);
+    return;
+  }
+  if (message.type === "browser.request") {
+    void dispatchBrowserRequest(message.payload).then((payload) => {
+      send(socketForReply, buildFrame("browser.result", payload, { replyTo: message.id }));
+    });
     return;
   }
   // Remaining server-to-extension messages are intentionally inert in this first shell.
