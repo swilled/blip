@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createVoiceState } from "./state";
 import { createTalkController, MSG_NOT_CONNECTED, type SttHandlers, type TalkDeps, type UtteranceOut } from "./talk-controller";
-import { MSG_DIDNT_CATCH } from "./stt";
+import { MSG_DIDNT_CATCH, createStt, type RecognitionLike } from "./stt";
 
 function setup(over: Partial<TalkDeps> & { speaking?: boolean; sendResult?: string | null } = {}) {
   const calls: string[] = [];
@@ -32,6 +32,7 @@ function setup(over: Partial<TalkDeps> & { speaking?: boolean; sendResult?: stri
     },
     makeStt: (h) => {
       handlers = h;
+      if (over.makeStt) return over.makeStt(h);
       return {
         press: () => calls.push("stt.press"),
         release: () => calls.push("stt.release"),
@@ -61,6 +62,34 @@ function setup(over: Partial<TalkDeps> & { speaking?: boolean; sendResult?: stri
 const final = (text: string) => ({ text, confidence: 0.9, alternatives: ["alt one"] });
 
 describe("talk controller", () => {
+  it("integrates native readiness and finalized full text before dispatch, then aborts disconnects", () => {
+    const recognizers: RecognitionLike[] = [];
+    let aborted = 0;
+    const t = setup({ makeStt: handlers => createStt({
+      ...handlers,
+      canListen: () => true,
+      makeRecognition() {
+        const r: RecognitionLike = { lang: "", continuous: false, interimResults: false, maxAlternatives: 0, onresult: null, onerror: null, onend: null, start() {}, stop() {}, abort() { aborted++; } };
+        recognizers.push(r); return r;
+      },
+    }) });
+    t.c.activate(); t.c.onHold("start");
+    expect(t.calls).not.toContain("earcon.listening");
+    const first = recognizers[0]!;
+    first.onstart!();
+    expect(t.calls).toContain("earcon.listening");
+    first.onresult!({ results: { length: 1, 0: { isFinal: true, length: 1, 0: { transcript: "read the form", confidence: 0.9 } } } });
+    expect(t.sent).toEqual([]);
+    t.c.onHold("end"); first.onend!();
+    expect(t.sent.map(x => x.text)).toEqual(["read the form"]);
+    t.state.socketOpened(); t.c.onHold("start");
+    const late = recognizers[1]!;
+    t.c.cancelCapture();
+    late.onresult!({ results: { length: 1, 0: { isFinal: true, length: 1, 0: { transcript: "submit survey", confidence: 1 } } } });
+    late.onend!();
+    expect(t.sent).toHaveLength(1);
+    expect(aborted).toBe(1);
+  });
   it("1: ignores a hold before the gate was activated", () => {
     const t = setup();
     t.c.onHold("start");

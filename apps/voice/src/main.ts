@@ -337,7 +337,11 @@ talk = createTalkController({
   spokenText: () => replyParts.join(" "),
 });
 
-const holdOwner = createHoldOwner((s, reason) => talk.onHold(s, reason));
+const holdOwner = createHoldOwner((s, reason) => {
+  if (s === "start" && captionTimer) { clearTimeout(captionTimer); captionTimer = null; }
+  if (s === "end") recordSpeechEvent({ event: "release", generation: nativeRecognitionId });
+  talk.onHold(s, reason);
+});
 const holdButton = el<HTMLButtonElement>("hold-to-talk");
 function renderHoldButton(): void {
   const owner = holdOwner.get();
