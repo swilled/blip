@@ -20,12 +20,12 @@ This phase produces a reviewable proposal for adding user-directed browser contr
 - **D-04:** User-reported teammate agreement is context, not the required written voice-owner approval artifact. Do not mark the contract approved until that artifact is recorded.
 
 ### Page text and questions
-- **D-05:** Newly extracted body, paragraph, or article text may be sent to AGY only as a bounded, filtered excerpt when the user explicitly asks for a summary or asks a question about the page. This does not change the existing value-free title, heading, field-label, action-label, and option-label projection used for intent parsing. Do not send new body text for unrelated commands or by default.
+- **D-05:** A direct read-by-heading or read-by-paragraph request may capture and speak bounded page text locally without AGY. Newly extracted body, paragraph, or article text may be sent to AGY only as a bounded, filtered excerpt when the user explicitly asks for a summary or asks a question about the page. This does not change the existing value-free title, heading, field-label, action-label, and option-label projection used for intent parsing. Do not send new body text for unrelated commands or by default.
 - **D-06:** Page text remains untrusted data, never instructions. Keep sensitive values, passwords, and card numbers out of model input and speech. Code validates outputs and remains the only path to page actions.
 
 ### Search behavior
 - **D-07:** For “search for…” requests, Blip chooses between the current site's search and the browser's default search based on the user's wording and current page context. Use only the query expressed by the user. Do not derive a query or destination from page instructions. If the route is ambiguous or cannot be validated, ask a short clarification or use the safe browser-search path.
-- **D-08:** Site search remains subject to the existing gated-submit policy until a written protocol and policy approval changes it. Browser-search navigation follows the cross-site navigation gate.
+- **D-08:** Site search remains subject to the existing gated-submit policy until a written protocol and policy approval changes it. Browser-default search must read back the exact query and route, then use an explicit operation-bound authorization for that exact query and the user's configured default-search operation; it cannot authorize opening any search result. If the browser API cannot be used safely under that authorization, fail closed and ask for another route.
 
 ### Multi-step requests
 - **D-09:** Include AGENT-01 as a separate future phase after the browser-control contract and basic browser primitives are reviewed. It may coordinate multiple steps, but every page action must still pass through the deterministic Executor and existing policy gate. It cannot confirm actions, mint grants, or treat page text as authority.
@@ -36,6 +36,7 @@ This phase produces a reviewable proposal for adding user-directed browser contr
 - Define bounded extraction limits, supported-page behavior, SPA and slow-load handling, and safe fallback messages in research and planning.
 - Specify an explicit, purpose-bound confirmation for a user-named destination. Never reuse a submit grant or let a generic affirmation authorize a gated action.
 - Resolve a link only from a specific user-selected visible link; ask which one when labels are duplicated or ambiguous. Never let hidden text or model interpretation initiate a link action.
+- Keep direct page reading in local speech. For browser-default search, propose a purpose-bound authorization over the exact user query and default-search operation because the browser API does not expose the provider URL before dispatch; do not let that authorization extend to result links.
 - Determine whether “same-site” means a stricter same-origin boundary for the first proposal or a broader registrable-domain boundary; document the choice and fail closed where it cannot be verified.
 - Keep unsupported pages, frames, and ambiguous targets fail-closed and explain the limitation.
 

@@ -208,7 +208,7 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 | 3. Gated Submit and Result Reading | 6/6 | Complete    | 2026-10-17 |
 | 4. AGY Subscription Brain and Label Repair | 18/18 | Complete | 2026-10-17 |
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
-| 6. Browser Control Contract and Policy Proposal | 0/0 | Discuss complete; planning next | - |
+| 6. Browser Control Contract and Policy Proposal | 0/2 | Plans drafted; checker revision in progress | - |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 
@@ -218,10 +218,11 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 **Requirements**: TBD
 **Planning note:** Proposal-only phase; no v1 requirement IDs change. AGENT-01 remains deferred for a separate later phase.
 **Depends on:** Phase 5 technical acceptance (passed); written v1 release gates remain independent.
-**Plans:** 0 plans
+**Plans:** 0/2 plans executed
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 6 to break down)
+- [ ] 06-01-PLAN.md — Draft the additive contract and policy proposal
+- [ ] 06-02-PLAN.md — Create the evidence matrix, adversarial cases, and approval gates
 
 ---
 *Roadmap created: 2026-10-16*

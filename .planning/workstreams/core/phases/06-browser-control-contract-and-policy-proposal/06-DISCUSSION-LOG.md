@@ -37,7 +37,7 @@
 | Send bounded page text only for explicit summary or question requests | Include filtered page text only when the user asks about it | ✓ |
 
 **User's choice:** Allow bounded page text for explicit summaries and questions.  
-**Notes:** Existing sensitive-data exclusions and untrusted-page rules remain.
+**Notes:** Existing sensitive-data exclusions and untrusted-page rules remain. Research clarified that direct reads by heading or paragraph can speak the bounded text locally without sending it to AGY; only explicit summary or page-question requests may send a separate body-text excerpt to AGY. The existing value-free intent metadata projection stays unchanged.
 
 ## Search routing
 
@@ -48,7 +48,7 @@
 | Choose based on the request and current context | Select a validated route from user wording and page context | ✓ |
 
 **User's choice:** “search for should be based on context the agent should be able to choose.”  
-**Notes:** Search query comes from the user's words, not page text. Existing submit and cross-origin gates remain.
+**Notes:** Search query comes from the user's words, not page text. Site search keeps the existing submit gate. The proposal will read back the exact query and route, and authorize default-provider search as a purpose-bound operation over that query and source page identity; it will not authorize result links.
 
 ## Multi-step agent mode
 
