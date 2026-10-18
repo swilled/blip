@@ -53,6 +53,10 @@ Start each run from a fresh response page or a cleared form. For each beat, wait
 
 ## Startup and reset commands
 
+For the speech repairs, follow [04-REPAIR-ACCEPTANCE.md](04-REPAIR-ACCEPTANCE.md) one check at a time. The updated launcher builds the current client and prints its build identity. Reopen the same running build with `npm.cmd run demo -- --reopen-voice`; if it reports a build mismatch, stop the demo terminal with Ctrl+C and restart `npm.cmd run demo -- --brain=fake`. Microphone permission belongs to Blip's separate voice Chrome profile. Startup alone does not prove microphone or audible speed behavior.
+
+Repair regression (2026-10-18): root suite passed 123 files / 1,298 tests, with 16 files / 28 tests skipped; root typecheck and voice build passed. Device acceptance and the original milestone rehearsals below remain pending.
+
 - One-command demo startup: from the repository root, run `npm.cmd run demo`. Verify the local voice window and expected form are ready before beginning; record the actual startup outcome below.
 - Local synthetic survey reset: `npm.cmd run reset -w @blip/mock-server`. This resets only the local broken survey and its fictional profile.
 - Live Microsoft Form reset: open a fresh response page or clear the page. No automated reset is asserted for the live service.
