@@ -453,6 +453,7 @@ describe("accepted semantic item captures", () => {
     const item = contentItem("item-live");
     let resultValue: unknown = { ...identity, status: "supported", blocks: [], items: [item], truncated: false };
     let wrongRequestId = false;
+    let wrongOperation = false;
     let duringRequest: (() => void) | undefined;
     const hub = {
       request: async (_role: string, _type: string, request: { requestId: string; operation: BrowserOperation }) => {
@@ -461,7 +462,7 @@ describe("accepted semantic item captures", () => {
           payload: {
             ok: true,
             requestId: wrongRequestId ? "different-request" : request.requestId,
-            operation: request.operation.op,
+            operation: wrongOperation ? "capture" : request.operation.op,
             result: resultValue,
           },
         };
@@ -486,6 +487,11 @@ describe("accepted semantic item captures", () => {
 
     resultValue = { ...item, identity: { ...identity, captureRevision: 2 } };
     expect(await executor.execute(operation)).toEqual({ ok: false, reason: "invalid-result" });
+
+    resultValue = { ...identity, status: "supported", blocks: [], items: [item], truncated: false };
+    wrongOperation = true;
+    expect(await executor.execute(operation)).toEqual({ ok: false, reason: "invalid-result" });
+    wrongOperation = false;
 
     resultValue = item;
     wrongRequestId = true;
