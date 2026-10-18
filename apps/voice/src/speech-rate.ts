@@ -1,7 +1,8 @@
 export type SpeechRateDirection = "faster" | "slower";
 
-export function parseSpeechRateCommand(_text: string): SpeechRateDirection | null {
-  return null;
+export function parseSpeechRateCommand(text: string): SpeechRateDirection | null {
+  const normalized = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  return normalized === "faster" || normalized === "slower" ? normalized : null;
 }
 
 export interface SpeechRateAdjustment {

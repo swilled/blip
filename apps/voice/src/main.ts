@@ -7,6 +7,7 @@ import { createHoldClient } from "./hold-client";
 import { createOutputModeController, type VoiceOutputMode } from "./output-mode";
 import { createSocket, type VoiceSocket } from "./socket";
 import { createSpeakBridge } from "./speak-bridge";
+import { adjustSpeechRate, createSpeechRate, parseSpeechRateCommand, type SpeechRateDirection } from "./speech-rate";
 import { createVoiceState } from "./state";
 import { createStt, type RecognitionLike } from "./stt";
 import { createTalkController } from "./talk-controller";
@@ -15,6 +16,7 @@ import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log
 
 const CLIENT_VERSION = "0.0.0";
 const CAPTION_CLEAR_MS = 1000;
+const LOCAL_RATE_ACK_ID = "local-speech-rate-ack";
 
 function el<T extends HTMLElement>(id: string): T {
   const e = document.getElementById(id);
@@ -25,8 +27,9 @@ function el<T extends HTMLElement>(id: string): T {
 function makeSynth(): Synth {
   const ss = window.speechSynthesis;
   return {
-    speak(text, handlers) {
+    speak(text, handlers, rate) {
       const u = new SpeechSynthesisUtterance(text);
+      u.rate = rate;
       const voices = ss.getVoices();
       const v = voices.find((x) => x.localService && /^Microsoft/.test(x.name) && x.lang.startsWith("en"));
       if (v) u.voice = v;
@@ -45,6 +48,8 @@ let connectionExtra = "";
 let replaced = false;
 let socket: VoiceSocket | null = null;
 let bannerModel = createBannerModel();
+let speechRate = createSpeechRate();
+let talk!: ReturnType<typeof createTalkController>;
 
 // Per-exchange bookkeeping for the log.
 let pendingUser = "";
@@ -100,10 +105,16 @@ function commitExchange(): void {
 
 const tts = createTts({
   synth: makeSynth(),
+  getRate: () => speechRate,
   now: () => Date.now(),
   setTimer: (fn, ms) => setTimeout(fn, ms),
   clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
   onDone: (d) => {
+    if (d.speakId === LOCAL_RATE_ACK_ID) {
+      if (state.get() === "thinking" || state.get() === "speaking") state.speechDone();
+      talk.onSpeechEnd();
+      return;
+    }
     bridge.onTtsDone(d); // sends speak.done for defined speakIds only
     if (d.speakId === undefined) return; // local "One moment." filler
     if (d.interrupted) replyInterrupted = true;
@@ -201,6 +212,35 @@ const outputMode = createOutputModeController({
   onModeChange: renderOutputMode,
 });
 
+function rateAcknowledgement(direction: SpeechRateDirection): string {
+  const result = adjustSpeechRate(speechRate, direction);
+  speechRate = result.rate;
+  if (result.limit === "fastest") return "Already at the fastest rate.";
+  if (result.limit === "slowest") return "Already at the slowest rate.";
+  return `Speech rate is now ${speechRate.toFixed(1)}.`;
+}
+
+function handleLocalRateUtterance(text: string): boolean {
+  const direction = parseSpeechRateCommand(text);
+  if (!direction) return false;
+  const acknowledgement = rateAcknowledgement(direction);
+  el("output-mode-status").textContent = `${acknowledgement} Using ${outputMode.getMode() === "agent-voice" ? "Blip voice" : "NVDA screen reader"}.`;
+  state.messageSent();
+  tts.speak(acknowledgement, { speakId: LOCAL_RATE_ACK_ID });
+  return true;
+}
+
+document.querySelectorAll<HTMLButtonElement>("[data-speech-rate]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const direction = button.dataset.speechRate;
+    if (direction !== "faster" && direction !== "slower") return;
+    const acknowledgement = rateAcknowledgement(direction);
+    el("output-mode-status").textContent = acknowledgement;
+    state.messageSent();
+    tts.speak(acknowledgement, { speakId: LOCAL_RATE_ACK_ID });
+  });
+});
+
 document.querySelectorAll<HTMLInputElement>('input[name="output-mode"]').forEach((radio) => {
   radio.addEventListener("change", () => {
     if (!radio.checked) return;
@@ -214,11 +254,12 @@ const RecognitionImpl = ((window as unknown as { SpeechRecognition?: Recognition
   | RecognitionCtor
   | undefined;
 
-const talk = createTalkController({
+talk = createTalkController({
   socket: {
     sendPtt: (s) => socket?.sendPtt(s),
     sendUtterance: (u) => socket?.sendUtterance(u) ?? null,
   },
+  handleLocalUtterance: handleLocalRateUtterance,
   makeStt: (h) =>
     createStt({
       makeRecognition: () => {
@@ -271,6 +312,7 @@ form.addEventListener("submit", (ev) => {
   const text = input.value.trim();
   input.value = "";
   if (!text) return;
+  if (handleLocalRateUtterance(text)) return;
   if (normalize(text) === "stop") {
     talk.onStopTyped(); // reports interrupted speak.done per outstanding speak; never sent to the server
     return;

@@ -44,6 +44,8 @@ export interface TalkDeps {
   earcons: { play(name: "listening"): void };
   caption: { render(text: string, isFinal: boolean): void; clear(): void };
   log: { markInterrupted(): void; showMessage(text: string): void; userSaid(text: string): void };
+  /** Handles exact local commands before any server dispatch or speech cancellation. */
+  handleLocalUtterance?: (text: string) => boolean;
   /** The text of what Blip is currently saying, for the echo filter. */
   spokenText: () => string;
   bargeInMode?: () => BargeInMode;
@@ -75,6 +77,10 @@ export function createTalkController(deps: TalkDeps): TalkController {
       deps.tts.cancel();
       deps.caption.clear();
       if (source === "hold") deps.state.noTranscript();
+      return;
+    }
+    if (deps.handleLocalUtterance?.(final.text)) {
+      deps.caption.clear();
       return;
     }
     const u: UtteranceOut = {
@@ -109,6 +115,11 @@ export function createTalkController(deps: TalkDeps): TalkController {
         }
         if (echoRequired && isEchoOfSpeech(final.text, deps.spokenText())) {
           source = null;
+          return;
+        }
+        if (deps.handleLocalUtterance?.(final.text)) {
+          source = null;
+          deps.caption.clear();
           return;
         }
         deps.tts.cancel();
