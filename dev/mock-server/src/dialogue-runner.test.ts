@@ -316,11 +316,13 @@ describe("real voice dialogue runner", () => {
       await handlers.utterance?.(ctx);
     };
 
+    await utter(`change password to ${sentinel}${"x".repeat(205)}`);
     await utter(`change password to ${sentinel}`);
     await utter("done");
 
     const transcript = sent.filter((frame) => frame.type === "transcript").map((frame) => frame.payload);
     expect(transcript[0]).toEqual({ utteranceId: "sensitive-0", heardAs: "[sensitive entry withheld]", routedTo: "grammar" });
+    expect(transcript[1]).toEqual({ utteranceId: "sensitive-1", heardAs: "[sensitive entry withheld]", routedTo: "grammar" });
     expect(JSON.stringify(sent)).not.toContain(sentinel);
     expect(session.lastSpoken).not.toContain(sentinel);
     expect(intentCalls).toBe(0);

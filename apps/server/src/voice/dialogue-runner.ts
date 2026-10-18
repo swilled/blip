@@ -9,6 +9,7 @@ import {
 import { type HandlerContext, type Handlers, type Hub } from "../hub/hub";
 import type { Session } from "../session/session";
 import type { DialogueEvent, DialogueState, Effect, SpeakEffect } from "@blip/dialogue";
+import { isOverlongSensitiveUtterance } from "@blip/dialogue";
 import type { GatePort } from "./gate-port";
 import profileTemplate from "../../../../fixtures/demo/profile.template.json" with { type: "json" };
 
@@ -104,6 +105,9 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
   ): Promise<void> {
     const session = context?.session ?? activeSession!;
     const form = formOverride !== undefined ? formOverride : currentForm(session);
+    const currentFieldId = state.currentFieldId;
+    const overlongSensitiveUtterance = event.type === "utterance"
+      && isOverlongSensitiveUtterance(event.utterance.text, form, currentFieldId);
     const injectionDetected = form !== null && session.page?.untrustedInstructionDetected === true;
     const result = reduce(state, event, {
       form,
@@ -120,7 +124,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     try {
       if (event.type === "utterance") {
         const routedTo = result.effects.some((effect) => effect.kind === "parseIntent") ? "model" : "grammar";
-        const sensitiveHandoff = result.effects.some((effect) => effect.kind === "focus"
+        const sensitiveHandoff = overlongSensitiveUtterance || result.effects.some((effect) => effect.kind === "focus"
           && form?.fields.some((field) => field.id === effect.fieldId && field.sensitive !== "none"));
         hub.send("voice", "transcript", {
           utteranceId: event.utterance.utteranceId,
