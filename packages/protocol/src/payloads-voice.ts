@@ -94,7 +94,7 @@ export const StatePayload = z.object({
   focusFieldId: z.string().optional(),
   busy: z.boolean(),
   extensionConnected: z.boolean(),
-  brain: z.enum(["claude", "fake"]),
+  brain: z.enum(["agy", "fake"]),
 });
 export type StatePayload = z.infer<typeof StatePayload>;
 

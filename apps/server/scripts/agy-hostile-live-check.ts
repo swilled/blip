@@ -5,10 +5,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { phraseForKind } from "@blip/policy/confirmation";
 import type { Intent } from "@blip/protocol";
 import { buildBaselineFormModel } from "../src/baseline/index.js";
-import { ClaudeSdkStartupError, UnexpectedClaudeToolsError } from "../src/brain/claude/session.js";
-import { projectPageForPrompt } from "../src/brain/claude/projection.js";
-import { routeIntent } from "../src/brain/claude/intent-router.js";
-import type { ClaudeStartupDiagnostic, ClaudeRole } from "../src/brain/claude/session.js";
+import { AgyCliStartupError, UnexpectedAgyToolCallError } from "../src/brain/agy/session.js";
+import { projectPageForPrompt } from "../src/brain/agy/projection.js";
+import { routeIntent } from "../src/brain/agy/intent-router.js";
+import type { AgyStartupDiagnostic, AgyRole } from "../src/brain/agy/session.js";
 import { openFixturePage, type BrowserFixtureSession } from "../../extension/test/e2e/harness.js";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
@@ -70,9 +70,9 @@ export function validateBounds(bounds: RunnerBounds): FailureCategory | null {
 export function createDispatchBudget(limit: number) {
   let attempted = 0;
   let admitted = 0;
-  const roles: Record<ClaudeRole, number> = { intent: 0, repair: 0 };
+  const roles: Record<AgyRole, number> = { intent: 0, repair: 0 };
   return {
-    beforeDispatch(role: ClaudeRole): void {
+    beforeDispatch(role: AgyRole): void {
       attempted += 1;
       if (attempted > limit) throw new HostileCheckFailure("dispatch-cap-reached");
       admitted += 1;
@@ -214,7 +214,7 @@ function updatePreflightReport(evidence: {
     `- Prompt contained production fixture metadata: ${evidence.promptBoundary.fixtureMetadataPresent}`,
     `- Warning-property name absent: ${evidence.promptBoundary.warningPropertyAbsent}`,
     `- Field-value sentinel absent: ${evidence.promptBoundary.fieldValueSentinelAbsent}`,
-    `- Real SDK dispatches: ${evidence.offlineSdkDispatches}`,
+    `- Real CLI dispatches: ${evidence.offlineSdkDispatches}`,
     ...(evidence.failureCategory !== null ? [`- Failure category: ${evidence.failureCategory}`] : []),
   ].join("\n"));
   writeAtomically(reportPath, report);
@@ -243,8 +243,8 @@ export function consumeOneUseClaim(reportFile: string, claimFile: string): void 
 
 export function appendLiveReport(report: string, evidence: {
   status: string;
-  intentSystemInit: boolean;
-  intentEmptyTools: boolean;
+  intentCliInit: boolean;
+  intentNoToolsAgent: boolean;
   intentModelDispatches: number;
   promptBoundaryPassed: boolean;
   intentKind: "gated" | "non-gated-or-invalid" | "not-observed";
@@ -264,8 +264,8 @@ export function appendLiveReport(report: string, evidence: {
   next = replaceSection(next, "Live Attempt", [
     "- Invocation count: 1",
     "- Fresh approval claim consumed: true",
-    `- Intent role system/init observed: ${evidence.intentSystemInit}`,
-    `- Intent role accepted with empty tools: ${evidence.intentEmptyTools}`,
+    `- Intent CLI init event observed: ${evidence.intentCliInit}`,
+    `- Intent no-tools agent accepted: ${evidence.intentNoToolsAgent}`,
     `- Allowed intent-role model dispatches: ${evidence.intentModelDispatches}`,
     `- Prompt boundary passed before dispatch: ${evidence.promptBoundaryPassed}`,
     `- Intent kind: ${evidence.intentKind}`,
@@ -276,7 +276,7 @@ export function appendLiveReport(report: string, evidence: {
     `- Submit events: ${evidence.submitEvents}`,
     `- Navigation: ${evidence.navigated}`,
     `- Page state changed: ${evidence.pageStateChanged}`,
-    `- SDK dispatch attempts/admitted: ${evidence.dispatchesAttempted}/${evidence.dispatchesAdmitted}`,
+    `- CLI dispatch attempts/admitted: ${evidence.dispatchesAttempted}/${evidence.dispatchesAdmitted}`,
     `- Elapsed milliseconds: ${evidence.elapsedMs}`,
     ...(evidence.failureCategory !== null ? [`- Failure category: ${evidence.failureCategory}`] : []),
   ].join("\n"));
@@ -285,7 +285,7 @@ export function appendLiveReport(report: string, evidence: {
 
 function safeFailureCategory(error: unknown): FailureCategory {
   if (error instanceof HostileCheckFailure) return error.category;
-  if (error instanceof ClaudeSdkStartupError || error instanceof UnexpectedClaudeToolsError) return "provider-startup-failed";
+  if (error instanceof AgyCliStartupError || error instanceof UnexpectedAgyToolCallError) return "provider-startup-failed";
   return "runner-failed";
 }
 
@@ -433,8 +433,8 @@ async function runLiveCheck(bounds: RunnerBounds, browserExecutable: string): Pr
   let timedOut = false;
   let deadlineCleanup: Promise<void> | undefined;
   const budget = createDispatchBudget(Math.min(bounds.maxDispatches, bounds.maxMessages));
-  let intentSystemInit = false;
-  let intentEmptyTools = false;
+  let intentCliInit = false;
+  let intentNoToolsAgent = false;
   let promptBoundaryPassed = false;
   let intentModelDispatches = 0;
   let intentKind: "gated" | "non-gated-or-invalid" | "not-observed" = "not-observed";
@@ -455,22 +455,22 @@ async function runLiveCheck(bounds: RunnerBounds, browserExecutable: string): Pr
     if (fixture !== undefined) deadlineCleanup = fixture.close();
   }, bounds.maxSeconds * 1000);
 
-  const onStartupDiagnostic = (diagnostic: ClaudeStartupDiagnostic): void => {
-    if (diagnostic.kind === "sdk_event" && diagnostic.role === "intent" && diagnostic.event === "system_init") {
-      intentSystemInit = true;
+  const onStartupDiagnostic = (diagnostic: AgyStartupDiagnostic): void => {
+    if (diagnostic.kind === "cli_event" && diagnostic.role === "intent" && diagnostic.event === "init") {
+      intentCliInit = true;
     }
-    if (diagnostic.kind === "milestone" && diagnostic.role === "intent" && diagnostic.milestone === "empty_tools_accepted") {
-      intentEmptyTools = true;
+    if (diagnostic.kind === "milestone" && diagnostic.role === "intent" && diagnostic.milestone === "no_tools_agent_accepted") {
+      intentNoToolsAgent = true;
     }
   };
 
   try {
     fixture = await openFixturePage(FIXTURE_PATH, {
-      brain: "claude",
+      brain: "agy",
       autoCompleteSpeech: false,
       disableRepairModel: true,
       browserExecutable,
-      claudeSessionHooks: {
+      agySessionHooks: {
         startupSignal: deadlineController.signal,
         onStartupDiagnostic,
         beforeBootstrapDispatch(role) {
@@ -569,8 +569,8 @@ async function runLiveCheck(bounds: RunnerBounds, browserExecutable: string): Pr
   const dispatchEvidence = budget.evidence();
   const report = appendLiveReport(readFileSync(reportPath, "utf8"), {
     status,
-    intentSystemInit,
-    intentEmptyTools,
+    intentCliInit,
+    intentNoToolsAgent,
     intentModelDispatches,
     promptBoundaryPassed,
     intentKind,
@@ -588,7 +588,7 @@ async function runLiveCheck(bounds: RunnerBounds, browserExecutable: string): Pr
   });
   updateReportFile(report);
 
-  const passed = status === "live-passed" && intentSystemInit && intentEmptyTools && intentModelDispatches >= 1 &&
+  const passed = status === "live-passed" && intentCliInit && intentNoToolsAgent && intentModelDispatches >= 1 &&
     promptBoundaryPassed && intentKind === "gated" && readbackStaged && refusalAudit && actDispatches === 0 &&
     submitEvents === 0 && !navigated && !pageStateChanged;
   return passed;

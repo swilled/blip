@@ -7,19 +7,19 @@ import {
   InvalidIntentResultError,
   routeIntent,
   StaleIntentPageError,
-} from "../src/brain/claude/intent-router";
-import { InvalidClaudeOutputError } from "../src/brain/claude/provider";
-import { RepairCache } from "../src/brain/claude/repair-cache";
-import { validateRepairPatch } from "../src/brain/claude/repair-schema";
-import { projectPageForPrompt, serializeProjectionForPrompt } from "../src/brain/claude/projection";
+} from "../src/brain/agy/intent-router";
+import { InvalidAgyOutputError } from "../src/brain/agy/provider";
+import { RepairCache } from "../src/brain/agy/repair-cache";
+import { validateRepairPatch } from "../src/brain/agy/repair-schema";
+import { projectPageForPrompt, serializeProjectionForPrompt } from "../src/brain/agy/projection";
 import {
-  ClaudeSdkStartupError,
-  UnexpectedClaudeToolsError,
-  type ClaudeRole,
-  type ClaudeSdkEventCategory,
-  type ClaudeStartupDiagnostic,
-  type ClaudeStartupFailureCategory,
-} from "../src/brain/claude/session";
+  AgyCliStartupError,
+  UnexpectedAgyToolCallError,
+  type AgyRole,
+  type AgyCliEventCategory,
+  type AgyStartupDiagnostic,
+  type AgyStartupFailureCategory,
+} from "../src/brain/agy/session";
 
 export const LIVE_CHECK_MAX_SECONDS = 900;
 export const LIVE_CHECK_PROMPT_LIMITS = { intent: 4, repair: 1, total: 5 } as const;
@@ -40,8 +40,8 @@ export type LiveCheckArguments = { live: boolean; maxSeconds: number };
 export type LiveCheckProvider = {
   parseIntent(prompt: string, signal?: AbortSignal): Promise<unknown>;
   repairFormModel(prompt: string, signal?: AbortSignal): Promise<unknown>;
-  abortRole(role: ClaudeRole): Promise<void>;
-  recreateRole(role: ClaudeRole): Promise<void>;
+  abortRole(role: AgyRole): Promise<void>;
+  recreateRole(role: AgyRole): Promise<void>;
   close(): Promise<void>;
 };
 
@@ -67,7 +67,7 @@ export type LiveCheckProbeEvidence = {
   intentSchemaValid: boolean[];
   currentSyntheticIdMatched: boolean[];
   cancellationVerified: boolean | null;
-  recreatedIntentToolCount: number | null;
+  recreatedIntentToolCallBlocked: boolean | null;
   repairPatchAccepted: boolean | null;
   repairFailureCategory: LiveCheckRepairFailureCategory | null;
   repairCacheReloaded: boolean | null;
@@ -90,16 +90,16 @@ export type LiveCheckRepairFailureCategory =
   | "repair_failed";
 
 export type LiveCheckStartupRoleEvidence = {
-  firstEvent: ClaudeSdkEventCategory | null;
-  lastEvent: ClaudeSdkEventCategory | null;
+  firstEvent: AgyCliEventCategory | null;
+  lastEvent: AgyCliEventCategory | null;
   eventCount: number;
   initReceived: boolean;
-  emptyToolsAccepted: boolean;
+  noToolsAgentAccepted: boolean;
   bootstrapCompleted: boolean;
-  failureCategory: ClaudeStartupFailureCategory | null;
+  failureCategory: AgyStartupFailureCategory | null;
 };
 
-export type LiveCheckStartupEvidence = Record<ClaudeRole, LiveCheckStartupRoleEvidence>;
+export type LiveCheckStartupEvidence = Record<AgyRole, LiveCheckStartupRoleEvidence>;
 
 export type LiveCheckResult = LiveCheckProbeEvidence & {
   status: "offline" | "completed" | "externally_blocked" | "timeout" | "failed";
@@ -107,9 +107,8 @@ export type LiveCheckResult = LiveCheckProbeEvidence & {
   promptCounts: { intent: number; repair: number; total: number };
   bootstrapCounts: { intent: number; repair: number; total: number };
   dispatchCounts: { intent: number; repair: number; total: number };
-  rejectingRole: ClaudeRole | null;
-  toolCount: number | null;
-  invalidToolList: boolean;
+  rejectingRole: AgyRole | null;
+  toolCallBlocked: boolean;
   startupDiagnostics: LiveCheckStartupEvidence;
   subsequentPromptsAfterBlock: 0;
 };
@@ -117,13 +116,13 @@ export type LiveCheckResult = LiveCheckProbeEvidence & {
 export type LiveCheckDependencies = {
   /** Read only the plan-specific report; this callback is not called in offline mode. */
   readReport(): Promise<string>;
-  /** Atomically claim the one-time approval before importing or starting the production SDK. */
+  /** Atomically claim the one-time approval before starting the production AGY CLI. */
   consumeApproval(): Promise<boolean>;
-  /** The production implementation dynamically imports the SDK only after approval passes. */
+  /** The production implementation starts the AGY CLI only after approval passes. */
   createProvider(
     signal: AbortSignal,
-    beforeBootstrapDispatch: (role: ClaudeRole) => void,
-    onStartupDiagnostic: (diagnostic: ClaudeStartupDiagnostic) => void,
+    beforeBootstrapDispatch: (role: AgyRole) => void,
+    onStartupDiagnostic: (diagnostic: AgyStartupDiagnostic) => void,
   ): Promise<LiveCheckProvider>;
   /** Injected so offline tests can prove gates without sending any provider prompt. */
   verify(
@@ -261,21 +260,18 @@ export function createLiveCheckProbeEvidence(): LiveCheckProbeEvidence {
     intentSchemaValid: [],
     currentSyntheticIdMatched: [],
     cancellationVerified: null,
-    recreatedIntentToolCount: null,
+    recreatedIntentToolCallBlocked: null,
     repairPatchAccepted: null,
     repairFailureCategory: null,
     repairCacheReloaded: null,
   };
 }
 
-function safeToolDiagnostic(error: unknown): Pick<LiveCheckResult, "rejectingRole" | "toolCount" | "invalidToolList"> | null {
-  if (!(error instanceof UnexpectedClaudeToolsError)) return null;
+function safeToolDiagnostic(error: unknown): Pick<LiveCheckResult, "rejectingRole" | "toolCallBlocked"> | null {
+  if (!(error instanceof UnexpectedAgyToolCallError)) return null;
   return {
     rejectingRole: error.role === "intent" || error.role === "repair" ? error.role : null,
-    toolCount: typeof error.toolCount === "number" && Number.isSafeInteger(error.toolCount) && error.toolCount >= 0
-      ? error.toolCount
-      : null,
-    invalidToolList: error.invalidToolList === true,
+    toolCallBlocked: true,
   };
 }
 
@@ -354,7 +350,7 @@ export async function runApprovedProbeSequence(
     } catch (error) {
       evidence.intentFailureCategories[evidenceIndex] = error instanceof InvalidIntentResultError
         ? "invalid_intent_result"
-        : error instanceof InvalidClaudeOutputError && [
+        : error instanceof InvalidAgyOutputError && [
           "invalid_json", "intent_schema_rejected", "intent_shape_rejected",
         ].includes(error.category)
           ? error.category as LiveCheckIntentFailureCategory
@@ -398,7 +394,7 @@ export async function runApprovedProbeSequence(
       assertProbeActive(signal);
       evidence.stage = "recreation";
       await provider.recreateRole("intent");
-      evidence.recreatedIntentToolCount = 0;
+      evidence.recreatedIntentToolCallBlocked = false;
       assertProbeActive(signal);
       await routeOnce("Could you place the cursor in the Work email field?", "recovery", false, 1);
     }
@@ -422,7 +418,7 @@ export async function runApprovedProbeSequence(
   } catch (error) {
     evidence.repairPatchAccepted = false;
     evidence.repairCacheReloaded = false;
-    evidence.repairFailureCategory = error instanceof InvalidClaudeOutputError &&
+    evidence.repairFailureCategory = error instanceof InvalidAgyOutputError &&
       (error.category === "invalid_json" || error.category === "repair_schema_rejected")
       ? error.category
       : "repair_failed";
@@ -528,7 +524,7 @@ function safeEvidence(evidence: LiveCheckProbeEvidence): LiveCheckProbeEvidence 
     intentSchemaValid: boolArray(evidence.intentSchemaValid),
     currentSyntheticIdMatched: boolArray(evidence.currentSyntheticIdMatched),
     cancellationVerified: nullableBoolean(evidence.cancellationVerified),
-    recreatedIntentToolCount: nullableCount(evidence.recreatedIntentToolCount),
+    recreatedIntentToolCallBlocked: nullableBoolean(evidence.recreatedIntentToolCallBlocked),
     repairPatchAccepted: nullableBoolean(evidence.repairPatchAccepted),
     repairFailureCategory: nullableRepairFailureCategory(evidence.repairFailureCategory),
     repairCacheReloaded: nullableBoolean(evidence.repairCacheReloaded),
@@ -547,14 +543,11 @@ function emptyDispatchCounts(): LiveCheckResult["dispatchCounts"] {
   return { intent: 0, repair: 0, total: 0 };
 }
 
-const SDK_EVENT_CATEGORIES: ClaudeSdkEventCategory[] = [
-  "system_init", "system_status", "system_api_retry", "system_other", "result", "assistant", "user",
-  "stream_event", "tool_progress", "auth_status", "other",
-];
+const CLI_EVENT_CATEGORIES: AgyCliEventCategory[] = ["init", "user", "assistant", "tool", "result", "other"];
 
-const STARTUP_FAILURE_CATEGORIES: ClaudeStartupFailureCategory[] = [
-  "sdk_import_error", "sdk_query_error", "sdk_stream_error", "sdk_stream_ended",
-  "init_tool_list_invalid", "init_tools_present", "startup_aborted", "startup_error",
+const STARTUP_FAILURE_CATEGORIES: AgyStartupFailureCategory[] = [
+  "cli_spawn_error", "cli_init_error", "cli_stream_error", "cli_stream_ended", "cli_turn_error",
+  "unexpected_agent", "unexpected_tool_call", "startup_aborted", "startup_error",
 ];
 
 function emptyStartupRoleEvidence(): LiveCheckStartupRoleEvidence {
@@ -563,7 +556,7 @@ function emptyStartupRoleEvidence(): LiveCheckStartupRoleEvidence {
     lastEvent: null,
     eventCount: 0,
     initReceived: false,
-    emptyToolsAccepted: false,
+    noToolsAgentAccepted: false,
     bootstrapCompleted: false,
     failureCategory: null,
   };
@@ -573,43 +566,40 @@ function emptyStartupEvidence(): LiveCheckStartupEvidence {
   return { intent: emptyStartupRoleEvidence(), repair: emptyStartupRoleEvidence() };
 }
 
-function recordStartupDiagnostic(evidence: LiveCheckStartupEvidence, diagnostic: ClaudeStartupDiagnostic): void {
+function recordStartupDiagnostic(evidence: LiveCheckStartupEvidence, diagnostic: AgyStartupDiagnostic): void {
   if (typeof diagnostic !== "object" || diagnostic === null ||
     (diagnostic.role !== "intent" && diagnostic.role !== "repair")) return;
   const role = evidence[diagnostic.role];
-  if (diagnostic.kind === "sdk_event" && SDK_EVENT_CATEGORIES.includes(diagnostic.event)) {
+  if (diagnostic.kind === "cli_event" && CLI_EVENT_CATEGORIES.includes(diagnostic.event)) {
     role.firstEvent ??= diagnostic.event;
     role.lastEvent = diagnostic.event;
     role.eventCount = Math.min(100, role.eventCount + 1);
   } else if (diagnostic.kind === "milestone") {
     if (diagnostic.milestone === "init_received") role.initReceived = true;
-    if (diagnostic.milestone === "empty_tools_accepted") role.emptyToolsAccepted = true;
+    if (diagnostic.milestone === "no_tools_agent_accepted") role.noToolsAgentAccepted = true;
     if (diagnostic.milestone === "bootstrap_completed") role.bootstrapCompleted = true;
   } else if (diagnostic.kind === "failure" && STARTUP_FAILURE_CATEGORIES.includes(diagnostic.category)) {
     role.failureCategory = diagnostic.category;
   }
 }
 
-function safeStartupFailure(error: unknown): { role: ClaudeRole; category: ClaudeStartupFailureCategory } | null {
-  if (error instanceof ClaudeSdkStartupError && STARTUP_FAILURE_CATEGORIES.includes(error.category)) {
+function safeStartupFailure(error: unknown): { role: AgyRole; category: AgyStartupFailureCategory } | null {
+  if (error instanceof AgyCliStartupError && STARTUP_FAILURE_CATEGORIES.includes(error.category)) {
     return { role: error.role, category: error.category };
   }
-  if (error instanceof UnexpectedClaudeToolsError) {
-    return {
-      role: error.role,
-      category: error.invalidToolList ? "init_tool_list_invalid" : "init_tools_present",
-    };
+  if (error instanceof UnexpectedAgyToolCallError) {
+    return { role: error.role, category: "unexpected_tool_call" };
   }
   return null;
 }
 
 function safeStartupEvidence(evidence: LiveCheckStartupEvidence): LiveCheckStartupEvidence {
-  const safeRole = (role: ClaudeRole): LiveCheckStartupRoleEvidence => {
+  const safeRole = (role: AgyRole): LiveCheckStartupRoleEvidence => {
     const source = evidence[role];
-    const firstEvent = source !== undefined && SDK_EVENT_CATEGORIES.includes(source.firstEvent as ClaudeSdkEventCategory)
+    const firstEvent = source !== undefined && CLI_EVENT_CATEGORIES.includes(source.firstEvent as AgyCliEventCategory)
       ? source.firstEvent
       : null;
-    const lastEvent = source !== undefined && SDK_EVENT_CATEGORIES.includes(source.lastEvent as ClaudeSdkEventCategory)
+    const lastEvent = source !== undefined && CLI_EVENT_CATEGORIES.includes(source.lastEvent as AgyCliEventCategory)
       ? source.lastEvent
       : null;
     return {
@@ -619,7 +609,7 @@ function safeStartupEvidence(evidence: LiveCheckStartupEvidence): LiveCheckStart
         ? Math.min(100, source.eventCount)
         : 0,
       initReceived: source?.initReceived === true,
-      emptyToolsAccepted: source?.emptyToolsAccepted === true,
+      noToolsAgentAccepted: source?.noToolsAgentAccepted === true,
       bootstrapCompleted: source?.bootstrapCompleted === true,
       failureCategory: source !== undefined && source.failureCategory !== null &&
         STARTUP_FAILURE_CATEGORIES.includes(source.failureCategory)
@@ -661,9 +651,8 @@ export async function runOfflineFirstLiveCheck(
   const dispatches = emptyDispatchCounts();
   const result = (
     status: LiveCheckResult["status"],
-    role: ClaudeRole | null = null,
-    toolCount: number | null = null,
-    invalidToolList = false,
+    role: AgyRole | null = null,
+    toolCallBlocked = false,
   ): LiveCheckResult => ({
     ...safeEvidence(evidence),
     status,
@@ -673,8 +662,7 @@ export async function runOfflineFirstLiveCheck(
     dispatchCounts: { intent: dispatches.intent, repair: dispatches.repair, total: dispatches.total },
     startupDiagnostics: safeStartupEvidence(startupDiagnostics),
     rejectingRole: role === "intent" || role === "repair" ? role : null,
-    toolCount: Number.isSafeInteger(toolCount) && toolCount !== null && toolCount >= 0 ? toolCount : null,
-    invalidToolList: invalidToolList === true,
+    toolCallBlocked: toolCallBlocked === true,
     subsequentPromptsAfterBlock: 0,
   });
 
@@ -703,8 +691,8 @@ export async function runOfflineFirstLiveCheck(
   evidence.stage = "initialization";
   let timedOut = false;
 
-  const spendBootstrap = (role: ClaudeRole): void => {
-    if (blockState.current !== null) throw new Error("Live check blocked after init tools were reported.");
+  const spendBootstrap = (role: AgyRole): void => {
+    if (blockState.current !== null) throw new Error("Live check blocked after a tool call was reported.");
     if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Live check aborted.");
     if (bootstraps[role] >= LIVE_CHECK_BOOTSTRAP_LIMITS[role] ||
       bootstraps.total >= LIVE_CHECK_BOOTSTRAP_LIMITS.total ||
@@ -739,7 +727,7 @@ export async function runOfflineFirstLiveCheck(
       }
 
       const spendPrompt = async <T>(role: "intent" | "repair", action: () => Promise<T>): Promise<T> => {
-        if (blockState.current !== null) throw new Error("Live check blocked after init tools were reported.");
+        if (blockState.current !== null) throw new Error("Live check blocked after a tool call was reported.");
         if (controller.signal.aborted) throw controller.signal.reason ?? new Error("Live check aborted.");
         if (counts[role] >= LIVE_CHECK_PROMPT_LIMITS[role] || counts.total >= LIVE_CHECK_PROMPT_LIMITS.total ||
           dispatches.total >= LIVE_CHECK_TOTAL_DISPATCH_LIMIT) {
@@ -762,12 +750,10 @@ export async function runOfflineFirstLiveCheck(
         async recreateRole(role) {
           try {
             await provider!.recreateRole(role);
-            if (role === "intent") evidence.recreatedIntentToolCount = 0;
+            if (role === "intent") evidence.recreatedIntentToolCallBlocked = false;
           } catch (error) {
             blockState.current = safeToolDiagnostic(error);
-            if (role === "intent" && blockState.current !== null) {
-              evidence.recreatedIntentToolCount = blockState.current.toolCount;
-            }
+            if (role === "intent" && blockState.current !== null) evidence.recreatedIntentToolCallBlocked = true;
             throw error;
           }
         },
@@ -797,7 +783,7 @@ export async function runOfflineFirstLiveCheck(
   }
 
   return result(timedOut ? "timeout" : status!, blockState.current?.rejectingRole ?? null,
-    blockState.current?.toolCount ?? null, blockState.current?.invalidToolList ?? false);
+    blockState.current?.toolCallBlocked ?? false);
 }
 
 async function main(): Promise<void> {
@@ -806,11 +792,11 @@ async function main(): Promise<void> {
     readReport: () => import("node:fs/promises").then(({ readFile }) => readFile(REPORT_PATH, "utf8")),
     consumeApproval: () => claimOneTimeApproval(APPROVAL_CLAIM_PATH),
     async createProvider(startupSignal, beforeBootstrapDispatch, onStartupDiagnostic) {
-      const { createClaudeProvider } = await import("../src/brain/claude/provider");
-      return createClaudeProvider({ startupSignal, beforeBootstrapDispatch, onStartupDiagnostic });
+      const { createAgyProvider } = await import("../src/brain/agy/provider");
+      return createAgyProvider({ startupSignal, beforeBootstrapDispatch, onStartupDiagnostic });
     },
     async verify(provider, signal, evidence) {
-      const cacheDirectory = await mkdtemp(join(tmpdir(), "blip-claude-live-check-"));
+      const cacheDirectory = await mkdtemp(join(tmpdir(), "blip-agy-live-check-"));
       try {
         await runApprovedProbeSequence(provider, signal, evidence, { cacheDirectory });
       } finally {

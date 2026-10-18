@@ -1,6 +1,6 @@
 # Local voice demo
 
-The demo uses the Phase 3 dialogue reducer connected to core's refresher, one-use grant store, and gated Executor. The fake brain is the offline default; use Claude explicitly for I3. Both modes open the local synthetic survey and use repository-local browser profiles. No public URL or real form data is involved.
+The demo uses the Phase 3 dialogue reducer connected to core's refresher, one-use grant store, and gated Executor. The fake brain is the offline default; use AGY for I3. AGY runs Gemini through the signed-in Antigravity CLI subscription. Both modes open the local synthetic survey and use repository-local browser profiles. No public URL or real form data is involved.
 
 ## One-time extension setup
 
@@ -25,17 +25,17 @@ Use fictional values in the Community Survey. Ask Blip to fill the required name
 
 `--smoke` checks only server, extension, voice-window and selected-page readiness. It does not exercise speech or the gate.
 
-## I3: real Claude with the same connected gate
+## I3: Gemini through the AGY subscription with the same connected gate
 
-Run the same local flow with the Claude brain:
+Install the Antigravity CLI and sign in once using your Antigravity account. Then run the same local flow with the AGY brain:
 
 ```powershell
-npm run demo -- --brain=claude
+npm run demo -- --brain=agy
 ```
 
-This starts the Claude Agent SDK provider and uses the reducer for deterministic fill and gated-submit turns. Utterances the reducer does not handle are routed to the selected brain. Model output cannot arm or redeem a gated action; confirmation still follows the reducer and core Executor path. The SDK must already be authenticated in the local environment. If initialization fails, the launcher exits with the provider error instead of silently switching to fake mode.
+This starts two persistent headless `agy` CLI sessions using Gemini Flash: one for intent routing and one for label repair. They use the CLI's cached subscription login, not a Gemini API key. Each role gets a generated `tools: []` agent and an isolated temporary working directory; any reported tool execution stops the role. Utterances the reducer does not handle are routed to the model. Model output cannot arm or redeem a gated action; confirmation still follows the reducer and core Executor path. If CLI startup or authentication fails, the launcher exits instead of silently switching to fake mode.
 
-Use the synthetic survey only. I3 evidence should include a successful Claude-routed turn and the connected-gate submit flow; `--smoke` is not that evidence.
+Use the synthetic survey only. I3 evidence should include a successful Gemini-routed turn and the connected-gate submit flow; `--smoke` is not that evidence.
 
 ## Browser selection and optional voice URL
 

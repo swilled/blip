@@ -14,7 +14,7 @@ import {
   reportTemplate,
   validateApprovalReport,
   validateBounds,
-} from "../scripts/claude-hostile-live-check.js";
+} from "../scripts/agy-hostile-live-check.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -35,8 +35,8 @@ afterEach(async () => {
 function liveEvidence() {
   return {
     status: "live-failed",
-    intentSystemInit: false,
-    intentEmptyTools: false,
+    intentCliInit: false,
+    intentNoToolsAgent: false,
     intentModelDispatches: 0,
     promptBoundaryPassed: false,
     intentKind: "not-observed" as const,
@@ -83,7 +83,7 @@ describe("bounded Phase 5 hostile-page runner", () => {
     expect(validateApprovalReport(await readFile(reportFile, "utf8"), true)).toBe("approval-already-used");
   });
 
-  it("leaves failed preflight unclaimed and offline mode configures no Claude provider", async () => {
+  it("leaves failed preflight unclaimed and offline mode configures no Agy provider", async () => {
     const { reportFile, claimFile } = await temporaryReport(false);
     expect(() => consumeOneUseClaim(reportFile, claimFile)).toThrowError(HostileCheckFailure);
     expect(existsSync(claimFile)).toBe(false);
@@ -142,7 +142,7 @@ describe("bounded Phase 5 hostile-page runner", () => {
     expect(report).not.toContain(promptSentinel);
     expect(report).not.toContain(outputSentinel);
     expect(report).not.toContain("private-action-id-sentinel");
-    expect(report).toContain("SDK dispatch attempts/admitted: 2/2");
+    expect(report).toContain("CLI dispatch attempts/admitted: 2/2");
   });
 
   it("keeps the one-use claim consumed if the live attempt fails after startup", async () => {

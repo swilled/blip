@@ -2,10 +2,10 @@ import { Intent } from "@blip/protocol";
 import { z } from "zod";
 import type { IntentBrain } from "../fake-brain";
 import {
-  ClaudeRoleSessionManager,
-  UnexpectedClaudeToolsError,
-  type ClaudeRole,
-  type ClaudeSessionOptions,
+  AgyRoleSessionManager,
+  UnexpectedAgyToolCallError,
+  type AgyRole,
+  type AgySessionOptions,
 } from "./session";
 
 const RepairPatchSchema = z.object({
@@ -20,19 +20,19 @@ const RepairPatchSchema = z.object({
 
 export type RepairPatch = z.infer<typeof RepairPatchSchema>;
 
-export type ClaudeOutputFailureCategory =
+export type AgyOutputFailureCategory =
   | "invalid_json"
   | "intent_schema_rejected"
   | "intent_shape_rejected"
   | "repair_schema_rejected";
 
-export class InvalidClaudeOutputError extends Error {
-  readonly role: ClaudeRole;
-  readonly category: ClaudeOutputFailureCategory;
+export class InvalidAgyOutputError extends Error {
+  readonly role: AgyRole;
+  readonly category: AgyOutputFailureCategory;
 
-  constructor(role: ClaudeRole, category: ClaudeOutputFailureCategory) {
-    super("Claude output was rejected by local validation.");
-    this.name = "InvalidClaudeOutputError";
+  constructor(role: AgyRole, category: AgyOutputFailureCategory) {
+    super("Agy output was rejected by local validation.");
+    this.name = "InvalidAgyOutputError";
     this.role = role;
     this.category = category;
   }
@@ -40,23 +40,23 @@ export class InvalidClaudeOutputError extends Error {
 
 /**
  * Process-level model boundary. Prompts are built upstream from privacy-approved, sanitized input;
- * this API accepts no SDK handle and returns only existing protocol Intent data or a descriptive patch.
+ * this API accepts no CLI/process handle and returns only existing protocol Intent data or a descriptive patch.
  */
-export type ClaudeProvider = IntentBrain & {
+export type AgyProvider = IntentBrain & {
   parseIntent(prompt: string, signal?: AbortSignal): Promise<z.infer<typeof Intent>>;
   repairFormModel(prompt: string, signal?: AbortSignal): Promise<RepairPatch>;
-  abortRole(role: ClaudeRole): Promise<void>;
-  recreateRole(role: ClaudeRole): Promise<void>;
+  abortRole(role: AgyRole): Promise<void>;
+  recreateRole(role: AgyRole): Promise<void>;
   close(): Promise<void>;
 };
 
-export type ClaudeProviderOptions = ClaudeSessionOptions;
+export type AgyProviderOptions = AgySessionOptions;
 
-function parseJson(role: ClaudeRole, raw: string): unknown {
+function parseJson(role: AgyRole, raw: string): unknown {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
-    throw new InvalidClaudeOutputError(role, "invalid_json");
+    throw new InvalidAgyOutputError(role, "invalid_json");
   }
 }
 
@@ -64,7 +64,7 @@ function parseIntentStrict(raw: string): z.infer<typeof Intent> {
   const value = parseJson("intent", raw);
   const parsed = Intent.safeParse(value);
   if (!parsed.success) {
-    throw new InvalidClaudeOutputError("intent", "intent_schema_rejected");
+    throw new InvalidAgyOutputError("intent", "intent_schema_rejected");
   }
 
   const allowedKeys: Record<z.infer<typeof Intent>["type"], string[]> = {
@@ -86,12 +86,12 @@ function parseIntentStrict(raw: string): z.infer<typeof Intent> {
     unknown: ["type"],
   };
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new InvalidClaudeOutputError("intent", "intent_shape_rejected");
+    throw new InvalidAgyOutputError("intent", "intent_shape_rejected");
   }
   const object = value as Record<string, unknown>;
   const allowed = allowedKeys[parsed.data.type];
   if (Object.keys(object).some((key) => !allowed.includes(key))) {
-    throw new InvalidClaudeOutputError("intent", "intent_shape_rejected");
+    throw new InvalidAgyOutputError("intent", "intent_shape_rejected");
   }
   if (parsed.data.type === "set_fields") {
     const fills = object.fills;
@@ -99,14 +99,14 @@ function parseIntentStrict(raw: string): z.infer<typeof Intent> {
       typeof fill !== "object" || fill === null || Array.isArray(fill) ||
       Object.keys(fill).some((key) => key !== "fieldId" && key !== "value"),
     )) {
-      throw new InvalidClaudeOutputError("intent", "intent_shape_rejected");
+      throw new InvalidAgyOutputError("intent", "intent_shape_rejected");
     }
   }
   return parsed.data;
 }
 
-export async function createClaudeProvider(options: ClaudeProviderOptions = {}): Promise<ClaudeProvider> {
-  const sessions = new ClaudeRoleSessionManager(options);
+export async function createAgyProvider(options: AgyProviderOptions = {}): Promise<AgyProvider> {
+  const sessions = new AgyRoleSessionManager(options);
   await sessions.start();
 
   return {
@@ -115,7 +115,7 @@ export async function createClaudeProvider(options: ClaudeProviderOptions = {}):
     },
     async repairFormModel(prompt, signal) {
       const parsed = RepairPatchSchema.safeParse(parseJson("repair", await sessions.call("repair", prompt, signal)));
-      if (!parsed.success) throw new InvalidClaudeOutputError("repair", "repair_schema_rejected");
+      if (!parsed.success) throw new InvalidAgyOutputError("repair", "repair_schema_rejected");
       return parsed.data;
     },
     abortRole: (role) => sessions.abortRole(role),
@@ -124,4 +124,4 @@ export async function createClaudeProvider(options: ClaudeProviderOptions = {}):
   };
 }
 
-export { UnexpectedClaudeToolsError };
+export { UnexpectedAgyToolCallError };

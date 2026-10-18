@@ -10,7 +10,7 @@ Two developers, two tracks, one repo. Read this before your first commit. The se
 | `voice` | Teammate | `apps/voice`, `packages/dialogue`, `apps/server/src/voice/`, `dev/mock-server`, `fixtures/forms/` | `.planning/workstreams/voice/` |
 | shared | both | `packages/protocol` (the contract) | `.planning/PROJECT.md`, `REQUIREMENTS.md`, `research/`, `config.json` |
 
-Set your workstream once per machine: `setx GSD_WORKSTREAM core` (or `voice`), then restart your terminal and Claude Code.
+Set your workstream once per machine: `setx GSD_WORKSTREAM core` (or `voice`), then restart your terminal and planning client.
 
 **Outside your track:** ask first, then make the change in a small PR and tag the owner. Don't edit the other track's code silently.
 
@@ -31,9 +31,9 @@ Set your workstream once per machine: `setx GSD_WORKSTREAM core` (or `voice`), t
 
 ## Safety invariants (don't weaken without both of you agreeing)
 
-- The model never acts on the page. Claude is only called through tool-less structured-output calls. Every action goes through the Executor.
+- The model never acts on the page. AGY uses Gemini for tool-less structured-output calls. Every action goes through the Executor.
 - Gated actions (submit, pay, delete, send, cross-domain) are default-deny. The server matches the fixed phrase after the tracked read-back; the voice reducer's `confirm.redeem` carries the current grant/read-back IDs, and GatePort receives only the server's consumed proof.
-- Agent SDK sessions keep the lockdown: `tools: []`, `settingSources: []`, `strictMcpConfig: true`, `permissionMode: "dontAsk"`, an empty working directory, `ANTHROPIC_API_KEY` stripped, and the tool list asserted at startup. Never `bypassPermissions`.
+- AGY CLI sessions use a generated primary agent with `tools: []`, no subagents, and a fresh temporary working directory. The server requires the expected agent identity and a restricted permission mode, and closes a role if the CLI reports a tool step. The CLI's startup tool list is a global inventory and must not be treated as the agent's allowed toolset. Keep cached subscription login available; remove API-key environment variables before launch. Never use `--dangerously-skip-permissions`.
 - Passwords and card numbers are never spoken, logged, or sent to the model.
 - Any PR that touches the Executor, the policy gate, or the lockdown config needs the other person's review.
 
@@ -56,7 +56,7 @@ Set your workstream once per machine: `setx GSD_WORKSTREAM core` (or `voice`), t
 | ~h0.75 | M0 | Protocol frozen; both sides' fixtures pass |
 | ~h6–8 | I1 | Voice UI talks to the real server; "what's here" works end to end |
 | ~h12 | I2 | Full loop on the broken form, including the blocked submit |
-| ~h20 | I3 | Real Claude, real public form, injection page blocked |
+| ~h20 | I3 | Real AGY Gemini on the local synthetic form, injection page blocked |
 | ~h30 | Freeze | Tag `demo-safe`; only demo fixes after this |
 
 Post a short status at each checkpoint: what's merged, what's blocked, what you need from the other person.

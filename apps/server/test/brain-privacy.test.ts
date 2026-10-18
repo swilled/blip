@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Field, FormModel } from "@blip/protocol";
 import { buildBaselineFormModel } from "../src/baseline";
-import { decideUtteranceForBrain } from "../src/brain/claude/privacy";
+import { decideUtteranceForBrain } from "../src/brain/agy/privacy";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 
 function booking(): FormModel {

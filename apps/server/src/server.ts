@@ -10,9 +10,9 @@ import { createStaticHandler, type StaticRoot } from "./hub/static";
 import { Session, type Brain } from "./session/session";
 import { createRefresher, type Refresher } from "./session/refresh";
 import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
-import { createClaudeProvider, type ClaudeProvider } from "./brain/claude/provider";
-import { RepairCoordinator, type RepairProvider } from "./brain/claude/repair-coordinator";
-import type { ClaudeSdkAdapter, ClaudeSessionOptions } from "./brain/claude/session";
+import { createAgyProvider, type AgyProvider } from "./brain/agy/provider";
+import { RepairCoordinator, type RepairProvider } from "./brain/agy/repair-coordinator";
+import type { AgyCliAdapter, AgySessionOptions } from "./brain/agy/session";
 import { handleDialogueFallback, handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
 import { createGatePort } from "./act/gate-port";
@@ -43,13 +43,13 @@ export type StartServerOptions = {
   fakeRequestActionId?: string;
   /** Test-only: with fakeRequestActionId, trigger request_action only for this exact utterance. */
   fakeRequestActionPhrase?: string;
-  /** Test-only: injects a scripted SDK boundary; production loads the SDK only in Claude mode. */
-  claudeAdapter?: ClaudeSdkAdapter;
-  /** Narrow opt-in hooks for bounded local Claude checks; normal startup has no dispatch hooks. */
-  claudeSessionHooks?: Pick<ClaudeSessionOptions,
+  /** Test-only: injects a scripted CLI boundary; production starts AGY only in Agy mode. */
+  agyAdapter?: AgyCliAdapter;
+  /** Narrow opt-in hooks for bounded local Agy checks; normal startup has no dispatch hooks. */
+  agySessionHooks?: Pick<AgySessionOptions,
     "beforeBootstrapDispatch" | "beforePromptDispatch" | "onStartupDiagnostic" | "startupSignal"
   >;
-  /** Test seam for repair flow; production uses the repair role of the Claude provider. */
+  /** Test seam for repair flow; production uses the repair role of the Agy provider. */
   repairProvider?: RepairProvider;
   /** Optional repair cache path; temporary directories are used in tests. */
   repairCacheDirectory?: string;
@@ -68,7 +68,7 @@ export type StartServerOptions = {
   /** Clock and timer seams keep the confirmation barrier deterministic in server tests. */
   clock?: () => number;
   schedule?: (callback: () => void, delayMs: number) => unknown;
-  /** Test-only seam for exercising the bounded Claude intent watchdog offline. */
+  /** Test-only seam for exercising the bounded Agy intent watchdog offline. */
   intentWatchdog?: { schedule(callback: () => void, delayMs: number): unknown; cancel(handle: unknown): void };
   /** Optional static roots (voice build, form fixtures). Behind the same Host check as everything else. */
   staticRoots?: StaticRoot[];
@@ -141,14 +141,14 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
   let repairCoordinator: RepairCoordinator | null = null;
 
   const fakeDelayMs = options.fakeDelayMs ?? 1500;
-  let claudeProvider: ClaudeProvider | null = null;
-  let brain: IntentBrain | ClaudeProvider;
-  if (brainMode === "claude") {
-    claudeProvider = await createClaudeProvider({
-      ...(options.claudeAdapter !== undefined ? { adapter: options.claudeAdapter } : {}),
-      ...(options.claudeSessionHooks !== undefined ? options.claudeSessionHooks : {}),
+  let agyProvider: AgyProvider | null = null;
+  let brain: IntentBrain | AgyProvider;
+  if (brainMode === "agy") {
+    agyProvider = await createAgyProvider({
+      ...(options.agyAdapter !== undefined ? { adapter: options.agyAdapter } : {}),
+      ...(options.agySessionHooks !== undefined ? options.agySessionHooks : {}),
     });
-    brain = claudeProvider;
+    brain = agyProvider;
   } else {
     brain = createFakeBrain({
       delayMs: fakeDelayMs,
@@ -172,7 +172,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
             freshnessMs,
             refresher,
             brain,
-            ...(claudeProvider !== null ? { claudeProvider } : {}),
+            ...(agyProvider !== null ? { agyProvider } : {}),
             clock,
             ...(schedule !== undefined ? { schedule } : {}),
             ...(options.intentWatchdog !== undefined ? { intentWatchdog: options.intentWatchdog } : {}),
@@ -270,7 +270,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     handlers,
   });
 
-  const repairProvider = options.repairProvider ?? claudeProvider ?? undefined;
+  const repairProvider = options.repairProvider ?? agyProvider ?? undefined;
   if (repairProvider !== undefined) {
     repairCoordinator = new RepairCoordinator({
       provider: repairProvider,
@@ -310,7 +310,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
           freshnessMs,
           refresher,
           brain,
-          ...(claudeProvider !== null ? { claudeProvider } : {}),
+          ...(agyProvider !== null ? { agyProvider } : {}),
           clock,
           ...(schedule !== undefined ? { schedule } : {}),
           ...(options.intentWatchdog !== undefined ? { intentWatchdog: options.intentWatchdog } : {}),
@@ -332,7 +332,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       resolve();
     });
   }).catch(async (error: unknown) => {
-    await claudeProvider?.close();
+    await agyProvider?.close();
     throw error;
   });
   boundPort = (server.address() as AddressInfo).port;
@@ -359,7 +359,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         server.close(() => resolve());
         server.closeAllConnections();
       });
-      await Promise.all([serverClosed, claudeProvider?.close() ?? Promise.resolve()]);
+      await Promise.all([serverClosed, agyProvider?.close() ?? Promise.resolve()]);
     },
   };
 }

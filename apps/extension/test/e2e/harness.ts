@@ -151,8 +151,8 @@ export type OpenFixturePageOptions = {
   fakeRequestActionPhrase?: string;
   /** Optional server brain used only by explicit local integration checks. */
   brain?: StartServerOptions["brain"];
-  /** Narrow hooks for a bounded synthetic real-Claude integration check. */
-  claudeSessionHooks?: StartServerOptions["claudeSessionHooks"];
+  /** Narrow hooks for a bounded synthetic real-AGY CLI integration check. */
+  agySessionHooks?: StartServerOptions["agySessionHooks"];
   /** Avoid dispatching a page repair turn during an intent-only live check. */
   disableRepairModel?: boolean;
   /** Browser executable for the harness-owned profile. */
@@ -334,7 +334,7 @@ export async function openFixturePage(
     dev: false,
     staticRoots: [{ urlPrefix: "/voice", dir: voicePublic }],
     ...(options.brain !== undefined ? { brain: options.brain } : {}),
-    ...(options.claudeSessionHooks !== undefined ? { claudeSessionHooks: options.claudeSessionHooks } : {}),
+    ...(options.agySessionHooks !== undefined ? { agySessionHooks: options.agySessionHooks } : {}),
     ...(options.repairCacheDirectory !== undefined ? { repairCacheDirectory: options.repairCacheDirectory } : {}),
     ...(options.disableRepairModel === true
       ? {

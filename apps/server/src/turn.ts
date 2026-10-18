@@ -5,9 +5,9 @@ import { newId, type Intent, type Message, type PayloadOf } from "@blip/protocol
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
-import { containsSensitiveUtterance, decideUtteranceForBrain } from "./brain/claude/privacy";
-import { routeIntent, type IntentRoutePage } from "./brain/claude/intent-router";
-import type { ClaudeProvider } from "./brain/claude/provider";
+import { containsSensitiveUtterance, decideUtteranceForBrain } from "./brain/agy/privacy";
+import { routeIntent, type IntentRoutePage } from "./brain/agy/intent-router";
+import type { AgyProvider } from "./brain/agy/provider";
 import type { Snapshot } from "@blip/protocol";
 import { executeUngated } from "./act/ungated";
 import { executeGatedAction, type GatedCommand } from "./act/gated";
@@ -28,8 +28,8 @@ export type TurnContext = {
   refresher: Refresher;
   /** Resolves model-routed utterances to an Intent (the fake brain in Phase 1). */
   brain: IntentBrain;
-  /** Present only in Claude mode; the raw `IntentBrain` seam remains fake-only. */
-  claudeProvider?: ClaudeProvider;
+  /** Present only in Agy mode; the raw `IntentBrain` seam remains fake-only. */
+  agyProvider?: AgyProvider;
   /** Injected only for deterministic cooldown/grant tests; production uses the process clock. */
   clock?: () => number;
   schedule?: (callback: () => void, delayMs: number) => unknown;
@@ -48,15 +48,15 @@ export const MSG_NOTHING_TO_REPEAT = "There's nothing to repeat.";
 export const MSG_STOPPED = "Stopped.";
 export const MSG_UNKNOWN = "I didn't understand that.";
 export const MSG_BRAIN_FAILED = "Something went wrong on my side.";
-export const MSG_CLAUDE_FAILED = "I couldn't understand that";
+export const MSG_MODEL_FAILED = "I couldn't understand that";
 export const MSG_FILLER = "One moment.";
 const MSG_FIELD_PHRASE_TOO_LONG = "That value is too long to fill.";
 const MSG_NO_CURRENT_ERRORS = "There are no errors currently detected.";
-const CLAUDE_INTENT_WATCHDOG_MS = 4_000;
+const INTENT_WATCHDOG_MS = 4_000;
 
-const intentRecoveries = new WeakMap<ClaudeProvider, Promise<void>>();
+const intentRecoveries = new WeakMap<AgyProvider, Promise<void>>();
 
-function startIntentRoleRecovery(provider: ClaudeProvider): Promise<void> {
+function startIntentRoleRecovery(provider: AgyProvider): Promise<void> {
   const pending = intentRecoveries.get(provider);
   if (pending !== undefined) return pending;
   const recovery = Promise.resolve()
@@ -70,7 +70,7 @@ function startIntentRoleRecovery(provider: ClaudeProvider): Promise<void> {
   return recovery;
 }
 
-async function waitForIntentRecovery(provider: ClaudeProvider): Promise<void> {
+async function waitForIntentRecovery(provider: AgyProvider): Promise<void> {
   await intentRecoveries.get(provider);
 }
 
@@ -170,10 +170,10 @@ function currentIntentPage(ctx: TurnContext, snapshot: Snapshot, model: NonNulla
   };
 }
 
-async function runClaudeIntent(ctx: TurnContext, text: string, snapshot: Snapshot, model: NonNullable<Session["model"]>): Promise<void> {
-  const provider = ctx.claudeProvider;
+async function runAgyIntent(ctx: TurnContext, text: string, snapshot: Snapshot, model: NonNullable<Session["model"]>): Promise<void> {
+  const provider = ctx.agyProvider;
   if (provider === undefined) {
-    speak(ctx.hub, ctx.session, MSG_CLAUDE_FAILED, "error");
+    speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
     return;
   }
 
@@ -191,21 +191,21 @@ async function runClaudeIntent(ctx: TurnContext, text: string, snapshot: Snapsho
     const controller = new AbortController();
     timer = watchdog.schedule(() => {
       if (settled) return;
-      controller.abort(new Error("Claude intent watchdog expired."));
+      controller.abort(new Error("Agy intent watchdog expired."));
       void startIntentRoleRecovery(provider).catch(() => {});
-      rejectTimeout(new Error("Claude intent watchdog expired."));
-    }, CLAUDE_INTENT_WATCHDOG_MS);
+      rejectTimeout(new Error("Agy intent watchdog expired."));
+    }, INTENT_WATCHDOG_MS);
 
     const routed = routeIntent(text, currentIntentPage(ctx, snapshot, model), provider, controller.signal);
     const result = await Promise.race([routed, timeout]);
     settled = true;
     if (result.kind === "intent") await runIntent(ctx, result.intent);
     else if (result.kind === "handoff") await handlePrivacyHandoff(ctx, result.handoff);
-    else speak(ctx.hub, ctx.session, MSG_CLAUDE_FAILED, "error");
+    else speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
   } catch {
     settled = true;
     ctx.hub.send("voice", "earcon", { name: "error" });
-    speak(ctx.hub, ctx.session, MSG_CLAUDE_FAILED, "error");
+    speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
   } finally {
     settled = true;
     if (timer !== undefined) watchdog.cancel(timer);
@@ -305,7 +305,7 @@ export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
       );
     }
 
-    if (ctx.claudeProvider !== undefined) {
+    if (ctx.agyProvider !== undefined) {
       const captured = await captureIntentPage(ctx);
       if (!captured.ok) return speak(hub, session, captured.reply, "error");
       const decision = decideUtteranceForBrain(text, captured.model);
@@ -337,10 +337,10 @@ export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
 
   hub.send("voice", "earcon", { name: "thinking" });
   speak(hub, session, MSG_FILLER, "filler");
-  if (ctx.claudeProvider !== undefined) {
+  if (ctx.agyProvider !== undefined) {
     const captured = await captureIntentPage(ctx);
     if (!captured.ok) return speak(hub, session, captured.reply, "error");
-    await runClaudeIntent(ctx, text, captured.snapshot, captured.model);
+    await runAgyIntent(ctx, text, captured.snapshot, captured.model);
     return;
   }
 

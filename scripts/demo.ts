@@ -23,7 +23,7 @@ const DEMO_REPAIR_CACHE = demoRepairCachePath();
 const READY_TIMEOUT_MS = 30_000;
 const READY_POLL_MS = 200;
 
-export type DemoBrain = "fake" | "claude";
+export type DemoBrain = "fake" | "agy";
 export interface DemoOptions {
   brain: DemoBrain;
   smoke: boolean;
@@ -42,14 +42,14 @@ export interface ReadinessWaitOptions {
   now?: () => number;
 }
 
-const USAGE = `usage: npm run demo -- [--brain=fake|claude] [--smoke]
-  --brain=fake|claude  local brain; defaults to fake
+const USAGE = `usage: npm run demo -- [--brain=fake|agy] [--smoke]
+  --brain=fake|agy  local brain; defaults to fake
   --smoke              exit after extension and voice readiness and print a pass marker
   --help               show this help
 
 The launcher runs the Phase 3 dialogue reducer through core's grant-bound Executor.
 I2: npm run demo -- --brain=fake
-I3: npm run demo -- --brain=claude
+I3: npm run demo -- --brain=agy
 It uses .chrome-profile/demo for the extension and .chrome-profile/demo-voice for the voice
 window, never auto-loads the extension, and serves the synthetic survey on port ${DEMO_PAGES_PORT}.`;
 
@@ -65,11 +65,11 @@ export function parseDemoArgs(args: string[]): DemoOptions {
       help = true;
     } else if (arg === "--brain") {
       const value = args[++index];
-      if (value !== "fake" && value !== "claude") throw new Error("--brain must be fake or claude");
+      if (value !== "fake" && value !== "agy") throw new Error("--brain must be fake or agy");
       brain = value;
     } else if (arg?.startsWith("--brain=")) {
       const value = arg.slice("--brain=".length);
-      if (value !== "fake" && value !== "claude") throw new Error("--brain must be fake or claude");
+      if (value !== "fake" && value !== "agy") throw new Error("--brain must be fake or agy");
       brain = value;
     } else {
       throw new Error(`unknown option: ${arg ?? "(missing)"}`);
@@ -284,7 +284,10 @@ async function runDemo(options: DemoOptions): Promise<number> {
 
     const readiness = waitForExtensionReady(async () => {
       if (launchError !== undefined) throw launchError;
-      if (browserChild.exitCode !== null) throw new Error(`browser exited before extension readiness (code ${browserChild.exitCode})`);
+      // Chromium may hand this launch to an already-running instance for the
+      // same profile and exit with code 0. Treat the server's extension/page
+      // handshake as authoritative instead of mistaking that handoff for a
+      // failed browser launch.
       return server!.session.extensionConnected &&
         server!.session.model?.url === fixtureUrl &&
         await hasExtensionInProfile(profileDirectory);

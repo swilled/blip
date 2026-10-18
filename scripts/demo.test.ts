@@ -20,11 +20,11 @@ describe("local demo launcher inputs", () => {
   it("defaults to the offline fake brain and supports an explicit smoke run", () => {
     expect(parseDemoArgs([])).toEqual({ brain: "fake", smoke: false });
     expect(parseDemoArgs(["--brain=fake", "--smoke"])).toEqual({ brain: "fake", smoke: true });
-    expect(parseDemoArgs(["--brain=claude"])).toEqual({ brain: "claude", smoke: false });
+    expect(parseDemoArgs(["--brain=agy"])).toEqual({ brain: "agy", smoke: false });
   });
 
   it("rejects unknown flags and brain modes", () => {
-    expect(() => parseDemoArgs(["--brain=other"])).toThrow("--brain must be fake or claude");
+    expect(() => parseDemoArgs(["--brain=other"])).toThrow("--brain must be fake or agy");
     expect(() => parseDemoArgs(["--unsafe"])).toThrow("unknown option");
   });
 

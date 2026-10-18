@@ -5,7 +5,7 @@
 //   npm run dev -- --brain=fake
 //   npm run dev -- --no-repl            (stay up so the voice UI can attach)
 //
-// Exit codes: 0 normal, 1 startup failure (including Claude SDK init), 2 bad flags.
+// Exit codes: 0 normal, 1 startup failure (including AGY CLI init), 2 bad flags.
 import { parseArgs } from "node:util";
 import { DEFAULT_PORT } from "@blip/protocol";
 import { FIXTURE_NAMES, type FixtureName } from "@blip/protocol/fixtures-loader";
@@ -15,7 +15,7 @@ import { startFakeExtension } from "../tools/fake-extension/src/fake-extension";
 import { startRepl } from "../tools/repl/src/repl";
 
 const USAGE = `usage: npm run dev -- [options]
-  --brain=fake|claude        default fake
+  --brain=fake|agy        default fake
   --port <n>                 default ${DEFAULT_PORT}; 0 picks a free port
   --fake-delay <ms>          how long a model-routed turn waits, default 1500
   --fixture=booking|broken   page the fake extension serves, default booking
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
     process.stdout.write(`${USAGE}\n`);
     process.exit(0);
   }
-  if (values.brain !== "fake" && values.brain !== "claude") die(`--brain must be fake or claude, got "${values.brain}"`, 2);
+  if (values.brain !== "fake" && values.brain !== "agy") die(`--brain must be fake or agy, got "${values.brain}"`, 2);
   if (!(FIXTURE_NAMES as readonly string[]).includes(values.fixture)) {
     die(`--fixture must be one of ${FIXTURE_NAMES.join(", ")}, got "${values.fixture}"`, 2);
   }

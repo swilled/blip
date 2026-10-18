@@ -1,5 +1,5 @@
 // The walking skeleton over real sockets on port 0 (roadmap criterion 2, D-23, D-24). No fake timers,
-// no Chrome, no voice UI, no Claude. Servers and clients are always closed in finally blocks.
+// no Chrome, no voice UI, no Agy. Servers and clients are always closed in finally blocks.
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { newId } from "@blip/protocol";

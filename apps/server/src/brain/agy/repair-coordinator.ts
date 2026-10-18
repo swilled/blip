@@ -5,12 +5,12 @@ import { projectPageForPrompt, serializeProjectionForPrompt } from "./projection
 import { RepairCache } from "./repair-cache";
 import { mergeRepairPatch } from "./repair-merge";
 import { validateRepairPatch, type RepairPatch } from "./repair-schema";
-import type { ClaudeRole } from "./session";
+import type { AgyRole } from "./session";
 
 export type RepairProvider = {
   repairFormModel(prompt: string, signal?: AbortSignal): Promise<unknown>;
-  abortRole(role: ClaudeRole): Promise<void>;
-  recreateRole(role: ClaudeRole): Promise<void>;
+  abortRole(role: AgyRole): Promise<void>;
+  recreateRole(role: AgyRole): Promise<void>;
 };
 
 type Candidate = { snapshot: Snapshot; model: FormModel; tabId: number; snapshotRevision: number };

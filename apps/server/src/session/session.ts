@@ -4,7 +4,7 @@ import { buildBaselineFormModel, summarizeFormModel } from "../baseline";
 
 export const SERVER_VERSION = "0.1.0";
 
-export type Brain = "claude" | "fake";
+export type Brain = "agy" | "fake";
 
 /** The pending read-back contains only the grant fingerprint inputs; sensitive field values are null. */
 export type PendingGatedAction = {

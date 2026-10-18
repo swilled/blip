@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { newId } from "@blip/protocol";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
-import type { ClaudeRole } from "../src/brain/claude/session";
-import type { RepairProvider } from "../src/brain/claude/repair-coordinator";
-import { RepairCache, repairCacheIdentity } from "../src/brain/claude/repair-cache";
+import type { AgyRole } from "../src/brain/agy/session";
+import type { RepairProvider } from "../src/brain/agy/repair-coordinator";
+import { RepairCache, repairCacheIdentity } from "../src/brain/agy/repair-cache";
 import { startServer, type RunningServer } from "../src/server";
 import { bindClient, type Frame, type TestClient } from "./helpers";
 
@@ -96,8 +96,8 @@ describe("background repair flow", () => {
         started.resolve(prompt);
         return call.promise;
       }),
-      abortRole: vi.fn(async (_role: ClaudeRole) => {}),
-      recreateRole: vi.fn(async (_role: ClaudeRole) => {}),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
     };
     const flow = await makeFlow(provider);
     server = flow.server;
@@ -140,8 +140,8 @@ describe("background repair flow", () => {
     const calls = [oldCall, newCall];
     const provider = {
       repairFormModel: vi.fn(() => calls.shift()!.promise),
-      abortRole: vi.fn(async (_role: ClaudeRole) => {}),
-      recreateRole: vi.fn(async (_role: ClaudeRole) => {}),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
     };
     const { server, extension, voice } = await makeFlow(provider);
     await answerWithSnapshot(voice, extension);
@@ -183,8 +183,8 @@ describe("background repair flow", () => {
     const calls = [oldCall, newCall];
     const provider = {
       repairFormModel: vi.fn(() => calls.shift()!.promise),
-      abortRole: vi.fn(async (_role: ClaudeRole) => {}),
-      recreateRole: vi.fn(async (_role: ClaudeRole) => {}),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
     };
     const { server, extension, voice } = await makeFlow(provider);
     const captured = loadSnapshot("broken");
@@ -217,8 +217,8 @@ describe("background repair flow", () => {
     const pending = deferred<unknown>();
     const provider = {
       repairFormModel: vi.fn(() => pending.promise),
-      abortRole: vi.fn(async (_role: ClaudeRole) => {}),
-      recreateRole: vi.fn(async (_role: ClaudeRole) => {}),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
     };
     const { server, extension, voice } = await makeFlow(provider, 25);
     const baselineReply = await answerWithSnapshot(voice, extension);
@@ -240,8 +240,8 @@ describe("background repair flow", () => {
         title: "Cached survey title",
         fields: [{ id: "e3", label: "Email address", group: "Contact", confidence: 0.95 }],
       })),
-      abortRole: vi.fn(async (_role: ClaudeRole) => {}),
-      recreateRole: vi.fn(async (_role: ClaudeRole) => {}),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
     };
     const first = await makeFlow(firstProvider);
     const base = loadSnapshot("broken");
@@ -265,8 +265,8 @@ describe("background repair flow", () => {
 
     const shouldNotRun = {
       repairFormModel: vi.fn(async () => { throw new Error("cache hit must precede provider call"); }),
-      abortRole: vi.fn(async (_role: ClaudeRole) => {}),
-      recreateRole: vi.fn(async (_role: ClaudeRole) => {}),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
     };
     const returning = await makeFlow(shouldNotRun, 1000, first.cacheDirectory);
     const returningSnapshot = {
@@ -286,8 +286,8 @@ describe("background repair flow", () => {
     const staleCall = deferred<unknown>();
     const staleProvider = {
       repairFormModel: vi.fn(() => staleCall.promise),
-      abortRole: vi.fn(async (_role: ClaudeRole) => {}),
-      recreateRole: vi.fn(async (_role: ClaudeRole) => {}),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
     };
     const staleIds = await makeFlow(staleProvider, 1000, first.cacheDirectory);
     const changedIdsSnapshot = {
@@ -305,8 +305,8 @@ describe("background repair flow", () => {
     await writeFile(join(first.cacheDirectory, `${identity}.json`), "{broken-json", "utf8");
     const corruptProvider = {
       repairFormModel: vi.fn(async () => ({ fields: [{ id: "e3", label: "Fresh label" }] })),
-      abortRole: vi.fn(async (_role: ClaudeRole) => {}),
-      recreateRole: vi.fn(async (_role: ClaudeRole) => {}),
+      abortRole: vi.fn(async (_role: AgyRole) => {}),
+      recreateRole: vi.fn(async (_role: AgyRole) => {}),
     };
     const corrupt = await makeFlow(corruptProvider, 1000, first.cacheDirectory);
     await answerWithSnapshot(corrupt.voice, corrupt.extension, base);

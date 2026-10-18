@@ -3,16 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createClaudeProvider,
-  InvalidClaudeOutputError,
+  createAgyProvider,
+  InvalidAgyOutputError,
   type RepairPatch,
-} from "../src/brain/claude/provider";
+} from "../src/brain/agy/provider";
 import type {
-  ClaudeRoleConfig,
-  ClaudeRoleSession,
-  ClaudeSdkAdapter,
-} from "../src/brain/claude/session";
-import { classifyClaudeSdkEvent } from "../src/brain/claude/session";
+  AgyRoleConfig,
+  AgyRoleSession,
+  AgyCliAdapter,
+} from "../src/brain/agy/session";
+import { classifyAgyCliEvent, UnexpectedAgyToolCallError } from "../src/brain/agy/session";
 
 type Deferred<T> = { promise: Promise<T>; resolve(value: T): void };
 function deferred<T>(): Deferred<T> {
@@ -22,24 +22,28 @@ function deferred<T>(): Deferred<T> {
 }
 
 function scriptedAdapter(options: {
-  toolsFor?: (config: ClaudeRoleConfig) => unknown;
-  answer?: (config: ClaudeRoleConfig, prompt: string) => Promise<string>;
-  bootstrapAnswer?: (config: ClaudeRoleConfig, prompt: string) => Promise<string>;
-  onCall?: (config: ClaudeRoleConfig, prompt: string) => void;
-  onClose?: (config: ClaudeRoleConfig) => void;
+  toolsFor?: (config: AgyRoleConfig) => unknown;
+  answer?: (config: AgyRoleConfig, prompt: string) => Promise<string>;
+  bootstrapAnswer?: (config: AgyRoleConfig, prompt: string) => Promise<string>;
+  onCall?: (config: AgyRoleConfig, prompt: string) => void;
+  onClose?: (config: AgyRoleConfig) => void;
 } = {}) {
-  const configs: ClaudeRoleConfig[] = [];
+  const configs: AgyRoleConfig[] = [];
   const started: string[] = [];
   const closed: string[] = [];
   const calls: Array<{ role: string; prompt: string }> = [];
-  const adapter: ClaudeSdkAdapter = {
-    createSession(config): ClaudeRoleSession {
+  const adapter: AgyCliAdapter = {
+    createSession(config): AgyRoleSession {
       configs.push(config);
       let callNumber = 0;
       return {
         async start() {
           started.push(config.role);
-          return { tools: options.toolsFor === undefined ? [] : options.toolsFor(config) };
+          return {
+            agent: config.agent,
+            permissionMode: "request-review",
+            tools: options.toolsFor === undefined ? [] : options.toolsFor(config),
+          };
         },
         call(prompt) {
           options.onCall?.(config, prompt);
@@ -67,25 +71,27 @@ function scriptedAdapter(options: {
   return { adapter, configs, started, closed, calls };
 }
 
-describe("Claude role provider", () => {
-  let provider: Awaited<ReturnType<typeof createClaudeProvider>> | undefined;
+describe("Agy role provider", () => {
+  let provider: Awaited<ReturnType<typeof createAgyProvider>> | undefined;
 
   afterEach(async () => {
     await provider?.close();
     provider = undefined;
   });
 
-  it("starts both roles with locked isolation settings, clean cwd, retained host env, and separate models", async () => {
+  it("starts both roles with isolated no-tools agents, subscription auth environment, and Gemini models", async () => {
     const f = scriptedAdapter();
     const tempDirs: string[] = [];
     const bootstrapDispatches: string[] = [];
-    provider = await createClaudeProvider({
+    provider = await createAgyProvider({
       adapter: f.adapter,
       beforeBootstrapDispatch: (role) => bootstrapDispatches.push(role),
       hostEnv: {
         PATH: "synthetic-host-path",
         USERPROFILE: "synthetic-user-profile",
         ANTHROPIC_API_KEY: "test-only-key-must-not-forward",
+        GEMINI_API_KEY: "test-only-gemini-key-must-not-forward",
+        GOOGLE_API_KEY: "test-only-google-key-must-not-forward",
         EXTRA_HOST_SETTING: "retained",
       },
       createEmptyCwd: async () => {
@@ -99,27 +105,27 @@ describe("Claude role provider", () => {
     expect(f.configs).toHaveLength(2);
     for (const config of f.configs) {
       expect(config).toMatchObject({
-        tools: [],
-        disallowedTools: ["*"],
-        settingSources: [],
-        strictMcpConfig: true,
-        mcpServers: {},
-        permissionMode: "dontAsk",
+        agent: config.role === "intent" ? "blip-agy-intent" : "blip-agy-repair",
+        model: expect.stringMatching(/^gemini-3\.8-flash-/),
       });
       expect(config.env).toMatchObject({
         PATH: "synthetic-host-path",
         USERPROFILE: "synthetic-user-profile",
         EXTRA_HOST_SETTING: "retained",
-        CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
-        ENABLE_CLAUDEAI_MCP_SERVERS: "false",
       });
       expect(config.env).not.toHaveProperty("ANTHROPIC_API_KEY");
-      expect(await readdir(config.cwd)).toEqual([]);
+      expect(config.env).not.toHaveProperty("GEMINI_API_KEY");
+      expect(config.env).not.toHaveProperty("GOOGLE_API_KEY");
+      expect(await readdir(config.cwd)).toEqual([".agents"]);
+      const { readFile } = await import("node:fs/promises");
+      const agent = await readFile(join(config.cwd, ".agents", "agents", config.agent, "agent.md"), "utf8");
+      expect(agent).toContain("tools: []");
+      expect(agent).toContain("subagent: false");
     }
     expect(new Set(f.configs.map((config) => config.cwd)).size).toBe(2);
     expect(f.configs.map(({ role, model }) => [role, model])).toEqual([
-      ["intent", "claude-haiku-5-5"],
-      ["repair", "claude-sonnet-5-5"],
+      ["intent", "gemini-3.8-flash-low"],
+      ["repair", "gemini-3.8-flash-medium"],
     ]);
     expect(f.calls.slice(0, 2).map(({ role }) => role)).toEqual(["intent", "repair"]);
     expect(bootstrapDispatches).toEqual(["intent", "repair"]);
@@ -135,34 +141,36 @@ describe("Claude role provider", () => {
     expect(tempDirs).toHaveLength(2);
   });
 
-  it("emits only allowlisted SDK startup categories and milestones", async () => {
+  it("emits only allowlisted CLI startup categories and milestones", async () => {
     const f = scriptedAdapter();
     const diagnostics: unknown[] = [];
-    provider = await createClaudeProvider({
+    provider = await createAgyProvider({
       adapter: f.adapter,
       onStartupDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     });
 
     expect(diagnostics).toEqual([
       { kind: "milestone", role: "intent", milestone: "init_received" },
-      { kind: "milestone", role: "intent", milestone: "empty_tools_accepted" },
+      { kind: "milestone", role: "intent", milestone: "no_tools_agent_accepted" },
       { kind: "milestone", role: "intent", milestone: "bootstrap_completed" },
       { kind: "milestone", role: "repair", milestone: "init_received" },
-      { kind: "milestone", role: "repair", milestone: "empty_tools_accepted" },
+      { kind: "milestone", role: "repair", milestone: "no_tools_agent_accepted" },
       { kind: "milestone", role: "repair", milestone: "bootstrap_completed" },
     ]);
 
-    const secret = "sdk-payload-secret-sentinel";
-    expect(classifyClaudeSdkEvent({ type: "system", subtype: "init", tools: [secret], account: secret }))
-      .toBe("system_init");
-    expect(classifyClaudeSdkEvent({ type: "system", subtype: secret, message: secret })).toBe("system_other");
-    expect(classifyClaudeSdkEvent({ type: secret, message: secret })).toBe("other");
+    const secret = "cli-payload-secret-sentinel";
+    expect(classifyAgyCliEvent({ event: "init", init: { tools: [secret] } })).toBe("init");
+    expect(classifyAgyCliEvent({ event: "step_update", step_update: { step_type: "tool", output: secret } }))
+      .toBe("tool");
+    expect(classifyAgyCliEvent({ event: "step_update", step_update: { step_type: "agent_response", text_delta: secret } }))
+      .toBe("assistant");
+    expect(classifyAgyCliEvent({ event: secret })).toBe("other");
     expect(JSON.stringify(diagnostics)).not.toContain(secret);
   });
 
   it("keeps startup diagnostic callback failures observational", async () => {
     const f = scriptedAdapter();
-    provider = await createClaudeProvider({
+    provider = await createAgyProvider({
       adapter: f.adapter,
       onStartupDiagnostic: () => { throw new Error("diagnostic callback sentinel"); },
     });
@@ -171,11 +179,11 @@ describe("Claude role provider", () => {
     expect(f.calls).toHaveLength(2);
   });
 
-  it("discards arbitrary prewarm output and still waits for both successful SDK turns", async () => {
+  it("discards arbitrary prewarm output and still waits for both successful CLI turns", async () => {
     const secret = "raw-prewarm-output-secret-sentinel";
     const f = scriptedAdapter({ bootstrapAnswer: async () => secret });
     const diagnostics: unknown[] = [];
-    provider = await createClaudeProvider({
+    provider = await createAgyProvider({
       adapter: f.adapter,
       onStartupDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
     });
@@ -198,11 +206,11 @@ describe("Claude role provider", () => {
     const firstResult = deferred<string>();
     const secondResult = deferred<string>();
     const calls: Array<{ role: string; prompt: string }> = [];
-    const adapter: ClaudeSdkAdapter = {
-      createSession(config): ClaudeRoleSession {
+    const adapter: AgyCliAdapter = {
+      createSession(config): AgyRoleSession {
         let firstCall = true;
         return {
-          async start() { return { tools: [] }; },
+          async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
           call(prompt) {
             calls.push({ role: config.role, prompt });
             if (firstCall) {
@@ -219,7 +227,7 @@ describe("Claude role provider", () => {
       },
     };
     let providerReady = false;
-    const creating = createClaudeProvider({ adapter }).then((created) => {
+    const creating = createAgyProvider({ adapter }).then((created) => {
       providerReady = true;
       return created;
     });
@@ -239,52 +247,43 @@ describe("Claude role provider", () => {
     expect(calls[2]!.prompt).toContain("ordinary request only after both gates");
   });
 
-  it("rejects unexpected init tools and closes partial sessions before startup can complete", async () => {
-    const f = scriptedAdapter({ toolsFor: (config) => config.role === "repair" ? ["Bash"] : [] });
-    const outcome = await createClaudeProvider({ adapter: f.adapter }).then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(outcome).toMatchObject({
-      name: "UnexpectedClaudeToolsError",
-      role: "repair",
-      toolCount: 1,
-      invalidToolList: false,
-    });
-    expect(outcome).toHaveProperty("message", "Claude SDK startup refused for repair: expected no tools, received 1.");
-    expect((outcome as Error).message).not.toContain("Bash");
+  it("accepts the CLI's global init inventory with the generated no-tools agent", async () => {
+    const f = scriptedAdapter({ toolsFor: () => ["view_file", "run_command"] });
+    provider = await createAgyProvider({ adapter: f.adapter });
     expect(f.started).toEqual(["intent", "repair"]);
-    expect(f.closed.sort()).toEqual(["intent", "repair"]);
+    expect(f.closed).toEqual([]);
     expect(f.calls.map(({ role }) => role)).toEqual(["intent", "repair"]);
   });
 
-  it("rejects a malformed init tool list without exposing its contents", async () => {
-    const f = scriptedAdapter({ toolsFor: () => ({ candidate: "sensitive-tool-name" }) });
-    const outcome = await createClaudeProvider({ adapter: f.adapter }).then(
+  it("refuses an attempted tool call before accepting a model response", async () => {
+    const f = scriptedAdapter({
+      bootstrapAnswer: async (config) => {
+        if (config.role === "intent") throw new UnexpectedAgyToolCallError("intent");
+        return '{"fields":[]}';
+      },
+    });
+    const outcome = await createAgyProvider({ adapter: f.adapter }).then(
       () => null,
       (error: unknown) => error,
     );
 
     expect(outcome).toMatchObject({
-      name: "UnexpectedClaudeToolsError",
+      name: "UnexpectedAgyToolCallError",
       role: "intent",
-      toolCount: null,
-      invalidToolList: true,
     });
-    expect((outcome as Error).message).toBe("Claude SDK startup refused for intent: init tool list was invalid.");
-    expect((outcome as Error).message).not.toContain("sensitive-tool-name");
+    expect((outcome as Error).message).toBe("AGY intent role attempted a tool call; the model session was stopped.");
     expect(f.closed).toContain("intent");
     expect(f.calls.map(({ role }) => role)).toEqual(["intent"]);
   });
 
-  it("aborts and closes an SDK role whose startup reaches the deadline", async () => {
+  it("aborts and closes a CLI role whose startup reaches the deadline", async () => {
     const controller = new AbortController();
     const started = deferred<void>();
     let rejectInit!: (error: Error) => void;
     let aborted = false;
     let closed = false;
-    const adapter: ClaudeSdkAdapter = {
-      createSession(): ClaudeRoleSession {
+    const adapter: AgyCliAdapter = {
+      createSession(config): AgyRoleSession {
         return {
           start() {
             started.resolve();
@@ -299,7 +298,7 @@ describe("Claude role provider", () => {
         };
       },
     };
-    const creating = createClaudeProvider({ adapter, startupSignal: controller.signal });
+    const creating = createAgyProvider({ adapter, startupSignal: controller.signal });
 
     await started.promise;
     controller.abort(new Error("startup deadline"));
@@ -313,8 +312,8 @@ describe("Claude role provider", () => {
     const started = deferred<void>();
     let aborted = false;
     let closed = false;
-    const adapter: ClaudeSdkAdapter = {
-      createSession(): ClaudeRoleSession {
+    const adapter: AgyCliAdapter = {
+      createSession(): AgyRoleSession {
         return {
           start() {
             started.resolve();
@@ -326,7 +325,7 @@ describe("Claude role provider", () => {
         };
       },
     };
-    const creating = createClaudeProvider({ adapter, hostEnv: {}, startupSignal: controller.signal });
+    const creating = createAgyProvider({ adapter, hostEnv: {}, startupSignal: controller.signal });
 
     await started.promise;
     controller.abort(new Error("startup deadline"));
@@ -340,10 +339,10 @@ describe("Claude role provider", () => {
     const bootstrapSent = deferred<void>();
     let aborted = false;
     let closed = false;
-    const adapter: ClaudeSdkAdapter = {
-      createSession(): ClaudeRoleSession {
+    const adapter: AgyCliAdapter = {
+      createSession(config): AgyRoleSession {
         return {
-          async start() { return { tools: [] }; },
+          async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
           call() {
             bootstrapSent.resolve();
             return new Promise(() => {});
@@ -353,7 +352,7 @@ describe("Claude role provider", () => {
         };
       },
     };
-    const creating = createClaudeProvider({ adapter, hostEnv: {}, startupSignal: controller.signal });
+    const creating = createAgyProvider({ adapter, hostEnv: {}, startupSignal: controller.signal });
 
     await bootstrapSent.promise;
     controller.abort(new Error("startup bootstrap deadline"));
@@ -364,7 +363,7 @@ describe("Claude role provider", () => {
 
   it("calls the bootstrap accounting gate before queueing any synthetic operation", async () => {
     const f = scriptedAdapter();
-    await expect(createClaudeProvider({
+    await expect(createAgyProvider({
       adapter: f.adapter,
       beforeBootstrapDispatch: () => { throw new Error("bootstrap dispatch cap reached"); },
     })).rejects.toThrow("bootstrap dispatch cap reached");
@@ -372,17 +371,17 @@ describe("Claude role provider", () => {
     expect(f.closed).toContain("intent");
   });
 
-  it("checks every ordinary prompt synchronously before the SDK receives it and fails closed at the shared cap", async () => {
+  it("checks every ordinary prompt synchronously before the CLI receives it and fails closed at the shared cap", async () => {
     const events: string[] = [];
-    const sdkCalls: Record<string, number> = { intent: 0, repair: 0 };
+    const cliCalls: Record<string, number> = { intent: 0, repair: 0 };
     const f = scriptedAdapter({
       onCall: (config) => {
-        sdkCalls[config.role] = (sdkCalls[config.role] ?? 0) + 1;
-        events.push(`sdk:${config.role}:${sdkCalls[config.role] === 1 ? "bootstrap" : "intent"}`);
+        cliCalls[config.role] = (cliCalls[config.role] ?? 0) + 1;
+        events.push(`cli:${config.role}:${cliCalls[config.role] === 1 ? "bootstrap" : "intent"}`);
       },
     });
     let dispatches = 0;
-    provider = await createClaudeProvider({
+    provider = await createAgyProvider({
       adapter: f.adapter,
       beforeBootstrapDispatch: (role) => {
         dispatches += 1;
@@ -397,9 +396,9 @@ describe("Claude role provider", () => {
 
     expect(events.slice(0, 4)).toEqual([
       "bootstrap-hook:intent",
-      "sdk:intent:bootstrap",
+      "cli:intent:bootstrap",
       "bootstrap-hook:repair",
-      "sdk:repair:bootstrap",
+      "cli:repair:bootstrap",
     ]);
 
     for (let call = 0; call < 6; call += 1) {
@@ -407,7 +406,7 @@ describe("Claude role provider", () => {
     }
     expect(events.slice(4, 16)).toEqual(Array.from({ length: 6 }, () => [
       "prompt-hook:intent",
-      "sdk:intent:intent",
+      "cli:intent:intent",
     ]).flat());
     const countBeforeRejectedDispatch = f.calls.length;
     await expect(provider.parseIntent("must fail closed")).rejects.toThrow("dispatch cap reached");
@@ -426,7 +425,7 @@ describe("Claude role provider", () => {
         return result.promise;
       },
     });
-    provider = await createClaudeProvider({
+    provider = await createAgyProvider({
       adapter: f.adapter,
       beforeBootstrapDispatch: (role) => bootstrapDispatches.push(role),
     });
@@ -462,7 +461,7 @@ describe("Claude role provider", () => {
 
     for (const [raw, category] of intentCases) {
       const f = scriptedAdapter({ answer: () => Promise.resolve(raw) });
-      provider = await createClaudeProvider({ adapter: f.adapter });
+      provider = await createAgyProvider({ adapter: f.adapter });
       let failure: unknown;
       try {
         await provider.parseIntent("safe synthetic prompt");
@@ -470,9 +469,9 @@ describe("Claude role provider", () => {
         failure = error;
       }
 
-      expect(failure).toBeInstanceOf(InvalidClaudeOutputError);
+      expect(failure).toBeInstanceOf(InvalidAgyOutputError);
       expect(failure).toMatchObject({ role: "intent", category });
-      expect((failure as Error).message).toBe("Claude output was rejected by local validation.");
+      expect((failure as Error).message).toBe("Agy output was rejected by local validation.");
       expect(JSON.stringify(failure)).not.toContain("private");
       expect((failure as Error).message).not.toContain("sentinel");
       await provider.close();
@@ -483,14 +482,14 @@ describe("Claude role provider", () => {
     const repair = scriptedAdapter({
       answer: (config) => Promise.resolve(config.role === "repair" ? repairRaw : '{"type":"describe"}'),
     });
-    provider = await createClaudeProvider({ adapter: repair.adapter });
+    provider = await createAgyProvider({ adapter: repair.adapter });
     let repairFailure: unknown;
     try {
       await provider.repairFormModel("safe synthetic repair prompt");
     } catch (error) {
       repairFailure = error;
     }
-    expect(repairFailure).toBeInstanceOf(InvalidClaudeOutputError);
+    expect(repairFailure).toBeInstanceOf(InvalidAgyOutputError);
     expect(repairFailure).toMatchObject({ role: "repair", category: "repair_schema_rejected" });
     expect((repairFailure as Error).message).not.toContain("repair-sentinel");
   });

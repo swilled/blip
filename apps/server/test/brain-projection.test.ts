@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FormModel } from "@blip/protocol";
 import { makeElement, makeSnapshot } from "../../../packages/protocol/test/helpers";
 import { buildBaselineFormModel } from "../src/baseline";
-import { estimateProjectionTokens, projectPageForPrompt } from "../src/brain/claude/projection";
+import { estimateProjectionTokens, projectPageForPrompt } from "../src/brain/agy/projection";
 
 describe("projectPageForPrompt", () => {
   it("retains all field/action ids and safe routing metadata", () => {

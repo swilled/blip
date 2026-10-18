@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 import { buildBaselineFormModel } from "../src/baseline";
-import { mergeRepairPatch } from "../src/brain/claude/repair-merge";
-import { parseRepairPatch, validateRepairPatch } from "../src/brain/claude/repair-schema";
+import { mergeRepairPatch } from "../src/brain/agy/repair-merge";
+import { parseRepairPatch, validateRepairPatch } from "../src/brain/agy/repair-schema";
 
 const baseline = () => buildBaselineFormModel(loadSnapshot("broken"));
 

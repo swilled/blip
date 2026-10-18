@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { startServer } from "../src/server";
-import type { ClaudeRoleConfig, ClaudeRoleSession, ClaudeSdkAdapter } from "../src/brain/claude/session";
+import type { AgyRoleConfig, AgyRoleSession, AgyCliAdapter } from "../src/brain/agy/session";
 import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
 import { bindClient, type Frame, type TestClient } from "./helpers";
 
@@ -39,12 +39,12 @@ async function collectUntil(voice: TestClient, predicate: (frame: Frame) => bool
   throw new Error(`timed out waiting for frame; saw ${frames.map(({ type }) => type).join(", ")}`);
 }
 
-async function boot(adapter: ClaudeSdkAdapter, options: { intentWatchdog?: ReturnType<typeof watchdogClock> } = {}) {
+async function boot(adapter: AgyCliAdapter, options: { intentWatchdog?: ReturnType<typeof watchdogClock> } = {}) {
   const server = await startServer({
     port: 0,
     dev: true,
-    brain: "claude",
-    claudeAdapter: adapter,
+    brain: "agy",
+    agyAdapter: adapter,
     snapshotTimeoutMs: 500,
     ...(options.intentWatchdog !== undefined ? { intentWatchdog: options.intentWatchdog } : {}),
   });
@@ -62,13 +62,13 @@ function firstCallHangAdapter() {
   let intentSessions = 0;
   let resolveFirstCallStarted!: () => void;
   const firstCallStarted = new Promise<void>((resolve) => { resolveFirstCallStarted = resolve; });
-  const adapter: ClaudeSdkAdapter = {
-    createSession(config: ClaudeRoleConfig): ClaudeRoleSession {
+  const adapter: AgyCliAdapter = {
+    createSession(config: AgyRoleConfig): AgyRoleSession {
       const sessionNumber = config.role === "intent" ? intentSessions++ : 0;
       let callNumber = 0;
       created.push(`${config.role}:${sessionNumber}`);
       return {
-        async start() { return { tools: [] }; },
+        async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
         call(prompt) {
           callNumber += 1;
           if (callNumber === 1) {
@@ -92,7 +92,7 @@ function firstCallHangAdapter() {
   return { adapter, oldCall, calls, aborted, created, firstCallStarted };
 }
 
-describe("Claude turn routing and watchdog recovery", () => {
+describe("Agy turn routing and watchdog recovery", () => {
   it("releases a hung queued turn, recreates the production-provider role, and ignores late output", async () => {
     const f = firstCallHangAdapter();
     const watchdog = watchdogClock();
@@ -127,13 +127,13 @@ describe("Claude turn routing and watchdog recovery", () => {
     }
   });
 
-  it("keeps grammar and parsed field phrases local in Claude mode", async () => {
+  it("keeps grammar and parsed field phrases local in Agy mode", async () => {
     const calls: string[] = [];
-    const adapter: ClaudeSdkAdapter = {
+    const adapter: AgyCliAdapter = {
       createSession(config) {
         let callNumber = 0;
         return {
-          async start() { return { tools: [] }; },
+          async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
           async call(prompt) {
             callNumber += 1;
             if (callNumber === 1) return config.role === "intent"
@@ -167,11 +167,11 @@ describe("Claude turn routing and watchdog recovery", () => {
 
   it("withholds a password-shaped utterance from the provider and speech", async () => {
     const calls: string[] = [];
-    const adapter: ClaudeSdkAdapter = {
+    const adapter: AgyCliAdapter = {
       createSession(config) {
         let callNumber = 0;
         return {
-          async start() { return { tools: [] }; },
+          async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
           async call(prompt) {
             callNumber += 1;
             if (callNumber === 1) return config.role === "intent"
@@ -208,11 +208,11 @@ describe("Claude turn routing and watchdog recovery", () => {
     ["second invalid result", async (_prompt: string) => '{"type":"describe","extra":true}', 2],
   ])("speaks the exact fallback and does not echo input after %s", async (_name, answer, expectedCalls) => {
     let intentCalls = 0;
-    const adapter: ClaudeSdkAdapter = {
+    const adapter: AgyCliAdapter = {
       createSession(config) {
         let callNumber = 0;
         return {
-          async start() { return { tools: [] }; },
+          async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
           async call(prompt) {
             callNumber += 1;
             if (callNumber === 1) return config.role === "intent"

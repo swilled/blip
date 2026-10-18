@@ -82,7 +82,7 @@ describe("CLI flags (D-21)", () => {
   it("an unknown brain mode exits 2 without starting a provider", async () => {
     const r = await runToExit(["--brain=remote"]);
     expect(r.code).toBe(2);
-    expect(r.stderr).toMatch(/--brain must be fake or claude/);
+    expect(r.stderr).toMatch(/--brain must be fake or agy/);
   });
 
   it("--allow-origin without --dev exits 2", async () => {

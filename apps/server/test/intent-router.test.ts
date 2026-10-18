@@ -6,7 +6,7 @@ import {
   StaleIntentPageError,
   routeIntent,
   type IntentRouteProvider,
-} from "../src/brain/claude/intent-router";
+} from "../src/brain/agy/intent-router";
 import { loadSnapshot } from "@blip/protocol/fixtures-loader";
 
 function page() {

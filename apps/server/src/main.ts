@@ -1,7 +1,7 @@
 // CLI entry (D-21). Flag parsing only; everything real lives in startServer().
 //   --port <n>            default 7777 (0 = ephemeral)
 //   --dev                 allow no-Origin clients and the dev voice origins
-//   --brain=fake|claude   default fake; claude arrives in Phase 4
+//   --brain=fake|agy   default fake; agy uses the signed-in Antigravity CLI subscription
 //   --fake-delay <ms>     default 1500: how long a model-routed turn waits (the fake brain "thinking")
 //   --fake-request-action <actionId>
 //                         TEST ONLY: the fake brain answers model-routed turns with request_action for
@@ -46,12 +46,12 @@ async function main(): Promise<void> {
       allowPositionals: false,
     }));
   } catch (err) {
-        die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake|claude] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
+        die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake|agy] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
   }
 
   const dev = values.dev === true;
   const brain = values.brain;
-  if (brain !== "fake" && brain !== "claude") die(`--brain must be fake or claude, got "${brain}"`, 2);
+  if (brain !== "fake" && brain !== "agy") die(`--brain must be fake or agy, got "${brain}"`, 2);
 
   const port = parseIntegerFlag("port", values.port, DEFAULT_PORT, 65535);
   const fakeDelayMs = parseIntegerFlag("fake-delay", values["fake-delay"], 1500, 600000);

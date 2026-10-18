@@ -7,7 +7,7 @@ import {
   projectPageForPrompt,
   serializeProjectionForPrompt,
 } from "./projection";
-import { InvalidClaudeOutputError } from "./provider";
+import { InvalidAgyOutputError } from "./provider";
 
 export type IntentRouteProvider = {
   parseIntent(prompt: string, signal?: AbortSignal): Promise<IntentData>;
@@ -29,14 +29,14 @@ export type IntentRouteResult =
 
 export class InvalidIntentResultError extends Error {
   constructor(reason: string) {
-    super(`Claude intent result was rejected: ${reason}`);
+    super(`Agy intent result was rejected: ${reason}`);
     this.name = "InvalidIntentResultError";
   }
 }
 
 export class StaleIntentPageError extends Error {
   constructor() {
-    super("The accepted page changed while Claude was resolving an intent.");
+    super("The accepted page changed while Agy was resolving an intent.");
     this.name = "StaleIntentPageError";
   }
 }
@@ -156,7 +156,7 @@ function promptFor(utterance: string, page: IntentRoutePage): string {
 
 /**
  * Grammar and field phrases are deliberately kept local. This final server boundary repeats the
- * check so a future caller cannot accidentally send one to Claude; only privacy-approved free text
+ * check so a future caller cannot accidentally send one to Agy; only privacy-approved free text
  * reaches the provider, paired with the immutable value-free projection of the captured snapshot.
  */
 export async function routeIntent(
@@ -182,7 +182,7 @@ export async function routeIntent(
         signal,
       ));
     } catch (error) {
-      if (error instanceof InvalidIntentResultError || error instanceof InvalidClaudeOutputError) {
+      if (error instanceof InvalidIntentResultError || error instanceof InvalidAgyOutputError) {
         if (attempt === 0) continue;
       }
       throw error;

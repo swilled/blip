@@ -121,7 +121,7 @@ describe("npm run dev (D-21)", () => {
     const r = run("--brain=remote");
     try {
       expect(await exitWithin(r, 30000)).toBe(2);
-      expect(r.err()).toContain("--brain must be fake or claude");
+      expect(r.err()).toContain("--brain must be fake or agy");
     } finally {
       killTree(r);
     }

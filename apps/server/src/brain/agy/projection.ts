@@ -43,7 +43,7 @@ export type PagePromptProjection = {
 
 /**
  * Make a conservative local estimate from the exact JSON serialized as model input.
- * This is a character/byte bound, not a tokenizer; live SDK usage is not required.
+ * This is a character/byte bound, not a tokenizer; live model usage is not required.
  */
 export function estimateProjectionTokens(projection: PagePromptProjection): number {
   const json = serializeProjectionForPrompt(projection);

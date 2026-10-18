@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { newId } from "@blip/protocol";
 import { startServer } from "../src/server";
-import type { ClaudeRoleConfig, ClaudeRoleSession, ClaudeSdkAdapter } from "../src/brain/claude/session";
+import type { AgyRoleConfig, AgyRoleSession, AgyCliAdapter } from "../src/brain/agy/session";
 import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
 import { bindClient, type Frame, type TestClient } from "./helpers";
 
@@ -56,13 +56,13 @@ describe("core server dialogue runner option", () => {
     }
   });
 
-  it("routes reducer-unmatched utterances through the configured Claude provider", async () => {
+  it("routes reducer-unmatched utterances through the configured Agy provider", async () => {
     const calls: Array<{ role: string; prompt: string }> = [];
-    const adapter: ClaudeSdkAdapter = {
-      createSession(config: ClaudeRoleConfig): ClaudeRoleSession {
+    const adapter: AgyCliAdapter = {
+      createSession(config: AgyRoleConfig): AgyRoleSession {
         let firstCall = true;
         return {
-          async start() { return { tools: [] }; },
+          async start() { return { agent: config.agent, permissionMode: "request-review", tools: [] }; },
           async call(prompt) {
             calls.push({ role: config.role, prompt });
             if (firstCall) {
@@ -70,7 +70,7 @@ describe("core server dialogue runner option", () => {
               return config.role === "intent" ? '{"type":"describe"}' : '{"fields":[]}';
             }
             return config.role === "intent"
-              ? '{"type":"answer","text":"Claude handled this synthetic question."}'
+              ? '{"type":"answer","text":"Agy handled this synthetic question."}'
               : '{"fields":[]}';
           },
           abort() {},
@@ -81,8 +81,8 @@ describe("core server dialogue runner option", () => {
     const server = await startServer({
       port: 0,
       dev: true,
-      brain: "claude",
-      claudeAdapter: adapter,
+      brain: "agy",
+      agyAdapter: adapter,
       dialogueRunner: true,
       snapshotTimeoutMs: 1_000,
     });
@@ -94,7 +94,7 @@ describe("core server dialogue runner option", () => {
       voice.send("utterance", { utteranceId: newId(), text: question, source: "typed" });
       const answer = await waitForFrame(
         voice,
-        (frame) => frame.type === "speak" && frame.payload.text === "Claude handled this synthetic question.",
+        (frame) => frame.type === "speak" && frame.payload.text === "Agy handled this synthetic question.",
       );
       expect(answer.payload.category).toBe("answer");
       expect(calls.some((call) => call.role === "intent" && call.prompt.includes(question))).toBe(true);

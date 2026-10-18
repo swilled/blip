@@ -1,23 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
 import { newId } from "@blip/protocol";
 import { startServer } from "../src/server";
-import type { ClaudeRoleConfig, ClaudeRoleSession, ClaudeSdkAdapter } from "../src/brain/claude/session";
+import type { AgyRoleConfig, AgyRoleSession, AgyCliAdapter } from "../src/brain/agy/session";
 import { bindClient, type Frame } from "./helpers";
 
 function adapterWithInit(options: {
-  toolsFor?: (config: ClaudeRoleConfig) => string[];
+  toolsFor?: (config: AgyRoleConfig) => string[];
+  agentFor?: (config: AgyRoleConfig) => string;
   events: string[];
 }) {
   const close = vi.fn();
   const calls: Array<{ role: string; prompt: string }> = [];
-  const adapter: ClaudeSdkAdapter = {
-    createSession(config): ClaudeRoleSession {
+  const adapter: AgyCliAdapter = {
+    createSession(config): AgyRoleSession {
       options.events.push(`create:${config.role}`);
       let callNumber = 0;
       return {
         async start() {
           options.events.push(`init:${config.role}`);
-          return { tools: options.toolsFor?.(config) ?? [] };
+          return {
+            agent: options.agentFor?.(config) ?? config.agent,
+            permissionMode: "request-review",
+            tools: options.toolsFor?.(config) ?? [],
+          };
         },
         async call(prompt) {
           callNumber += 1;
@@ -41,13 +46,13 @@ function adapterWithInit(options: {
 }
 
 describe("server brain mode", () => {
-  it("default and explicit fake startup remain usable without initializing the SDK", async () => {
+  it("default and explicit fake startup remain usable without initializing the AGY CLI", async () => {
     const createSession = vi.fn(() => {
-      throw new Error("fake mode must not initialize a Claude SDK session");
+      throw new Error("fake mode must not initialize an AGY CLI session");
     });
-    const adapter: ClaudeSdkAdapter = { createSession };
+    const adapter: AgyCliAdapter = { createSession };
 
-    const defaultServer = await startServer({ port: 0, dev: true, claudeAdapter: adapter });
+    const defaultServer = await startServer({ port: 0, dev: true, agyAdapter: adapter });
     try {
       expect(defaultServer.config.brain).toBe("fake");
       expect((await fetch(`http://127.0.0.1:${defaultServer.port}/healthz`)).status).toBe(200);
@@ -55,7 +60,7 @@ describe("server brain mode", () => {
       await defaultServer.close();
     }
 
-    const fakeServer = await startServer({ port: 0, dev: true, brain: "fake", claudeAdapter: adapter });
+    const fakeServer = await startServer({ port: 0, dev: true, brain: "fake", agyAdapter: adapter });
     try {
       expect(fakeServer.config.brain).toBe("fake");
       expect((await fetch(`http://127.0.0.1:${fakeServer.port}/healthz`)).status).toBe(200);
@@ -65,23 +70,23 @@ describe("server brain mode", () => {
     expect(createSession).not.toHaveBeenCalled();
   });
 
-  it("Claude startup initializes and validates both roles before the server listens", async () => {
+  it("Agy startup initializes and validates both roles before the server listens", async () => {
     const events: string[] = [];
     const bootstrapDispatches: string[] = [];
     const f = adapterWithInit({ events });
     const server = await startServer({
       port: 0,
       dev: true,
-      brain: "claude",
-      claudeAdapter: f.adapter,
-      claudeSessionHooks: {
+      brain: "agy",
+      agyAdapter: f.adapter,
+      agySessionHooks: {
         beforeBootstrapDispatch: (role) => bootstrapDispatches.push(role),
         beforePromptDispatch: () => { throw new Error("ordinary prompt hook must not run for bootstrap"); },
       },
     });
     try {
       expect(events).toEqual(["create:intent", "init:intent", "create:repair", "init:repair"]);
-      expect(server.config.brain).toBe("claude");
+      expect(server.config.brain).toBe("agy");
       expect((await fetch(`http://127.0.0.1:${server.port}/healthz`)).status).toBe(200);
     } finally {
       await server.close();
@@ -90,26 +95,24 @@ describe("server brain mode", () => {
     expect(bootstrapDispatches).toEqual(["intent", "repair"]);
   });
 
-  it("fails startup and closes partial roles if init reports an unexpected tool", async () => {
+  it("fails startup and closes partial roles if init reports the wrong no-tools agent", async () => {
     const events: string[] = [];
-    const f = adapterWithInit({ events, toolsFor: (config) => config.role === "repair" ? ["mcp__unexpected__tool"] : [] });
+    const f = adapterWithInit({ events, agentFor: (config) => config.role === "repair" ? "unexpected-agent" : config.agent });
 
-    const outcome = await startServer({ port: 0, dev: true, brain: "claude", claudeAdapter: f.adapter }).then(
+    const outcome = await startServer({ port: 0, dev: true, brain: "agy", agyAdapter: f.adapter }).then(
       () => null,
       (error: unknown) => error,
     );
-    expect(outcome).toMatchObject({ name: "UnexpectedClaudeToolsError", role: "repair", toolCount: 1 });
-    expect((outcome as Error).message).toBe("Claude SDK startup refused for repair: expected no tools, received 1.");
-    expect((outcome as Error).message).not.toContain("mcp__unexpected__tool");
+    expect(outcome).toMatchObject({ name: "AgyCliStartupError", role: "repair", category: "unexpected_agent" });
     expect(events).toEqual([
       "create:intent", "init:intent", "create:repair", "init:repair", "close:repair", "close:intent",
     ]);
   });
 
-  it("does not send an utterance to Claude when no accepted page snapshot exists", async () => {
+  it("does not send an utterance to Agy when no accepted page snapshot exists", async () => {
     const events: string[] = [];
     const f = adapterWithInit({ events });
-    const server = await startServer({ port: 0, dev: true, brain: "claude", claudeAdapter: f.adapter });
+    const server = await startServer({ port: 0, dev: true, brain: "agy", agyAdapter: f.adapter });
     const voice = await bindClient(server.port, "voice", { origin: undefined });
     try {
       voice.send("utterance", {

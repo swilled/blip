@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { phraseForKind } from "@blip/policy/confirmation";
 import type { Message } from "@blip/protocol";
 import { buildBaselineFormModel } from "../../../server/src/baseline/index.js";
-import { projectPageForPrompt } from "../../../server/src/brain/claude/projection.js";
+import { projectPageForPrompt } from "../../../server/src/brain/agy/projection.js";
 import type { TestPageReport } from "../../../../tools/test-pages/serve.js";
 import { openFixturePage, type BrowserFixtureSession } from "./harness.js";
 

@@ -15,11 +15,11 @@ import {
   runOfflineFirstLiveCheck,
   type LiveCheckProbeEvidence,
   type LiveCheckProvider,
-} from "../scripts/claude-sdk-live-check";
-import { RepairCache, repairCacheIdentity } from "../src/brain/claude/repair-cache";
-import { InvalidClaudeOutputError } from "../src/brain/claude/provider";
-import { UnexpectedClaudeToolsError } from "../src/brain/claude/session";
-import type { ClaudeStartupDiagnostic } from "../src/brain/claude/session";
+} from "../scripts/agy-cli-live-check";
+import { RepairCache, repairCacheIdentity } from "../src/brain/agy/repair-cache";
+import { InvalidAgyOutputError } from "../src/brain/agy/provider";
+import { UnexpectedAgyToolCallError } from "../src/brain/agy/session";
+import type { AgyStartupDiagnostic } from "../src/brain/agy/session";
 
 const APPROVED_REPORT = `${LIVE_CHECK_APPROVAL_LINE}\napprovalUsed: false\n`;
 const SYNTHETIC_URL = "https://synthetic.example/form/contact";
@@ -207,7 +207,7 @@ async function runFakeProbe(
   return { result, cacheDirectory, createProvider, verify };
 }
 
-describe("Claude SDK approved-mode synthetic verifier", () => {
+describe("AGY CLI approved-mode synthetic verifier", () => {
   it("keeps offline mode ahead of report reads, provider creation, and probe dispatch", async () => {
     const readReport = vi.fn(async () => APPROVED_REPORT);
     const consumeApproval = vi.fn(async () => true);
@@ -236,7 +236,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     const deferredReport = "phase04FollowupApproval: defer-04-08-live-check\nstatus: externally_blocked\n";
     const reports = [
       deferredReport,
-      "sdkPinApproval: @anthropic-ai/claude-agent-sdk@0.3.302\nownerLiveUse: confirmed\n",
+      "legacyProviderPinApproval: old-runtime@0.3\nownerLiveUse: confirmed\n",
       "No approval line is present.\n",
       `${LIVE_CHECK_APPROVAL_LINE} \napprovalUsed: false\n`,
       `${LIVE_CHECK_APPROVAL_LINE}\napprovalUsed: false\nphase04FollowupApproval: defer-04-08-live-check\n`,
@@ -314,23 +314,23 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
   });
 
   it("records only bounded allowlisted startup diagnostics", async () => {
-    const secret = "raw-sdk-payload-secret-sentinel";
+    const secret = "raw-cli-payload-secret-sentinel";
     const provider = fakeProvider();
     const createProvider = vi.fn(async (
       _signal: AbortSignal,
       _beforeBootstrapDispatch: (role: "intent" | "repair") => void,
-      report: (diagnostic: ClaudeStartupDiagnostic) => void,
+      report: (diagnostic: AgyStartupDiagnostic) => void,
     ) => {
       for (let index = 0; index < 104; index += 1) {
-        report({ kind: "sdk_event", role: "intent", event: index === 0 ? "system_init" : "other" });
+        report({ kind: "cli_event", role: "intent", event: index === 0 ? "init" : "other" });
       }
       report({ kind: "milestone", role: "intent", milestone: "init_received" });
       report({
         kind: "failure",
         role: "intent",
-        category: "sdk_stream_error",
+        category: "cli_stream_error",
         payload: secret,
-      } as unknown as ClaudeStartupDiagnostic);
+      } as unknown as AgyStartupDiagnostic);
       return provider;
     });
     const result = await runOfflineFirstLiveCheck(
@@ -344,20 +344,20 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     );
 
     expect(result.startupDiagnostics.intent).toEqual({
-      firstEvent: "system_init",
+      firstEvent: "init",
       lastEvent: "other",
       eventCount: 100,
       initReceived: true,
-      emptyToolsAccepted: false,
+      noToolsAgentAccepted: false,
       bootstrapCompleted: false,
-      failureCategory: "sdk_stream_error",
+      failureCategory: "cli_stream_error",
     });
     expect(result.startupDiagnostics.repair).toEqual({
       firstEvent: null,
       lastEvent: null,
       eventCount: 0,
       initReceived: false,
-      emptyToolsAccepted: false,
+      noToolsAgentAccepted: false,
       bootstrapCompleted: false,
       failureCategory: null,
     });
@@ -466,9 +466,9 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     expect(Object.keys(result).sort()).toEqual([
       "bootstrapCounts", "cancellationVerified", "currentSyntheticIdMatched", "dispatchCounts", "elapsedMs", "intentAccepted", "intentLatenciesMs",
       "intentFailureCategories", "intentRouteDispatchCounts",
-      "intentSchemaValid", "invalidToolList", "promptCounts", "rejectingRole", "repairCacheReloaded",
-      "repairFailureCategory", "repairPatchAccepted", "recreatedIntentToolCount", "startupDiagnostics", "stage", "status",
-      "subsequentPromptsAfterBlock", "toolCount",
+      "intentSchemaValid", "promptCounts", "rejectingRole", "repairCacheReloaded",
+      "repairFailureCategory", "repairPatchAccepted", "recreatedIntentToolCallBlocked", "startupDiagnostics", "stage", "status",
+      "subsequentPromptsAfterBlock", "toolCallBlocked",
     ].sort());
   });
 
@@ -520,7 +520,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
 
   it("records only the fixed provider validation category after its one retry", async () => {
     const provider = fakeProvider();
-    provider.parseIntent.mockRejectedValue(new InvalidClaudeOutputError("intent", "invalid_json"));
+    provider.parseIntent.mockRejectedValue(new InvalidAgyOutputError("intent", "invalid_json"));
     const { result } = await runFakeProbe(provider);
 
     expect(result).toMatchObject({
@@ -530,7 +530,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       intentRouteDispatchCounts: [2],
       intentFailureCategories: ["invalid_json"],
     });
-    expect(JSON.stringify(result)).not.toContain("Claude output was rejected");
+    expect(JSON.stringify(result)).not.toContain("Agy output was rejected");
     expect(provider.repairFormModel).not.toHaveBeenCalled();
   });
 
@@ -561,7 +561,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       status: "completed",
       promptCounts: { intent: 3, repair: 1, total: 4 },
       cancellationVerified: true,
-      recreatedIntentToolCount: 0,
+      recreatedIntentToolCallBlocked: false,
       currentSyntheticIdMatched: [true, true],
       intentRouteDispatchCounts: [1, 1],
     });
@@ -606,7 +606,7 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
 
   it("records only a fixed repair output category and never an error message", async () => {
     const provider = fakeProvider();
-    provider.repairFormModel.mockRejectedValue(new InvalidClaudeOutputError("repair", "repair_schema_rejected"));
+    provider.repairFormModel.mockRejectedValue(new InvalidAgyOutputError("repair", "repair_schema_rejected"));
     const { result } = await runFakeProbe(provider);
 
     expect(result).toMatchObject({
@@ -616,14 +616,14 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
       repairFailureCategory: "repair_schema_rejected",
       repairCacheReloaded: false,
     });
-    expect(JSON.stringify(result)).not.toContain("Claude output was rejected");
+    expect(JSON.stringify(result)).not.toContain("Agy output was rejected");
     expect(JSON.stringify(result)).not.toContain(FIELD_ID);
   });
 
   it("preserves monotonic counts and sends no prompt after a recreated role reports tools", async () => {
     vi.useFakeTimers();
     const provider = fakeProvider({ pendingCancellation: true });
-    provider.recreateRole.mockRejectedValue(new UnexpectedClaudeToolsError("intent", 2));
+    provider.recreateRole.mockRejectedValue(new UnexpectedAgyToolCallError("intent"));
     const cacheDirectory = await temporaryCacheDirectory();
     const resultPromise = runOfflineFirstLiveCheck(
       { live: true, maxSeconds: LIVE_CHECK_MAX_SECONDS },
@@ -644,8 +644,8 @@ describe("Claude SDK approved-mode synthetic verifier", () => {
     expect(result).toMatchObject({
       status: "externally_blocked",
       rejectingRole: "intent",
-      toolCount: 2,
-      recreatedIntentToolCount: 2,
+      toolCallBlocked: true,
+      recreatedIntentToolCallBlocked: true,
       promptCounts: { intent: 2, repair: 0, total: 2 },
       subsequentPromptsAfterBlock: 0,
     });

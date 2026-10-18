@@ -5,8 +5,8 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { demoRepairCachePath } from "../../../../scripts/demo.js";
-import { repairCacheIdentity } from "../../../server/src/brain/claude/repair-cache.js";
-import type { ClaudeRole, ClaudeStartupDiagnostic } from "../../../server/src/brain/claude/session.js";
+import { repairCacheIdentity } from "../../../server/src/brain/agy/repair-cache.js";
+import type { AgyRole, AgyStartupDiagnostic } from "../../../server/src/brain/agy/session.js";
 import { openFixturePage, type BrowserFixtureSession } from "./harness.js";
 
 const APPROVAL_LINE = "phase05RepairCacheApproval: approve-05-11-synthetic-survey-cache";
@@ -51,7 +51,7 @@ type ReportData = {
   stage?: Stage;
   elapsedMs?: number;
   dispatches?: { total: number; bootstrap: number; prompt: number; intent: number; repair: number };
-  emptyToolsAccepted?: { intent: boolean; repair: boolean };
+  noToolsAgentAccepted?: { intent: boolean; repair: boolean };
   extensionConnected?: boolean;
   voiceConnected?: boolean;
   exactDemoIdentity?: boolean;
@@ -64,7 +64,7 @@ type ReportData = {
 
 function renderReport(data: ReportData): string {
   const dispatches = data.dispatches ?? { total: 0, bootstrap: 0, prompt: 0, intent: 0, repair: 0 };
-  const tools = data.emptyToolsAccepted ?? { intent: false, repair: false };
+  const noToolsAgent = data.noToolsAgentAccepted ?? { intent: false, repair: false };
   return [
     "---",
     "phase: 05-hostile-pages-real-web-and-freeze",
@@ -84,8 +84,8 @@ function renderReport(data: ReportData): string {
     `promptDispatches: ${dispatches.prompt}`,
     `intentDispatches: ${dispatches.intent}`,
     `repairDispatches: ${dispatches.repair}`,
-    `intentEmptyToolsAccepted: ${tools.intent}`,
-    `repairEmptyToolsAccepted: ${tools.repair}`,
+    `intentNoToolsAgentAccepted: ${noToolsAgent.intent}`,
+    `repairNoToolsAgentAccepted: ${noToolsAgent.repair}`,
     `extensionConnected: ${data.extensionConnected ?? false}`,
     `voiceConnected: ${data.voiceConnected ?? false}`,
     `exactDemoIdentity: ${data.exactDemoIdentity ?? false}`,
@@ -98,7 +98,7 @@ function renderReport(data: ReportData): string {
     "",
     "# Phase 5 Synthetic Demo Repair Cache Live Check",
     "",
-    "One bounded, one-use Claude check against the self-hosted synthetic survey only. The report stores no prompts, page prose, model output, field values, credentials, account state, or provider errors.",
+    "One bounded, one-use AGY CLI check against the self-hosted synthetic survey only. The report stores no prompts, page prose, model output, field values, credentials, account state, or provider errors.",
     "",
     `- Exact page: ${PAGE_URL}`,
     `- Cache directory: .chrome-profile/demo-repair-cache-v1 (the launcher's dedicated cache)`,
@@ -109,8 +109,8 @@ function renderReport(data: ReportData): string {
   ].join("\n");
 }
 
-function emptyToolsObserver(value: ClaudeStartupDiagnostic, state: { intent: boolean; repair: boolean }): void {
-  if (value.kind !== "milestone" || value.milestone !== "empty_tools_accepted") return;
+function noToolsAgentObserver(value: AgyStartupDiagnostic, state: { intent: boolean; repair: boolean }): void {
+  if (value.kind !== "milestone" || value.milestone !== "no_tools_agent_accepted") return;
   state[value.role] = true;
 }
 
@@ -124,7 +124,7 @@ async function waitForRepair(fixture: BrowserFixtureSession, timeoutMs: number):
   throw new Error("the synthetic survey label repair did not complete");
 }
 
-describe("bounded live Claude cache prewarm for the local survey", () => {
+describe("bounded live AGY cache prewarm for the local survey", () => {
   it.skipIf(!ENABLED)("repairs the exact demo identity and reloads the validated patch without another provider prompt", async () => {
     if (!process.env["BLIP_BROWSER"]) throw new Error("BLIP_BROWSER must name the dedicated Edge executable");
     await consumeFreshApproval();
@@ -133,7 +133,7 @@ describe("bounded live Claude cache prewarm for the local survey", () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(new Error("bounded synthetic check time limit")), MAX_SECONDS * 1_000);
     const counts = { total: 0, bootstrap: 0, prompt: 0, intent: 0, repair: 0 };
-    const emptyToolsAccepted = { intent: false, repair: false };
+    const noToolsAgentAccepted = { intent: false, repair: false };
     let stage: Stage = "startup";
     let passed = false;
     let exactDemoIdentity = false;
@@ -146,7 +146,7 @@ describe("bounded live Claude cache prewarm for the local survey", () => {
     let voiceConnected = false;
     let fixture: BrowserFixtureSession | undefined;
 
-    const admitDispatch = (role: ClaudeRole, kind: "bootstrap" | "prompt"): void => {
+    const admitDispatch = (role: AgyRole, kind: "bootstrap" | "prompt"): void => {
       if (controller.signal.aborted || counts.total >= MAX_DISPATCHES) {
         controller.abort(new Error("bounded synthetic check dispatch cap reached"));
         throw new Error("bounded synthetic check dispatch cap reached");
@@ -163,7 +163,7 @@ describe("bounded live Claude cache prewarm for the local survey", () => {
         stage,
         elapsedMs: Math.max(0, Date.now() - startedAt),
         dispatches: { ...counts },
-        emptyToolsAccepted: { ...emptyToolsAccepted },
+        noToolsAgentAccepted: { ...noToolsAgentAccepted },
         extensionConnected,
         voiceConnected,
         exactDemoIdentity,
@@ -177,14 +177,14 @@ describe("bounded live Claude cache prewarm for the local survey", () => {
 
     try {
       fixture = await openFixturePage(PAGE_PATH, {
-        brain: "claude",
+        brain: "agy",
         pagePort: 7791,
         repairCacheDirectory: CACHE_DIRECTORY,
-        claudeSessionHooks: {
+        agySessionHooks: {
           startupSignal: controller.signal,
           beforeBootstrapDispatch: (role) => admitDispatch(role, "bootstrap"),
           beforePromptDispatch: (role) => admitDispatch(role, "prompt"),
-          onStartupDiagnostic: (diagnostic) => emptyToolsObserver(diagnostic, emptyToolsAccepted),
+          onStartupDiagnostic: (diagnostic) => noToolsAgentObserver(diagnostic, noToolsAgentAccepted),
         },
       });
       stage = "survey";
@@ -212,8 +212,8 @@ describe("bounded live Claude cache prewarm for the local survey", () => {
       if (!reloadedFromCache || !dispatchesUnchangedOnCacheReload) {
         throw new Error("the exact demo cache entry was not reused without a provider prompt");
       }
-      if (!emptyToolsAccepted.intent || !emptyToolsAccepted.repair || counts.total > MAX_DISPATCHES) {
-        throw new Error("Claude startup or dispatch bounds were not satisfied");
+      if (!noToolsAgentAccepted.intent || !noToolsAgentAccepted.repair || counts.total > MAX_DISPATCHES) {
+        throw new Error("AGY startup or dispatch bounds were not satisfied");
       }
       stage = "complete";
       passed = true;

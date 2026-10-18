@@ -37,7 +37,7 @@ In the tables below `from` is the role allowed to put the frame on the wire and 
 | type | from | to | payload | notes |
 |---|---|---|---|---|
 | `hello` | extension, voice | server | `{ role, clientVersion, protocolVersion: 1 }` | first frame, within 2 s |
-| `welcome` | server | extension, voice | `{ sessionId, serverVersion, brain: claude or fake }` | reply to `hello` |
+| `welcome` | server | extension, voice | `{ sessionId, serverVersion, brain: agy or fake }` | reply to `hello` |
 | `error` | server | extension, voice | `{ code, message, fatal }` | `code` is an open string, see the error code table |
 
 ### Extension to Server
