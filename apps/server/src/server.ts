@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_PORT, EXTENSION_ID, LOOPBACK_HOST, WS_PATH } from "@blip/protocol";
+import { DEFAULT_PORT, EXTENSION_ID, LOOPBACK_HOST, WS_PATH, newId } from "@blip/protocol";
 import { log } from "./log";
 import { createHub, type Handlers, type Hub } from "./hub/hub";
 import { hostAllowed, parseAllowedOrigin } from "./hub/guard";
@@ -19,6 +19,7 @@ import { createGatePort } from "./act/gate-port";
 import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
 import { createDialogueHandlers } from "./voice/dialogue-runner";
 import { createCoreDialogueGatePort } from "./voice/core-gate-port";
+import type { SpeechOutput } from "./voice/speech-routing";
 
 function clearPendingThroughVoiceGate(
   ctx: GatedContext,
@@ -65,6 +66,8 @@ export type StartServerOptions = {
   handlersFactory?: (context: GatedContext) => Handlers;
   /** Install the Phase 3 voice reducer, wired to this server's refresher and grant-bound Executor. */
   dialogueRunner?: boolean;
+  /** Test seam for per-session speech routing; production uses the NVDA Controller Client. */
+  speechOutput?: SpeechOutput;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
   snapshotTimeoutMs?: number;
   /** Maximum model age for read_form and what's_required. Default 2000. */
@@ -227,7 +230,22 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       handleGatedSpeakDone(gatedContext, message.payload);
     },
-    settings: () => {},
+    settings: ({ message, hub: h, session: s }) => {
+      if (message.type !== "settings" || s.outputMode === message.payload.outputMode) return;
+      const gatedContext: GatedContext = {
+        hub: h,
+        gatePort: createGatePort(h, s.grants),
+        session: s,
+        refresher,
+        clock,
+        ...(schedule !== undefined ? { schedule } : {}),
+      };
+      clearPendingThroughVoiceGate(gatedContext, "cancelled", "output-mode-changed");
+      // An empty interrupt frame cancels current browser speech without adding a new spoken line.
+      // In NVDA modes Hub routes the same frame through cancelSpeech before its empty payload.
+      h.send("voice", "speak", { speakId: newId(), text: "", category: "answer", interrupt: true });
+      s.outputMode = message.payload.outputMode;
+    },
     ptt: ({ message, hub: h, session: s }) => {
       if (message.type !== "ptt" || message.payload.state !== "start") return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
@@ -271,6 +289,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     extensionId: options.extensionId ?? EXTENSION_ID,
     extraVoiceOrigins,
     ...(options.helloTimeoutMs !== undefined ? { helloTimeoutMs: options.helloTimeoutMs } : {}),
+    ...(options.speechOutput !== undefined ? { speechOutput: options.speechOutput } : {}),
     handlers,
   });
 

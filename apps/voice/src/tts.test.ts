@@ -55,16 +55,14 @@ describe("tts", () => {
     expect(spoken).toEqual([]);
   });
 
-  it("releases the gate at estimated duration + 1000 ms when onend never fires", () => {
-    const { tts, done } = setup();
+  it("fails closed as interrupted when the completion watchdog expires", () => {
+    const { tts, done, cancel } = setup();
     tts.speak("one two three", { speakId: "s1" }); // 3 words = 1200 ms estimate
     vi.advanceTimersByTime(2199);
     expect(done).toEqual([]);
-    vi.advanceTimersByTime(1); // gate releases, tail starts
-    vi.advanceTimersByTime(399);
-    expect(done).toEqual([]);
     vi.advanceTimersByTime(1);
-    expect(done).toEqual([{ speakId: "s1", interrupted: false }]);
+    expect(done).toEqual([{ speakId: "s1", interrupted: true }]);
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it("waits the 400 ms tail after onend before reporting done", () => {
@@ -86,12 +84,12 @@ describe("tts", () => {
     expect(done).toEqual([{ speakId: "s1", interrupted: false }]);
   });
 
-  it("treats onerror (interrupted/canceled) as sentence completion", () => {
-    const { tts, handlers, done } = setup();
-    tts.speak("hello.", { speakId: "s1" });
+  it("treats onerror (interrupted/canceled) as interruption, not completion", () => {
+    const { tts, handlers, done, cancel } = setup();
+    tts.speak("hello. second sentence.", { speakId: "s1" });
     handlers[0].onerror("interrupted");
-    vi.advanceTimersByTime(400);
-    expect(done).toEqual([{ speakId: "s1", interrupted: false }]);
+    expect(done).toEqual([{ speakId: "s1", interrupted: true }]);
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it("cancel reports interrupted for active and queued speaks in order, once", () => {

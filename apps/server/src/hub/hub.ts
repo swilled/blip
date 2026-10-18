@@ -28,6 +28,8 @@ import {
 } from "@blip/protocol";
 import { log } from "../log";
 import { SERVER_VERSION, type Session } from "../session/session";
+import { nvdaCancel, nvdaSpeak } from "../voice/nvda";
+import { routeSpeech, type SpeechOutput } from "../voice/speech-routing";
 import { hostAllowed, rolesForOrigin } from "./guard";
 
 export type HandlerContext = { role: Role; message: Message; hub: Hub; session: Session };
@@ -44,6 +46,8 @@ export type HubOptions = {
   extraVoiceOrigins?: readonly string[];
   helloTimeoutMs?: number;
   handlers?: Handlers;
+  /** Replace the NVDA output boundary in deterministic server-routing tests. */
+  speechOutput?: SpeechOutput;
 };
 
 export type RequestOptions<E extends MessageType> = { expect: E; timeoutMs: number };
@@ -59,8 +63,9 @@ export class HubRequestError extends Error {
 
 export type Hub = {
   /**
-   * Send a validated frame to the live connection of `role`. Throws when that role may not receive the
-   * type (a programming error). Returns false when the role has no live connection.
+   * Send a validated frame to the live connection of `role`. `speak` uses the owning session's
+   * output mode and may route through NVDA instead. Throws when the role may not receive the type;
+   * returns false when the selected output is unavailable.
    */
   send<T extends MessageType>(role: Role, type: T, payload: PayloadOf<T>, opts?: BuildOpts): boolean;
   /** Send and wait for a reply carrying the matching replyTo and the expected type. */
@@ -113,6 +118,7 @@ export function createHub(options: HubOptions): Hub {
   const extId = options.extensionId ?? EXTENSION_ID;
   const helloTimeoutMs = options.helloTimeoutMs ?? HELLO_TIMEOUT_MS;
   const handlers: Handlers = options.handlers ?? {};
+  const speechOutput = options.speechOutput ?? { speak: nvdaSpeak, cancel: nvdaCancel };
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES });
   const slots: Partial<Record<Role, Conn>> = {};
   const conns = new Set<Conn>();
@@ -349,6 +355,16 @@ export function createHub(options: HubOptions): Hub {
   const hub: Hub = {
     send(role, type, payload, opts = {}) {
       if (!canReceive(role, type)) throw new Error(`role ${role} cannot receive ${type}`);
+      if (role === "voice" && type === "speak") {
+        if (session.outputMode !== "agent-voice" && !session.voiceConnected) return false;
+        const voicePayload = payload as PayloadOf<"speak">;
+        return routeSpeech(session.outputMode, voicePayload, () => {
+          const voiceConn = slots.voice;
+          if (voiceConn === undefined) return false;
+          sendTo(voiceConn, type, payload, opts);
+          return true;
+        }, speechOutput);
+      }
       const conn = slots[role];
       if (conn === undefined) return false;
       sendTo(conn, type, payload, opts);

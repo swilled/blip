@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { newId } from "@blip/protocol";
 import { startServer } from "../src/server";
 import type { AgyRoleConfig, AgyRoleSession, AgyCliAdapter } from "../src/brain/agy/session";
 import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
-import { bindClient, type Frame, type TestClient } from "./helpers";
+import { bindClient, sleep, type Frame, type TestClient } from "./helpers";
 
 async function waitForFrame(client: TestClient, predicate: (frame: Frame) => boolean, timeoutMs = 3_000): Promise<Frame> {
   const deadline = Date.now() + timeoutMs;
@@ -15,6 +15,33 @@ async function waitForFrame(client: TestClient, predicate: (frame: Frame) => boo
 }
 
 describe("core server dialogue runner option", () => {
+  it("applies settings to this session and routes screen-reader speech through NVDA only", async () => {
+    const speechOutput = {
+      speak: vi.fn(() => 0),
+      cancel: vi.fn(() => 0),
+    };
+    const server = await startServer({ port: 0, dialogueRunner: true, brain: "fake", speechOutput });
+    const voice = await bindClient(server.port, "voice");
+    try {
+      voice.send("settings", { outputMode: "screen-reader" });
+      const stop = await waitForFrame(voice, (frame) => frame.type === "speak" && frame.payload.text === "Stopped.");
+      await vi.waitFor(() => expect(server.session.outputMode).toBe("screen-reader"));
+
+      voice.send("utterance", { utteranceId: newId(), text: "what's here", source: "typed" });
+      await waitForFrame(voice, (frame) => frame.type === "transcript");
+      await vi.waitFor(() => expect(speechOutput.speak).toHaveBeenCalledWith("I can't see a page yet."));
+
+      expect(server.session.activeSpeakId).toBeNull();
+      expect(voice.frames.some((frame) => frame.type === "speak" && frame.payload.text === "I can't see a page yet.")).toBe(false);
+
+      await sleep(30);
+      expect(server.session.speechCompletion(stop.payload.speakId)).toBeNull();
+    } finally {
+      voice.close();
+      await server.close();
+    }
+  });
+
   it("routes deterministic voice grammar through the installed reducer", async () => {
     const server = await startServer({ port: 0, dialogueRunner: true, brain: "fake" });
     const voice = await bindClient(server.port, "voice");

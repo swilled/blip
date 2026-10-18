@@ -200,10 +200,20 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     context?: HandlerContext,
   ): Promise<void> {
     switch (effect.kind) {
-      case "speak":
-        sendSpeakEffect(hub, effect, session);
+      case "speak": {
+        const sent = sendSpeakEffect(hub, effect, session);
         if (effect.category !== "filler") session.lastSpoken = effect.text;
+        if (sent && session.outputMode !== "agent-voice") {
+          // The selected path accepted the speech but has no completion callback. Retire its local
+          // reducer ID as interrupted so outstanding IDs do not accumulate and read-back cannot arm.
+          session.abandonSpeech(effect.speakId);
+          await dispatch({
+            type: "speak.done",
+            done: { speakId: effect.speakId, interrupted: true },
+          }, context);
+        }
         return;
+      }
       case "earcon":
         hub.send("voice", "earcon", { name: effect.name });
         return;
@@ -211,12 +221,22 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         if (typeof effect.speakId !== "string" || effect.speakId.trim() === "") {
           throw new Error("cancelSpeech effect requires a tracked speakId");
         }
-        if (hub.send("voice", "speak", {
+        const sent = hub.send("voice", "speak", {
           speakId: effect.speakId,
           text: "Stopped.",
           category: "answer",
           interrupt: true,
-        })) session.trackSpeech(effect.speakId, "answer");
+        });
+        if (sent) {
+          session.trackSpeech(effect.speakId, "answer");
+          if (session.outputMode !== "agent-voice") {
+            session.abandonSpeech(effect.speakId);
+            await dispatch({
+              type: "speak.done",
+              done: { speakId: effect.speakId, interrupted: true },
+            }, context);
+          }
+        }
         return;
       case "parseIntent":
         if (options.parseIntent && context) {
@@ -419,8 +439,23 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       activeSession = context.session;
       sessionHub = context.hub;
       return enqueue(async () => {
-        context.session.completeSpeech(done.speakId, done.interrupted, now());
+        // Never let an unknown, duplicate, NVDA-only, or otherwise untracked completion reach the
+        // reducer. Matching a read-back id alone is not evidence that its output actually finished.
+        if (!context.session.completeSpeech(done.speakId, done.interrupted, now())) return;
         await dispatch({ type: "speak.done", done }, context);
+      });
+    },
+    settings(context) {
+      if (context.role !== "voice" || context.message.type !== "settings") return;
+      const nextMode = context.message.payload.outputMode;
+      activeSession = context.session;
+      sessionHub = context.hub;
+      if (context.session.outputMode === nextMode) return;
+      return enqueue(async () => {
+        // Cancel speech and clear any armed/read-back state through GatePort while the old output
+        // route is still active, then apply the new setting to this session.
+        await dispatch({ type: "control", cmd: "stop" }, context);
+        context.session.outputMode = nextMode;
       });
     },
     "page.changed"(context) {

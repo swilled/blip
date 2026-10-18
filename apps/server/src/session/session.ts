@@ -1,10 +1,11 @@
-import { newId, type ActionKind, type DialogueStateName, type FormModel, type Snapshot, type StatePayload } from "@blip/protocol";
+import { newId, type ActionKind, type DialogueStateName, type FormModel, type PayloadOf, type Snapshot, type StatePayload } from "@blip/protocol";
 import { createGrantStore, type GrantBinding, type GrantStore } from "../act/grants";
 import { buildBaselineFormModel, summarizeFormModel } from "../baseline";
 
 export const SERVER_VERSION = "0.1.0";
 
 export type Brain = "agy" | "fake";
+export type OutputMode = PayloadOf<"settings">["outputMode"];
 
 /** The pending read-back contains only the grant fingerprint inputs; sensitive field values are null. */
 export type PendingGatedAction = {
@@ -45,9 +46,16 @@ export class Session {
   stale = true;
   /** The text of the last `speak` the server sent, for "repeat". */
   lastSpoken: string | null = null;
+  /** Voice output belongs to this session; a different voice connection cannot change another session. */
+  outputMode: OutputMode = "agent-voice";
   /** Latest successfully sent speech; stale speak.done frames cannot complete newer speech. */
   activeSpeakId: string | null = null;
-  #speech = new Map<string, { category: string; completedAt: number | null; interrupted: boolean }>();
+  #speech = new Map<string, {
+    category: string;
+    completedAt: number | null;
+    interrupted: boolean;
+    voiceCompletionExpected: boolean;
+  }>();
   /** Confirmation state is local to this voice session and never comes from an Intent. */
   pendingGatedAction: PendingGatedAction | null = null;
   /** Existing server-only one-use grant store from the Phase 3 foundation. */
@@ -64,10 +72,17 @@ export class Session {
     this.grants = createGrantStore(clock);
   }
 
-  /** Track a speech only after its frame was accepted by the live voice connection. */
+  /** Track a speech only after its selected output path accepted the request. */
   trackSpeech(speakId: string, category = "answer"): void {
     this.activeSpeakId = speakId;
-    this.#speech.set(speakId, { category, completedAt: null, interrupted: false });
+    // NVDA's Controller Client speakText call only reports dispatch acceptance. It has no
+    // completion callback, so its acknowledgement must never satisfy a confirmation read-back.
+    this.#speech.set(speakId, {
+      category,
+      completedAt: null,
+      interrupted: false,
+      voiceCompletionExpected: this.outputMode === "agent-voice",
+    });
     while (this.#speech.size > 256) {
       const oldest = this.#speech.keys().next().value;
       if (oldest === undefined) break;
@@ -78,10 +93,20 @@ export class Session {
   /** Record completion only for speech emitted by this server session; duplicate frames are ignored. */
   completeSpeech(speakId: string, interrupted = false, completedAt = Date.now()): boolean {
     const speech = this.#speech.get(speakId);
-    if (speech === undefined || speech.completedAt !== null || !Number.isFinite(completedAt)) return false;
-    this.#speech.set(speakId, { category: speech.category, completedAt, interrupted });
+    if (
+      speech === undefined || speech.completedAt !== null || !speech.voiceCompletionExpected ||
+      !Number.isFinite(completedAt)
+    ) return false;
+    this.#speech.set(speakId, { ...speech, completedAt, interrupted });
     if (this.activeSpeakId === speakId) this.activeSpeakId = null;
     return true;
+  }
+
+  /** Drop a speech whose selected output accepted it but cannot report when playback finished. */
+  abandonSpeech(speakId: string): boolean {
+    const removed = this.#speech.delete(speakId);
+    if (this.activeSpeakId === speakId) this.activeSpeakId = null;
+    return removed;
   }
 
   /** Read completion evidence for a server-tracked speech id. */

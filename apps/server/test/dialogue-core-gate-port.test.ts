@@ -98,6 +98,21 @@ async function arm(rig: ReturnType<typeof makeRig>) {
 }
 
 describe("dialogue reducer to core GatePort integration", () => {
+  it("does not arm from a client completion when the selected output has no completion signal", async () => {
+    const rig = makeRig();
+    rig.session.outputMode = "screen-reader";
+
+    await rig.handle("voice", "utterance", { utteranceId: "u-submit", text: "submit survey", source: "typed" });
+    const readback = rig.frames("speak").findLast((frame) => frame.payload.category === "readback")!;
+    expect(readback.payload.speakId).toBeDefined();
+
+    await rig.handle("voice", "speak.done", { speakId: readback.payload.speakId, interrupted: false });
+
+    expect(rig.frames("confirm.armed")).toHaveLength(0);
+    expect(rig.session.pendingGatedAction).toBeNull();
+    expect(rig.session.speechCompletion(readback.payload.speakId)).toBeNull();
+  });
+
   it("clears the one-use grant after a UI confirmation arrives before the prompt cooldown", async () => {
     const rig = makeRig();
     const { armed } = await arm(rig);
