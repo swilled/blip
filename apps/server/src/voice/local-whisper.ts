@@ -3,7 +3,7 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export type TranscribeAudio = (wav: Buffer, signal: AbortSignal) => Promise<string>;
+export type TranscribeAudio = ((wav: Buffer, signal: AbortSignal) => Promise<string>) & { engine?: string };
 export const MAX_WAV_BYTES = 44 + 16000 * 2 * 10;
 
 /** Accept exactly our bounded 16 kHz mono PCM format. Reject silence before model decoding. */
@@ -19,19 +19,26 @@ export function validateWav(wav: Buffer): boolean {
   return Math.sqrt(energy / ((wav.length - 44) / 2)) >= 0.003;
 }
 
-export async function discoverLocalWhisper(): Promise<TranscribeAudio | undefined> {
+export async function discoverLocalWhisper(options: { model?: "base.en" | "small.en" | "medium.en-q5_0"; beamSize?: number } = {}): Promise<TranscribeAudio | undefined> {
   if (process.platform !== "win32" || process.arch !== "x64") return undefined;
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
   const executable = path.join(root, ".local-stt/bin/Release/whisper-cli.exe");
-  const model = path.join(root, ".local-stt/ggml-base.en.bin");
+  const configured = options.model ?? process.env["BLIP_STT_MODEL"];
+  if (configured !== undefined && !["base.en", "small.en", "medium.en-q5_0"].includes(configured)) throw new Error("Unsupported BLIP_STT_MODEL. Use base.en, small.en or medium.en-q5_0.");
+  let selected = configured;
+  if (!selected) {
+    try { await access(path.join(root, ".local-stt/ggml-small.en.bin")); selected = "small.en"; }
+    catch { selected = "base.en"; }
+  }
+  const model = path.join(root, `.local-stt/ggml-${selected}.bin`);
   try { await Promise.all([access(executable), access(model)]); } catch { return undefined; }
-  return (wav, signal) => new Promise<string>((resolve, reject) => {
+  const transcribe: TranscribeAudio = (wav, signal) => new Promise<string>((resolve, reject) => {
     if (signal.aborted) { reject(new Error("cancelled")); return; }
     // WAV goes through stdin; stdout is only the transcript. No recordings or transcript files.
     // No command grammar/prompt may bias a recognition into an authorization phrase.
     // Override the output basename only: stdin's default '-' disables the live stdout callback.
     // No --output-* flag is enabled, so this basename never creates a file (Windows /dev/stdout is unsupported).
-    const child = spawn(executable, ["-m", model, "-f", "-", "-of", "blip-memory", "-l", "en", "-np", "-nt", "-ng", "-sns", "-t", "4", "-bs", "1", "-bo", "1", "-nf"], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+    const child = spawn(executable, ["-m", model, "-f", "-", "-of", "blip-memory", "-l", "en", "-np", "-nt", "-ng", "-sns", "-t", "4", "-bs", String(options.beamSize ?? 5), "-bo", "5", "-nf"], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
     let output = "", settled = false;
     const finish = (error?: Error) => {
       if (settled) return; settled = true;
@@ -53,4 +60,6 @@ export async function discoverLocalWhisper(): Promise<TranscribeAudio | undefine
     child.on("close", code => finish(code === 0 ? undefined : new Error("recognizer-failed")));
     child.stdin.end(wav);
   });
+  transcribe.engine = `whisper.cpp ${selected}`;
+  return transcribe;
 }

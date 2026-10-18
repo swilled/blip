@@ -140,7 +140,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     if (req.method === "GET" && pathname === "/healthz") return json(res, 200, { ok: true });
     if (pathname === "/_blip/stt" && req.method === "GET") {
       res.setHeader("Cache-Control", "no-store");
-      return json(res, 200, { engine: "whisper.cpp base.en", ready: options.transcribeAudio !== undefined, token: transcriptionToken });
+      return json(res, 200, { engine: options.transcribeAudio?.engine ?? "whisper.cpp", ready: options.transcribeAudio !== undefined, token: transcriptionToken });
     }
     if (pathname === "/_blip/stt" && req.method === "POST") {
       void transcriptionHttp(req, res);

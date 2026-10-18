@@ -16,6 +16,16 @@ function setup() {
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 describe("native synthesis lifecycle", () => {
+  it("applies a chosen voice to the next item without disturbing current speech or rate", () => {
+    const t = setup();
+    const zira = { ...voice, voiceURI: "local-zira", name: "Microsoft Zira" };
+    t.setVoices([voice, zira]); t.speak(1.26); vi.advanceTimersByTime(0);
+    t.synth.setVoice(zira.voiceURI);
+    expect(t.spoken[0].voice).toBe(voice); expect(t.spoken[0].rate).toBe(1.26);
+    t.spoken[0].onend!({} as never); t.speak(0.5); vi.advanceTimersByTime(0);
+    expect(t.spoken[1].voice).toBe(zira); expect(t.spoken[1].rate).toBe(0.5);
+    expect(t.synth.getVoices()).toEqual([voice, zira]); t.synth.dispose();
+  });
   it("sets voice and rate in the next task and reports actual events once", () => {
     const t = setup(); t.speak(0.63);
     expect(t.spoken).toHaveLength(0); vi.advanceTimersByTime(0);

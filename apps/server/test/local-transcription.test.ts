@@ -11,7 +11,7 @@ describe("bounded local transcription endpoint", () => {
     const wrong = wav(); wrong.writeUInt32LE(48000, 24); expect(() => validateWav(wrong)).toThrow();
   });
   it("transcribes only same-origin, token-authorized bounded WAV and never executes an action", async () => {
-    const transcribe = vi.fn(async () => "read the form");
+    const transcribe = Object.assign(vi.fn(async () => "read the form"), { engine: "whisper.cpp small.en" });
     const server = await startServer({ port: 0, transcribeAudio: transcribe }); server.session.voiceConnected = true;
     const origin = `http://127.0.0.1:${server.port}`;
     try {
@@ -25,7 +25,7 @@ describe("bounded local transcription endpoint", () => {
       expect((await post(headers, Buffer.alloc(100))).status).toBe(400);
       expect(await (await post(headers, wav(0))).json()).toMatchObject({ text: "" });
       expect(transcribe).not.toHaveBeenCalled();
-      expect(await (await post(headers)).json()).toMatchObject({ text: "read the form", engine: "whisper.cpp base.en" });
+      expect(await (await post(headers)).json()).toMatchObject({ text: "read the form", engine: "whisper.cpp small.en" });
       expect(transcribe).toHaveBeenCalledTimes(1); expect(server.session.pendingGatedAction).toBeNull();
     } finally { await server.close(); }
   });

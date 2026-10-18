@@ -47,6 +47,12 @@
 
       <section id="banner-slot" aria-label="Notices"></section>
       <button id="check-microphone" type="button">Check microphone</button>
+      <label for="microphone-device">Microphone</label>
+      <select id="microphone-device"><option value="">Windows default microphone</option></select>
+      <label><input id="microphone-filter" type="checkbox" checked /> Filter background noise</label>
+      <meter id="microphone-level" min="0" max="1" value="0" aria-label="Microphone sound level"></meter>
+      <p id="microphone-level-hint" aria-live="off">Hold to talk to check the sound level.</p>
+      <p id="microphone-capture-summary" class="label muted"></p>
       <p>Speech recognition: local Whisper. Hold to record; release to transcribe.</p>
       <p id="microphone-check-status" role="status"></p>
       <details id="speech-diagnostics">
@@ -57,6 +63,8 @@
 
       <fieldset id="output-mode" aria-describedby="output-mode-help">
         <legend>Speech output</legend>
+        <label for="speech-voice">Blip voice</label>
+        <select id="speech-voice"><option value="">Automatic local English voice</option></select>
         <label><input type="radio" name="output-mode" value="agent-voice" checked /> Blip voice</label>
         <label><input type="radio" name="output-mode" value="screen-reader" /> Screen reader (NVDA)</label>
         <p id="output-mode-help" class="label muted">Only one speech output is used. This choice lasts for this window session.</p>

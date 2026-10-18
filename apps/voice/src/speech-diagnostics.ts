@@ -1,4 +1,4 @@
-export type SpeechEventName = "capture-request" | "start" | "audiostart" | "soundstart" | "speechstart" | "result" | "error" | "end" | "release" | "synth-start" | "synth-end" | "synth-error";
+export type SpeechEventName = "capture-request" | "capture-summary" | "start" | "audiostart" | "soundstart" | "speechstart" | "result" | "error" | "end" | "release" | "synth-start" | "synth-end" | "synth-error";
 export interface DiagnosticEvent {
   event: SpeechEventName;
   generation?: number;
@@ -8,6 +8,9 @@ export interface DiagnosticEvent {
   visible?: boolean;
   rate?: number;
   voice?: string;
+  durationSeconds?: number;
+  rms?: number;
+  peak?: number;
 }
 const errorCodes = new Set(["no-speech", "aborted", "audio-capture", "network", "not-allowed", "service-not-allowed", "language-not-supported", "interrupted", "canceled", "synthesis-failed", "audio-busy"]);
 export function createSpeechDiagnostics(now = () => performance.now()) {
@@ -26,6 +29,9 @@ export function createSpeechDiagnostics(now = () => performance.now()) {
       if (typeof input.visible === "boolean") row.visible = input.visible;
       if (Number.isFinite(input.rate)) row.rate = input.rate;
       if (input.voice) row.voice = input.voice.slice(0, 100);
+      if (Number.isFinite(input.durationSeconds)) row.durationSeconds = Math.max(0, Math.min(10, input.durationSeconds!));
+      if (Number.isFinite(input.rms)) row.rms = Math.max(0, Math.min(1, input.rms!));
+      if (Number.isFinite(input.peak)) row.peak = Math.max(0, Math.min(1, input.peak!));
       rows.push(row);
       if (rows.length > 100) rows.shift();
     },

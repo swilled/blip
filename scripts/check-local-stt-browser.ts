@@ -79,7 +79,10 @@ try {
   if (received.length !== 1 || received[0].source !== "voice" || !/read the form/i.test(received[0].text) || "sttConfidence" in received[0]) {
     throw new Error(`No complete finalized command: ${JSON.stringify(received)}; ${await evaluate("document.getElementById('status-hint').textContent")}`);
   }
-  console.log(JSON.stringify({ syntheticMicrophone: true, realAudioWorklet: true, chromeSpeechDisabled: true, nativeWhisper: true, finalizedAfterRelease: received[0], passed: true }));
+  const captureSummary = await evaluate("document.getElementById('microphone-capture-summary').textContent");
+  if (!/Recorded \d/.test(captureSummary)) throw new Error("Capture duration/level feedback is missing.");
+  const engine = (await (await fetch(`${origin}/_blip/stt`)).json() as { engine: string }).engine;
+  console.log(JSON.stringify({ syntheticMicrophone: true, realAudioWorklet: true, chromeSpeechDisabled: true, nativeWhisper: engine, captureSummary, microphoneOptions: await evaluate("document.getElementById('microphone-device').options.length"), voiceOptions: await evaluate("[...document.getElementById('speech-voice').options].map(option => option.text)"), finalizedAfterRelease: received[0], passed: true }));
   await send("Browser.close").catch(() => {});
 } finally {
   ws?.close(); browser.kill(); await server.close();

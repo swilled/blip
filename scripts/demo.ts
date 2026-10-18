@@ -293,7 +293,7 @@ async function runDemo(options: DemoOptions): Promise<number> {
     await buildVoiceClientForDemo();
     const voiceBuildId = await readVoiceBuildId();
     const transcribeAudio = await discoverLocalWhisper();
-    process.stdout.write(transcribeAudio ? "Recognition: local whisper.cpp base.en (offline CPU)\n" : "Recognition unavailable: run npm.cmd run stt:setup before microphone testing.\n");
+    process.stdout.write(transcribeAudio ? `Recognition: local ${transcribeAudio.engine} (offline CPU)\n` : "Recognition unavailable: run npm.cmd run stt:setup before microphone testing.\n");
     await mkdir(profileDirectory, { recursive: true });
     server = await startServer({
       port: DEFAULT_PORT,

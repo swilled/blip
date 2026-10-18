@@ -60,6 +60,12 @@ describe("held recording with external recognition", () => {
     expect(view.getUint32(24, true)).toBe(16000); expect(view.getInt16(44, true)).toBe(16384);
     expect(() => encodeWav([new Float32Array(160001)], 16000)).toThrow("audio-too-long");
   });
+  it("reports actual captured duration and levels separately from transcription", async () => {
+    const t = setup(), onCapture = vi.fn();
+    const stt = createRecordedStt({ ...t.options, onCapture });
+    stt.press(); await tick(); stt.release(); await tick();
+    expect(onCapture).toHaveBeenCalledWith({ durationSeconds: 1, rms: expect.closeTo(0.1), peak: expect.closeTo(0.1) });
+  });
   it("uses the same-origin token and WAV endpoint without Chrome SpeechRecognition", async () => {
     const request = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ ready: true, token: "test-token" }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ text: "read the form" }) });

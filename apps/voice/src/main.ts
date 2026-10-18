@@ -18,6 +18,7 @@ import { createTalkController } from "./talk-controller";
 import { checkMicrophone, createSpeechDiagnostics } from "./speech-diagnostics";
 import { createTts } from "./tts";
 import { createNativeSynth } from "./native-synth";
+import { microphoneConstraints, microphoneLevelHint } from "./microphone";
 import { appendExchange, clearCaption, renderCaption, setStatus } from "./ui-log";
 
 const CLIENT_VERSION = "0.0.0";
@@ -42,10 +43,11 @@ document.getElementById("check-microphone")!.addEventListener("click", async () 
   button.disabled = true;
   el("microphone-check-status").textContent = "Allow microphone access if Chrome asks.";
   el("microphone-check-status").textContent = await checkMicrophone(
-    () => navigator.mediaDevices.getUserMedia({ audio: true }),
+    () => navigator.mediaDevices.getUserMedia(selectedMicrophoneConstraints()),
     microphoneCheckOwner.signal,
   );
   button.disabled = false;
+  await refreshMicrophones();
 });
 
 function el<T extends HTMLElement>(id: string): T {
@@ -55,6 +57,28 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 const nativeSynth = createNativeSynth({ synthesis: window.speechSynthesis, makeUtterance: text => new SpeechSynthesisUtterance(text), record: recordSpeechEvent, warn: message => { el("output-mode-status").textContent = message; } });
+function renderVoices(): void {
+  const select = el<HTMLSelectElement>("speech-voice");
+  const selected = select.value;
+  select.replaceChildren(new Option("Automatic local English voice", ""), ...nativeSynth.getVoices().map(voice => new Option(`${voice.name}${voice.localService ? " (local)" : ""}`, voice.voiceURI)));
+  if ([...select.options].some(option => option.value === selected)) select.value = selected;
+}
+renderVoices();
+window.speechSynthesis.addEventListener("voiceschanged", renderVoices);
+el<HTMLSelectElement>("speech-voice").addEventListener("change", event => { nativeSynth.setVoice((event.target as HTMLSelectElement).value || null); el("output-mode-status").textContent = "The selected voice will read the next reply."; });
+function selectedMicrophoneConstraints(): MediaStreamConstraints {
+  return microphoneConstraints(el<HTMLSelectElement>("microphone-device").value, el<HTMLInputElement>("microphone-filter").checked);
+}
+async function refreshMicrophones(): Promise<void> {
+  try {
+    const select = el<HTMLSelectElement>("microphone-device"), selected = select.value;
+    const microphones = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === "audioinput");
+    select.replaceChildren(new Option("Windows default microphone", ""), ...microphones.filter(device => device.deviceId !== "default").map((device, index) => new Option(device.label || `Microphone ${index + 1}`, device.deviceId)));
+    if ([...select.options].some(option => option.value === selected)) select.value = selected;
+  } catch { /* Device access can be granted using Check microphone. */ }
+}
+void refreshMicrophones();
+navigator.mediaDevices.addEventListener("devicechange", refreshMicrophones);
 
 const earcons = createEarcons();
 let connectionExtra = "";
@@ -275,11 +299,18 @@ talk = createTalkController({
       open: async signal => {
         ++nativeRecognitionId;
         recordSpeechEvent({ event: "capture-request", generation: nativeRecognitionId, focused: document.hasFocus(), visible: document.visibilityState === "visible" });
-        const recording = await openPcmMicrophone(signal);
+        const recording = await openPcmMicrophone(signal, { constraints: selectedMicrophoneConstraints(), onLevel: level => {
+          el<HTMLMeterElement>("microphone-level").value = Math.min(1, level.rms * 5);
+          el("microphone-level-hint").textContent = microphoneLevelHint(level.rms, level.peak);
+        } });
         recordSpeechEvent({ event: "audiostart", generation: nativeRecognitionId });
         return recording;
       },
       transcribe: createLocalTranscriber(),
+      onCapture: summary => {
+        recordSpeechEvent({ event: "capture-summary", generation: nativeRecognitionId, ...summary });
+        el("microphone-capture-summary").textContent = `Recorded ${summary.durationSeconds.toFixed(1)} seconds. ${microphoneLevelHint(summary.rms, summary.peak)}`;
+      },
       onFinal: final => { recordSpeechEvent({ event: "result", generation: nativeRecognitionId, results: 1 }); h.onFinal(final); },
       onError: error => { recordSpeechEvent({ event: "error", generation: nativeRecognitionId, code: error.kind }); h.onError(error); },
       onStage: h.onStage,
@@ -311,6 +342,10 @@ const holdOwner = createHoldOwner((s, reason) => {
   talk.onHold(s, reason);
 });
 const holdButton = el<HTMLButtonElement>("hold-to-talk");
+for (const id of ["microphone-device", "microphone-filter"]) el(id).addEventListener("change", () => {
+  holdOwner.cancel(); talk.cancelCapture();
+  el("microphone-level-hint").textContent = "Microphone changed. Start a fresh hold.";
+});
 function renderHoldButton(): void {
   const owner = holdOwner.get();
   const active = owner !== null;
@@ -364,7 +399,7 @@ holdButton.addEventListener("keyup", (ev) => {
   }
 });
 window.addEventListener("blur", () => setManualHold(false, "The Blip window lost focus. Nothing was sent."));
-window.addEventListener("pagehide", () => { rateCommands.cancel(); holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); tts.cancel(); nativeSynth.dispose(); });
+window.addEventListener("pagehide", () => { rateCommands.cancel(); holdOwner.cancel(); holdWire.close(); talk.cancelCapture(); tts.cancel(); nativeSynth.dispose(); window.speechSynthesis.removeEventListener("voiceschanged", renderVoices); navigator.mediaDevices.removeEventListener("devicechange", refreshMicrophones); });
 
 // Typed input.
 const input = el<HTMLInputElement>("typed-input");

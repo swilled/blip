@@ -17,6 +17,7 @@
     "stt:setup": "tsx scripts/setup-local-stt.ts",
     "stt:check": "tsx scripts/check-local-stt.ts",
     "stt:check:browser": "tsx scripts/check-local-stt-browser.ts",
+    "stt:compare": "tsx scripts/compare-local-stt.ts",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "ext:build": "npm run build --workspace @blip/extension",

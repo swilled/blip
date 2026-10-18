@@ -1,9 +1,11 @@
 import { MAX_TEXT_CHARS, MSG_CAPTURE_LIMIT, MSG_DIDNT_CATCH, MSG_MIC, MSG_MIC_MISSING, type Stt, type SttError, type SttOptions } from "./stt";
+import { audioLevel } from "./microphone";
 
 export interface PcmRecording { stop(): Promise<Float32Array[]>; cancel(): void; sampleRate: number }
 export interface RecordedSttOptions extends Pick<SttOptions, "onFinal" | "onError" | "onStage"> {
   open(signal: AbortSignal): Promise<PcmRecording>;
   transcribe(wav: Uint8Array, signal: AbortSignal): Promise<string>;
+  onCapture?: (summary: { durationSeconds: number; rms: number; peak: number }) => void;
 }
 
 export function encodeWav(chunks: Float32Array[], inputRate: number): Uint8Array {
@@ -47,6 +49,10 @@ export function createRecordedStt(options: RecordedSttOptions): Stt {
       const chunks = await capture.recording.stop();
       if (active !== capture) return;
       const wav = encodeWav(chunks, capture.recording.sampleRate);
+      const total = chunks.reduce((n, chunk) => n + chunk.length, 0);
+      let energy = 0, peak = 0;
+      for (const chunk of chunks) { const level = audioLevel(chunk); energy += level.rms ** 2 * chunk.length; peak = Math.max(peak, level.peak); }
+      options.onCapture?.({ durationSeconds: total / capture.recording.sampleRate, rms: Math.sqrt(energy / total), peak });
       const text = (await options.transcribe(wav, capture.abort.signal)).trim();
       if (active !== capture) return;
       if (!text) { settle(capture, { kind: "no-speech", message: MSG_DIDNT_CATCH }); return; }
@@ -57,6 +63,8 @@ export function createRecordedStt(options: RecordedSttOptions): Stt {
       settle(capture, { kind: "other", message: code === "too-short" ? MSG_DIDNT_CATCH
         : code === "recognizer-unavailable" ? "Local speech recognition is not ready. Restart Blip after installing its local recognizer."
         : code === "audio-too-long" ? MSG_CAPTURE_LIMIT
+        : code === "capture-cancelled" ? "The page or connection changed during recognition. Nothing was sent. Start a fresh hold."
+        : code === "recognizer-busy" ? "The previous recording is still being processed. Wait, then try again."
         : "Local speech recognition could not finish. Nothing was sent. Release the keys and try again." });
     }
   }
@@ -80,14 +88,15 @@ export function createRecordedStt(options: RecordedSttOptions): Stt {
 }
 
 /** Raw microphone capture only: no SpeechRecognition, silence endpointing or cloud service. */
-export async function openPcmMicrophone(signal: AbortSignal): Promise<PcmRecording> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+export async function openPcmMicrophone(signal: AbortSignal, options: { constraints?: MediaStreamConstraints; onLevel?: (level: ReturnType<typeof audioLevel>) => void } = {}): Promise<PcmRecording> {
+  const stream = await navigator.mediaDevices.getUserMedia(options.constraints ?? { audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: false } });
   let context: AudioContext;
   try { context = new AudioContext({ sampleRate: 16000 }); }
   catch (error) { for (const track of stream.getTracks()) track.stop(); throw error; }
   const chunks: Float32Array[] = [];
   let source: MediaStreamAudioSourceNode | undefined, worklet: AudioWorkletNode | undefined;
   let closed = false, stopping = false, samples = 0;
+  let levelAt = -Infinity;
   let ready!: () => void, flush!: () => void;
   const started = new Promise<void>(resolve => { ready = resolve; });
   const flushed = new Promise<void>(resolve => { flush = resolve; });
@@ -113,6 +122,7 @@ export async function openPcmMicrophone(signal: AbortSignal): Promise<PcmRecordi
       if (closed) return;
       if (event.data === null) { flush(); return; }
       if (!(event.data instanceof Float32Array)) return;
+      if (performance.now() - levelAt >= 200) { levelAt = performance.now(); options.onLevel?.(audioLevel(event.data)); }
       samples += event.data.length;
       if (samples <= context.sampleRate * 10) chunks.push(event.data);
       else { cleanup(); flush(); }
@@ -148,7 +158,11 @@ export function createLocalTranscriber(request: typeof fetch = fetch) {
     if (!status.ok || !config.ready || !config.token) throw new Error("recognizer-unavailable");
     const deadline = AbortSignal.timeout(25000);
     const response = await request("/_blip/stt", { method: "POST", headers: { "Content-Type": "audio/wav", "X-Blip-Stt": config.token }, body: new Blob([wav as Uint8Array<ArrayBuffer>], { type: "audio/wav" }), signal: AbortSignal.any([signal, deadline]) });
-    if (!response.ok) throw new Error("recognition-failed");
+    if (!response.ok) {
+      let code: unknown;
+      try { code = (await response.json() as { code?: unknown }).code; } catch { /* Generic failure remains visible. */ }
+      throw new Error(typeof code === "string" && ["capture-cancelled", "recognizer-busy", "recognizer-unavailable"].includes(code) ? code : "recognition-failed");
+    }
     const result = await response.json() as { text?: unknown };
     if (typeof result.text !== "string") throw new Error("recognition-failed");
     return result.text;
