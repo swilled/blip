@@ -24,7 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Hostile Pages, Local Synthetic Web and Freeze** - AGY hostile, full I3, and launcher-cache acceptance pass; written M0 sign-off, teammate review, and mainline release gates remain
 - [x] **Phase 6: Browser Control Contract and Policy Proposal** - Proposal complete; core-owner authorized follow-on implementation, with voice-owner review still required before shared protocol or policy changes merge
 - [ ] **Phase 7: Generic Browser Control and Content Reading** - Add user-directed navigation, page reading, links, search, tabs, scrolling and find-on-page on supported sites
-- [ ] **Phase 8: Multi-Step Web Reading and Drafting** - Add generic page-grounded read, summarize, draft, revise and confirmation-gated actions
+- [x] **Phase 8: Multi-Step Web Reading and Drafting** - Add generic page-grounded read, summarize, draft, revise and confirmation-gated actions (completed 2026-10-18)
 
 ## Shared Milestones
 
@@ -212,7 +212,7 @@ V1 phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5. Phase 6 follows Phase
 | 5. Hostile Pages, Local Synthetic Web and Freeze | 11/11 | In Progress - technical acceptance passed; written sign-off and release review pending | - |
 | 6. Browser Control Contract and Policy Proposal | 2/2 | Proposal complete; follow-on phases authorized, review pending before merge | 2026-10-18 |
 | 7. Generic Browser Control and Content Reading | 2/6 | In Progress - 07-01 and 07-02 complete; four plans remain | - |
-| 8. Multi-Step Web Reading and Drafting | 6/6 | Complete | 2026-10-18 |
+| 8. Multi-Step Web Reading and Drafting | 6/6 | Complete    | 2026-10-18 |
 
 **Coverage:** 25/25 core v1 requirements mapped (see `.planning/workstreams/core/REQUIREMENTS.md` traceability).
 
@@ -248,7 +248,7 @@ Plans:
 **Goal:** Add generic, page-grounded workflows that can read requested content, summarize it on request, draft and revise text, read the final draft back, and carry out a send or other gated action only after explicit confirmation bound to that exact draft and page. Site names and the email example are not hardcoded.
 **Requirements**: No shared requirement changes in this phase
 **Depends on:** Phase 7
-**Plans:** 7 plans
+**Plans:** 7/7 plans complete
 
 Plans:
 - [x] 08-01-PLAN.md — Capture generic visible items with bounded recency evidence
