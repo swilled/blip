@@ -154,6 +154,32 @@ function selectedTab(selector: string, capture: BrowserCapture | null): BrowserC
   return { type: "switch-tab", targetTabId: matches[0]!.tabId };
 }
 
+const COURTESY_PREFIX = /^(?:(?:hey|ok|okay)[,\s]+)?(?:blip[,\s]+)?(?:(?:can|could|would|will) you(?: please)?|please|i want to|i'd like to|i would like to|let's|lets)[,\s]+/iu;
+const QUERY_COMMAND = /^(?:search|browser search|web search|site-search|find|look for|what does (?:this|the) page say about|what does it say about)\b/iu;
+const QUERY_SUFFIX = /[\s,]+(?:please|for me)[.!?]*$/iu;
+const COMMAND_SUFFIX = /[\s,]+(?:please|for me|thanks|thank you|now|in (?:microsoft )?edge|in chrome|in (?:the|my|this) browser)$/iu;
+const TRAILING_PUNCTUATION = /[.!?,]+$/u;
+
+/**
+ * Remove the conversational wrapper people naturally put around a command ("can you … in Edge,
+ * please?"), so speech matches the closed grammar. Only wrapper words are removed: the command,
+ * destination and query are still the user's own words. Query-bearing commands keep their
+ * punctuation and lose only a trailing "please" or "for me".
+ */
+export function relaxBrowserUtterance(input: string): string {
+  let text = input.trim();
+  for (let previous = ""; previous !== text;) {
+    previous = text;
+    text = text.replace(COURTESY_PREFIX, "").trim();
+  }
+  if (QUERY_COMMAND.test(text)) return text.replace(QUERY_SUFFIX, "").trim();
+  for (let previous = ""; previous !== text;) {
+    previous = text;
+    text = text.replace(TRAILING_PUNCTUATION, "").replace(COMMAND_SUFFIX, "").trim();
+  }
+  return text;
+}
+
 /**
  * Parse only user words into a closed browser command. Capture text is deliberately not consulted
  * for command intent, destinations, queries, or tab selection; it is used only to resolve an
@@ -163,7 +189,7 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
   if (utterance.length > MAX_COMMAND_LENGTH || INVALID_TEXT.test(utterance)) {
     return clarify("That browser request is too long or contains unsupported control characters.");
   }
-  const input = utterance.trim();
+  const input = relaxBrowserUtterance(utterance);
   const lower = input.toLocaleLowerCase();
   if (input === "") return clarify("Say what you want me to do in the browser.");
 
@@ -181,7 +207,10 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
   if (lower === "go back" || lower === "back") return { type: "history", direction: "back" };
   if (lower === "go forward" || lower === "forward") return { type: "history", direction: "forward" };
   if (["reload", "reload this page", "refresh this page"].includes(lower)) return { type: "reload" };
-  if (["open a blank tab", "open blank tab", "open a new tab", "new tab"].includes(lower)) return { type: "open-blank" };
+  if ([
+    "open a blank tab", "open blank tab", "open a new tab", "new tab", "open new tab", "open up a new tab",
+    "open another tab", "open a new browser tab", "create a new tab", "make a new tab", "start a new tab",
+  ].includes(lower)) return { type: "open-blank" };
 
   const switchMatch = /^(?:switch to|go to)\s+tab\s+(.+)$/iu.exec(input);
   if (switchMatch !== null) return selectedTab(switchMatch[1]!, currentCapture);
@@ -206,7 +235,7 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
 
   const openLink = /^(?:open|click)\s+(?:the\s+)?link\s+(?:named\s+)?([\s\S]+)$/iu.exec(input);
   if (openLink !== null) return resolveLink(openLink[1]!.trim(), currentCapture);
-  const open = /^(?:open|go to|navigate to)\s+([\s\S]+)$/iu.exec(input);
+  const open = /^(?:open|go to|navigate to|take me to|bring up|pull up)\s+([\s\S]+)$/iu.exec(input);
   if (open !== null) {
     const destination = parseDestination(open[1]!);
     if ("error" in destination) return clarify(destination.error);

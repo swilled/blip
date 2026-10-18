@@ -116,7 +116,36 @@ describe("parseBrowserCommand", () => {
     expect(parseBrowserCommand(text, capture)?.type).toBe("clarify");
   });
 
-  it.each(["yes", "yeah", "okay"])("does not parse bare %s as authorization", (text) => {
+  it.each(["yes", "yeah", "okay", "yes please", "okay.", "please"])("does not parse bare %s as authorization", (text) => {
     expect(parseBrowserCommand(text, capture)).toBeNull();
+  });
+
+  it.each([
+    ["Can you open a new tab in Edge?", { type: "open-blank" }],
+    ["Open a new tab.", { type: "open-blank" }],
+    ["Hey Blip, could you please open up a new tab for me", { type: "open-blank" }],
+    ["Where am I?", { type: "location" }],
+    ["Please go back.", { type: "history", direction: "back" }],
+    ["Could you scroll down a little? ", null],
+    ["Can you scroll down please", { type: "scroll", direction: "down", pixels: 600 }],
+    ["Take me to example.org in Edge, please.", { type: "navigate", url: "https://example.org/", host: "example.org" }],
+    ["Could you switch to tab 2?", { type: "switch-tab", targetTabId: 11 }],
+    ["Can you read this page?", { type: "read-page", identity: capture.identity }],
+  ] as const)("accepts the natural phrasing %s", (text, expected) => {
+    expect(parseBrowserCommand(text, capture)).toEqual(expected);
+  });
+
+  it("keeps a spoken search query exact apart from a trailing please", () => {
+    expect(parseBrowserCommand("Can you search for C++ and tea? please", capture)).toEqual({
+      type: "search", query: "C++ and tea?", route: "auto",
+    });
+    expect(parseBrowserCommand("Could you search for things to do in Edge", capture)).toEqual({
+      type: "search", query: "things to do in Edge", route: "auto",
+    });
+  });
+
+  it("never turns the wrapper words themselves into a destination", () => {
+    expect(parseBrowserCommand("Can you open a new tab in Edge?", capture)?.type).toBe("open-blank");
+    expect(parseBrowserCommand("Open a new tab.", capture)?.type).not.toBe("search");
   });
 });
