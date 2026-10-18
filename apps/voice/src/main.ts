@@ -224,7 +224,7 @@ function handleLocalRateUtterance(text: string): boolean {
   const direction = parseSpeechRateCommand(text);
   if (!direction) return false;
   const acknowledgement = rateAcknowledgement(direction);
-  el("output-mode-status").textContent = `${acknowledgement} Using ${outputMode.getMode() === "agent-voice" ? "Blip voice" : "NVDA screen reader"}.`;
+  el("output-mode-status").textContent = acknowledgement;
   state.messageSent();
   tts.speak(acknowledgement, { speakId: LOCAL_RATE_ACK_ID });
   return true;
