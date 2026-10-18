@@ -94,7 +94,7 @@ The proposed `browser.request` message is server-to-extension and `browser.resul
 | `history` | `direction: back or forward` |
 | `reload` | none |
 | `search` | `route: site or browser-default`, user-derived `query` (1–500 Unicode code points), and required one-use `authorizationId` |
-| `tabs` | `action: list or switch`; `targetTabId` is required only for `switch` |
+| `tabs` | `action: list, switch, or open-blank`; `targetTabId` is required only for `switch` |
 | `list-links` | none |
 | `read-content` | `kind: heading or paragraph`, user-derived `target`, and captured `identity` |
 | `open-link` | stable `linkId`, captured `identity`, and required one-use `authorizationId` |
@@ -103,7 +103,9 @@ The proposed `browser.request` message is server-to-extension and `browser.resul
 
 The protocol validates shape only. Deterministic server code must keep URLs and queries sourced from the user's words, resolve links from a uniquely selected visible live candidate, and authorize gated work before dispatch. It may issue an `authorizationId` only after read-back of the exact operation and target and a matching operation-specific spoken phrase; a bare "yes" never authorizes it. The grant is one-use and target-bound, and the extension revalidates before dispatch. Page text and model output cannot invent or rewrite a destination, query, link, tab, or action target. The required authorization IDs do not add confirmation authority to `Intent`.
 
-`BrowserResultPayload` has `ok: true` and a typed result for its `operation`, or `ok: false` with the same bounded `requestId`, operation, and a closed error code plus a message of at most 300 Unicode code points. Successful location results distinguish `supported` from `restricted` pages. Tab results expose at most 50 entries, with a bounded title and host hint rather than a navigable URL.
+Browser-default search calls `chrome.search.query` with the exact user query and `CURRENT_TAB`. It requires the manifest `search` permission and fails closed when the API or permission is unavailable; the extension never builds a provider URL. The `search` manifest permission is a local review-pending delta and requires written voice-owner approval before merge or push.
+
+`BrowserResultPayload` has `ok: true` and a typed result for its `operation`, or `ok: false` with the same bounded `requestId`, operation (or `unknown` for an invalid discriminant), and a closed error code plus a message of at most 300 Unicode code points. History refusal uses `unsupported-destination-check` when the next destination cannot be established. Successful location results distinguish `supported` from `restricted` pages. Tab results expose at most 50 entries, with a bounded title and host hint rather than a navigable URL. A created `about:blank` tab is a navigation target only and remains restricted for content capture.
 
 Content and link results carry an independent `captureId`, positive `captureRevision`, `tabId`, and canonical `pageUrl`. Page URLs may use HTTP(S), `about:`, `chrome:`, or `chrome-extension:` so restricted pages can be identified; navigation destinations accept HTTP(S) only and reject credentials and unsupported schemes. Content blocks are visible heading/paragraph text, at most 20 blocks, 400 Unicode code points per block and 4,000 total. Their `truncated` flag describes only this content excerpt and does not alter `Snapshot.truncated`. A restricted result carries no blocks or links, distinct from a supported empty result. Link lists contain at most 100 records; each record exposes only a bounded stable `linkId`, visible label (at most 200 code points), and safe host hint, never an `href`.
 

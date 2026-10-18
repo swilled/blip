@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "minimum_chrome_version": "116",
   "key": "__EXTENSION_PUBLIC_KEY__",
-  "permissions": ["tabs", "scripting", "alarms", "storage", "webNavigation"],
+  "permissions": ["tabs", "scripting", "alarms", "storage", "webNavigation", "search"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

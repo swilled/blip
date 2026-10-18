@@ -16,6 +16,8 @@ function browserApi(overrides: Record<string, unknown> = {}) {
       ...properties,
     })),
     reload: vi.fn(async () => undefined),
+    goBack: vi.fn(async () => undefined),
+    goForward: vi.fn(async () => undefined),
   };
   const permissions = { contains: vi.fn(async () => true) };
   const search = { query: vi.fn(async () => undefined) };
@@ -138,6 +140,8 @@ describe("extension browser request dispatcher", () => {
     expect(forward).toMatchObject({ ok: false, operation: "history", error: { code: "unsupported-destination-check" } });
     expect(state.tabs.update).not.toHaveBeenCalled();
     expect(state.tabs.get).not.toHaveBeenCalled();
+    expect(state.tabs.goBack).not.toHaveBeenCalled();
+    expect(state.tabs.goForward).not.toHaveBeenCalled();
   });
 
   it("reloads the current tab without cache bypass options", async () => {
