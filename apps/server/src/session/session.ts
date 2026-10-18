@@ -256,6 +256,11 @@ export class Session {
   clearPendingGatedAction(): PendingGatedAction | null {
     const pending = this.pendingGatedAction;
     if (pending?.grantId !== undefined) this.grants.clear(pending.grantId);
+    const taskGrant = pending?.binding.pageTask;
+    if (pending !== null && taskGrant !== undefined && this.activePageTask?.taskId === taskGrant.taskId &&
+        this.activePageTask.associatedGrantId === pending.grantId) {
+      this.activePageTask.associatedGrantId = null;
+    }
     this.pendingGatedAction = null;
     return pending;
   }
