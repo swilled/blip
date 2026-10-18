@@ -4,6 +4,7 @@ import type {
   BrowserContentResult,
   BrowserLinkListResult,
   BrowserPageIdentity,
+  BrowserReadItemResult,
   BrowserResultPayload,
   Snapshot,
 } from "@blip/protocol";
@@ -14,6 +15,7 @@ type BrowserScrollResult = Extract<BrowserResultPayload, { ok: true; operation: 
 export type BrowserContentRequest =
   | { t: "browser-content"; operation: "capture" | "list-links"; identity: BrowserPageIdentity }
   | { t: "browser-content"; operation: "read-content"; identity: BrowserPageIdentity; contentId: string; kind: "heading" | "paragraph" }
+  | { t: "browser-content"; operation: "read-item"; identity: BrowserPageIdentity; itemId: string }
   | { t: "browser-content"; operation: "open-link"; identity: BrowserPageIdentity; linkId: string; authorizationId: string }
   | { t: "browser-content"; operation: "scroll"; identity: BrowserPageIdentity; direction: "up" | "down"; pixels: number }
   | { t: "browser-content"; operation: "scroll"; identity: BrowserPageIdentity; contentId: string; kind: "heading" | "paragraph" }
@@ -23,6 +25,7 @@ export type BrowserContentResponse =
   | { t: "browser-content.result"; operation: "capture"; result: BrowserContentResult }
   | { t: "browser-content.result"; operation: "list-links"; result: BrowserLinkListResult }
   | { t: "browser-content.result"; operation: "read-content"; result: BrowserContentResult }
+  | { t: "browser-content.result"; operation: "read-item"; result: BrowserReadItemResult }
   | { t: "browser-content.result"; operation: "open-link"; result: { identity: BrowserPageIdentity; frameId: number; href: string } }
   | { t: "browser-content.result"; operation: "scroll"; result: BrowserScrollResult }
   | { t: "browser-content.result"; operation: "find"; result: BrowserFindResult }

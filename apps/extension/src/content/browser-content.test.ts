@@ -59,6 +59,10 @@ function openRequest(linkId: string, pageIdentity = identity): BrowserContentReq
   };
 }
 
+function readItemRequest(itemId: string, pageIdentity = identity): BrowserContentRequest {
+  return { t: "browser-content", operation: "read-item", identity: pageIdentity, itemId };
+}
+
 function browserDispatcher() {
   let tab = { id: 7, url: PAGE, title: "Example" };
   const navigations: string[] = [];
@@ -308,6 +312,70 @@ describe("bounded visible browser content", () => {
     });
     expect(handleBrowserContentRequest(document, { ...request, identity: { ...identity, captureRevision: 2 } }, 0))
       .toMatchObject({ t: "browser-content.error", code: "stale-capture" });
+  });
+
+  it("returns only the unchanged live text and visible date for a captured item", () => {
+    addArticle("Current item", "2026-10-18T12:30:00Z");
+    const capture = captureWithFixedClock();
+    const item = capture.items![0]!;
+
+    const response = contentResponse(handleBrowserContentRequest(document, readItemRequest(item.itemId, capture), 0));
+    expect(response).toMatchObject({
+      operation: "read-item",
+      result: {
+        itemId: item.itemId,
+        text: item.text,
+        visibleDate: "2026-10-18T12:30:00Z",
+        identity,
+        frameId: 0,
+      },
+    });
+  });
+
+  it("rejects an item after its visible text or date changes", () => {
+    const article = addArticle("Captured item", "2026-10-18T12:30:00Z");
+    const capture = captureWithFixedClock();
+    const item = capture.items![0]!;
+    article.querySelector("p")!.textContent = "Changed visible text";
+    expect(handleBrowserContentRequest(document, readItemRequest(item.itemId, capture), 0))
+      .toMatchObject({ t: "browser-content.error", code: "stale-capture" });
+
+    const nextIdentity = { ...identity, captureId: "capture-date-change", captureRevision: 2 };
+    captureVisibleContent(document, nextIdentity, { now: () => 0 });
+    const time = article.querySelector("time")!;
+    time.textContent = "2026-10-19T12:30:00Z";
+    time.setAttribute("datetime", "2026-10-19T12:30:00Z");
+    expect(handleBrowserContentRequest(document, readItemRequest(`${nextIdentity.captureId}.i0`, nextIdentity), 0))
+      .toMatchObject({ t: "browser-content.error", code: "stale-capture" });
+  });
+
+  it("rejects hidden, disconnected, stale-identity, wrong-frame, and unsupported item requests", () => {
+    const article = addArticle("Current item");
+    const capture = captureWithFixedClock();
+    const itemId = capture.items![0]!.itemId;
+
+    article.setAttribute("hidden", "");
+    expect(handleBrowserContentRequest(document, readItemRequest(itemId, capture), 0))
+      .toMatchObject({ t: "browser-content.error", code: "stale-capture" });
+    article.removeAttribute("hidden");
+
+    const disconnectedIdentity = { ...identity, captureId: "capture-disconnected", captureRevision: 2 };
+    captureVisibleContent(document, disconnectedIdentity, { now: () => 0 });
+    const disconnectedItemId = `${disconnectedIdentity.captureId}.i0`;
+    article.remove();
+    expect(handleBrowserContentRequest(document, readItemRequest(disconnectedItemId, disconnectedIdentity), 0))
+      .toMatchObject({ t: "browser-content.error", code: "stale-capture" });
+
+    addArticle("Current item again");
+    const currentIdentity = { ...identity, captureId: "capture-current-again", captureRevision: 3 };
+    const current = captureVisibleContent(document, currentIdentity, { now: () => 0 });
+    const currentItemId = current.items![0]!.itemId;
+    expect(handleBrowserContentRequest(document, readItemRequest(currentItemId, { ...currentIdentity, captureRevision: 4 }), 0))
+      .toMatchObject({ t: "browser-content.error", code: "stale-capture" });
+    expect(handleBrowserContentRequest(document, readItemRequest(currentItemId, currentIdentity), 3))
+      .toMatchObject({ t: "browser-content.error", code: "unsupported-frame" });
+    expect(handleBrowserContentRequest(document, readItemRequest("unknown-item", currentIdentity), 0))
+      .toMatchObject({ t: "browser-content.error", code: "not-found" });
   });
 
   it("rejects a bare link request without authorization and duplicate user-selected labels", () => {

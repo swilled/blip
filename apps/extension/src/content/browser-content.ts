@@ -6,6 +6,7 @@ import {
   type BrowserContentResult,
   type BrowserLinkListResult,
   type BrowserPageIdentity,
+  type BrowserReadItemResult,
 } from "@blip/protocol";
 import { classifyAction } from "@blip/policy/classify";
 import { boundedText } from "./text.js";
@@ -33,7 +34,7 @@ const DEFAULT_TIME_BUDGET_MS = 100;
 
 type CaptureOptions = { now?: () => number; timeBudgetMs?: number };
 type ElementEntry = { contentId: string; kind: "heading" | "paragraph"; element: Element };
-type ItemEntry = { itemId: string; element: Element };
+type ItemEntry = { itemId: string; element: Element; text: string; visibleDate: string | null };
 type LinkEntry = { linkId: string; element: HTMLAnchorElement; href: string; rawHref: string; target: string; label: string };
 type CaptureState = {
   identity: BrowserPageIdentity;
@@ -354,7 +355,7 @@ export function captureVisibleContent(
     const itemId = `${identity.captureId.slice(0, 56)}.i${items.length}`;
     const item: BrowserContentItemType = { itemId, text, visibleDate: raw.visibleDate, identity, frameId };
     items.push(item);
-    state.items.set(itemId, { itemId, element: raw.element });
+    state.items.set(itemId, { itemId, element: raw.element, text, visibleDate: raw.visibleDate });
     itemTotal += Array.from(text).length;
     if (itemTotal >= MAX_TOTAL_CODE_POINTS) {
       if (rawItems.length > items.length) truncated = true;
@@ -428,6 +429,40 @@ function readBlock(document: Document, request: Extract<BrowserContentRequest, {
     operation: "read-content",
     result: { ...state.identity, status: "supported", blocks: [block], truncated: textResult.truncated },
   };
+}
+
+function readItem(document: Document, request: Extract<BrowserContentRequest, { operation: "read-item" }>, frameId: number): BrowserContentResponse {
+  const state = currentState(document, request.identity, frameId);
+  if (!state) return failure(request, "stale-capture", "That page item capture is no longer current.");
+  const entry = state.items.get(request.itemId);
+  if (!entry) return failure(request, "not-found", "That visible page item is no longer available.");
+  const element = entry.element;
+  if (!element.isConnected || excluded(element) || !isVisible(element) || !itemCandidate(element) || hasItemAncestor(element)) {
+    return failure(request, "stale-capture", "The selected page item is no longer an eligible visible item.");
+  }
+
+  const now = () => document.defaultView?.performance.now() ?? performance.now();
+  const deadline = now() + DEFAULT_TIME_BUDGET_MS;
+  const liveText = visibleText(element, MAX_BLOCK_CODE_POINTS + 1, now, deadline, {
+    skipNestedContentCandidates: false,
+    skipNestedItems: true,
+  });
+  if (liveText.timedOut) return failure(request, "timeout", "The selected page item took too long to read.");
+  const date = visibleDateEvidence(element, now, deadline);
+  if (date.timedOut) return failure(request, "timeout", "The selected page item date took too long to validate.");
+  const text = boundedText(liveText.text, MAX_BLOCK_CODE_POINTS, MAX_BLOCK_CODE_POINTS * 2);
+  if (text === "" || text !== entry.text || date.value !== entry.visibleDate) {
+    return failure(request, "stale-capture", "The selected page item changed after it was captured.");
+  }
+
+  const result: BrowserReadItemResult = {
+    itemId: entry.itemId,
+    text,
+    visibleDate: date.value,
+    identity: state.identity,
+    frameId: state.frameId,
+  };
+  return { t: "browser-content.result", operation: "read-item", result };
 }
 
 function openLink(document: Document, request: Extract<BrowserContentRequest, { operation: "open-link" }>, frameId: number): BrowserContentResponse {
@@ -542,6 +577,7 @@ export function handleBrowserContentRequest(
       return { t: "browser-content.result", operation: "list-links", result: listLinks(captureByDocument.get(document)!) };
     }
     case "read-content": return readBlock(document, request, frameId);
+    case "read-item": return readItem(document, request, frameId);
     case "open-link": return openLink(document, request, frameId);
     case "scroll": return scroll(document, request, frameId);
     case "find": return find(document, request, frameId);
