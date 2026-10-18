@@ -34,5 +34,5 @@
     "label": "Reconcile core v1 acceptance and release evidence",
     "reason": "Phase 5 technical acceptance passes: AGY hostile-page refusal, full local I3, launcher-cache prewarm/reload, fake-browser E2Es, full tests, typecheck, and production builds. GSD closeout awaits written M0 sign-off, teammate review, mainline promotion, and demo-safe tagging; the latest one-command smoke rerun remains inconclusive."
   },
-  "updated_at": "2026-10-18T01:43:29Z"
+  "updated_at": "2026-10-18T01:47:01Z"
 }

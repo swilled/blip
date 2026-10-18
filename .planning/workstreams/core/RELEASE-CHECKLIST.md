@@ -1,11 +1,11 @@
 # Core Release Checklist
 
-**Updated:** 2026-10-18 01:43 UTC
+**Updated:** 2026-10-18 01:47 UTC
 **Branch:** `integration/ho8-voice-gate`
-**HEAD before the uncommitted work in this checkout:** `ac4fb1c`
+**Branch tip at reconciliation start:** `ac4fb1c`
 **Release state:** Technical Phase 5 acceptance is ready for human review. Do not tag or merge until the remaining written sign-off and teammate review gates are complete.
 
-This checklist records the current local evidence and separates it from the remaining human/repository gates. The checks used only loopback fixtures, fictional values, isolated browser profiles, and temporary caches. No credentials or auth state were inspected. No commit, push, merge, or tag was created for this reconciliation.
+This checklist records the current evidence and separates it from the remaining human/repository gates. The checks used only loopback fixtures, fictional values, isolated browser profiles, and temporary caches. No credentials or auth state were inspected. Commit `25015c7` is pushed to `origin/integration/ho8-voice-gate` for teammate review. It has not been merged or tagged.
 
 ## Core acceptance
 
