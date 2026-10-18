@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Phase 05 local acceptance is verified on integration/ho8-voice-gate through bc6d2f0; the core adapter is ready for the voice Phase 2 runtime, teammate review, and mainline promotion before demo-safe tagging. Public-form DEMO-03 is explicitly deferred because no URL exists for this hackathon.
-stopped_at: Added and pushed bc6d2f0 with core arm/clear/redeem adapter coverage; full tests, typecheck, Edge survey E2E, and demo smoke pass. The fetched voice branch still lacks its Phase 2 DialogueRunner/GatePort runtime, so voice-side adoption and teammate review remain before mainline freeze/tag.
-last_updated: "2026-10-17T21:18:00Z"
+status: Phase 05 local acceptance and HO-8 voice reducer integration are verified on integration/ho8-voice-gate; teammate review and mainline promotion remain before demo-safe tagging. Public-form DEMO-03 is explicitly deferred because no URL exists for this hackathon.
+stopped_at: Integrated origin/voice/phase-2-dialogue-gateport at 2f22bb5, ran the full suite, typecheck, extension and voice builds, and production-extension browser E2E. Teammate review is the remaining release step before mainline freeze/tag.
+last_updated: "2026-10-17T22:12:21Z"
 progress:
   total_phases: 5
   completed_phases: 3
@@ -20,12 +20,12 @@ See: .planning/PROJECT.md (updated 2026-10-17)
 Workstream: core (Person A, Pranav). Roadmap: .planning/workstreams/core/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 05 local acceptance is complete, including the core voice client integration and exact synthetic survey cache. The pushed adapter needs adoption by the voice Phase 2 runtime, teammate review, and mainline promotion before `demo-safe`; public-form DEMO-03 is deferred.
+**Current focus:** Phase 05 local acceptance is complete, including the voice Phase 2 reducer wired to the core Gate/Executor and exact synthetic survey cache. The integration branch needs teammate review and mainline promotion before `demo-safe`; public-form DEMO-03 is deferred.
 
 ## Current Position
 
 Phase: 05 (hostile-pages-real-web-and-freeze) — LOCAL ACCEPTANCE VERIFIED / RELEASE REVIEW PENDING
-Plan: Phase 04 complete (18/18); Phase 05 plans executed (11/11). Freeze/tag waits for voice Phase 2 adoption, teammate review, and merge of the integration branch.
+Plan: Phase 04 complete (18/18); Phase 05 plans executed (11/11). Voice Phase 2 reducer adoption is integrated and locally verified; freeze/tag waits for teammate review and mainline promotion.
 
 ## Performance Metrics
 
@@ -132,7 +132,7 @@ Recent decisions affecting current work:
 - [Phase 05]: The core owner confirmed there is no public-form URL for this hackathon. Use the self-hosted synthetic survey for Core I3 and leave voice-owned DEMO-03 explicitly deferred.
 - [Phase 05]: The first-party core voice UI sends `confirm.redeem` with its active grant and completed read-back IDs; the server validates them and alone consumes the `ConsumedGrant` for GatePort dispatch.
 - [Phase 05]: Commit `bc6d2f0` adds an arm/clear/redeem adapter that keeps read-back, grant binding, and `ConsumedGrant` dispatch in core. The adapter ignores reducer title/digest as authority and publishes `confirm.armed` through the existing protocol.
-- [Phase 05]: Fetched `origin/voice/vox-05-barge-in` at `18ebb67` contains the Phase 1 dialogue reducer and Phase 2 plans, but no Phase 2 DialogueRunner/GatePort implementation; voice-side adoption remains an external handoff.
+- [Phase 05]: Fetched `origin/voice/phase-2-dialogue-gateport` at `2f22bb5`, integrated the Phase 2 DialogueRunner/GatePort runtime, and verified the reducer-to-core path through the production extension on a local synthetic form.
 - [Phase 05]: GATE-07, PROT-03, local synthetic I3, and exact demo repair-cache identity have direct local evidence. Keep `demo-safe` untagged until the HO-8 integration branch receives teammate review and is merged to main.
 
 ### Pending Todos
@@ -142,7 +142,7 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 1] Written voice sign-off for the M0 protocol freeze is still pending; voice's `Effect` union remains a cross-track integration item
-- [Phase 5] `integration/ho8-voice-gate` at `bc6d2f0` needs voice Phase 2 adoption and teammate review before merge and mainline `demo-safe` tagging.
+- [Phase 5] `integration/ho8-voice-gate` contains the tested HO-8 integration; teammate review and mainline promotion are required before `demo-safe` tagging.
 - [Phase 5] Voice-owned public-form DEMO-03 is deferred; the core owner confirmed no public-form URL exists for the hackathon. Core acceptance uses the local synthetic survey and makes no public-form claim.
 - [Coordination] `fixtures/forms/` belongs to voice, but GATE-06 is core's: agree at M0 that core authors `injection.html`
 - [Phase 4] Phase 04 is complete after 04-18. Subscription usage is attributed to the user's authorized local subscription allowance and source configuration; account identity was not independently inspected.
@@ -158,6 +158,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-17T21:18:00Z
-Stopped at: Pushed bc6d2f0 with the core adapter and verified the local voice UI, synthetic survey, exact cache prewarm, full tests, and fake launcher. Voice Phase 2 adoption, teammate review, and mainline merge/tag remain.
+Last session: 2026-10-17T22:12:21Z
+Stopped at: Integrated the teammate's voice Phase 2 branch into `integration/ho8-voice-gate`; full tests, typecheck, builds, and isolated production-extension E2E pass. Teammate review and mainline merge/tag remain.
 Resume file: None

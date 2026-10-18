@@ -42,6 +42,7 @@ export function createVoiceGateAdapter(ctx: GatedContext): VoiceGateAdapter {
         text: payload.phrase,
         grantId: payload.grantId,
         speakId: payload.speakId,
+        utteranceId: payload.utteranceId,
       });
     },
   };

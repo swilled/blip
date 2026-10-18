@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Blip Local Form Bridge",
+  "version": "0.1.0",
+  "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsHBqMehtNcl6pb4MriUgp2WXNAvmYgqp/fcn1UTlMhFwGl1OMlSV/EYwkpfS2XaNj7MMAXwis4j5PJxt3mvVaP3yOBVabSU9gR+4VJREpj6r/4p/nLE2kwSuGb4UkIP9ccsrn0AtX+CY7IBeJVczMZnCqSVH+gh1uWpigMNdywc3VoRMQbi1YYRxngPk7Z6X4mCMS8+SSh2AxxaqG4XjemVMryNZm/tMRHy9gtHfTV3us1bhBZ/xo3/p97mi3F2KtXRPO9nyxs243HdE+F1KZmxZrxcTBeCWBJp/rjPdzwDKi4sOkFAOwmjiKeUE4Ywp7aaaJYAcKpHbtRusaNvpGQIDAQAB",
+  "permissions": ["tabs"],
+  "host_permissions": ["http://127.0.0.1:7777/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1:7777/fixtures/forms/broken.html"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

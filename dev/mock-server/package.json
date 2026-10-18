@@ -1,0 +1,19 @@
+{
+  "name": "@blip/mock-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --import tsx src/main.ts",
+    "window": "node --import tsx src/launch-window.ts",
+    "dev": "node --import tsx src/dev.ts",
+    "real": "node --import tsx src/run-real.ts",
+    "reset": "node --import tsx src/reset.ts"
+  },
+  "dependencies": {
+    "@blip/protocol": "*",
+    "@blip/dialogue": "*",
+    "sirv": "3.0.2",
+    "ws": "8.22.0"
+  }
+}

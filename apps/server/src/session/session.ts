@@ -47,6 +47,7 @@ export class Session {
   lastSpoken: string | null = null;
   /** Latest successfully sent speech; stale speak.done frames cannot complete newer speech. */
   activeSpeakId: string | null = null;
+  #speech = new Map<string, { category: string; completedAt: number | null; interrupted: boolean }>();
   /** Confirmation state is local to this voice session and never comes from an Intent. */
   pendingGatedAction: PendingGatedAction | null = null;
   /** Existing server-only one-use grant store from the Phase 3 foundation. */
@@ -64,15 +65,31 @@ export class Session {
   }
 
   /** Track a speech only after its frame was accepted by the live voice connection. */
-  trackSpeech(speakId: string): void {
+  trackSpeech(speakId: string, category = "answer"): void {
     this.activeSpeakId = speakId;
+    this.#speech.set(speakId, { category, completedAt: null, interrupted: false });
+    while (this.#speech.size > 256) {
+      const oldest = this.#speech.keys().next().value;
+      if (oldest === undefined) break;
+      this.#speech.delete(oldest);
+    }
   }
 
-  /** Clear only the matching active speech; old completion frames are ignored. */
-  completeSpeech(speakId: string): boolean {
-    if (this.activeSpeakId !== speakId) return false;
-    this.activeSpeakId = null;
+  /** Record completion only for speech emitted by this server session; duplicate frames are ignored. */
+  completeSpeech(speakId: string, interrupted = false, completedAt = Date.now()): boolean {
+    const speech = this.#speech.get(speakId);
+    if (speech === undefined || speech.completedAt !== null || !Number.isFinite(completedAt)) return false;
+    this.#speech.set(speakId, { category: speech.category, completedAt, interrupted });
+    if (this.activeSpeakId === speakId) this.activeSpeakId = null;
     return true;
+  }
+
+  /** Read completion evidence for a server-tracked speech id. */
+  speechCompletion(speakId: string): { category: string; completedAt: number; interrupted: boolean } | null {
+    const speech = this.#speech.get(speakId);
+    return speech?.completedAt === null || speech === undefined
+      ? null
+      : { category: speech.category, completedAt: speech.completedAt, interrupted: speech.interrupted };
   }
 
   get extensionConnected(): boolean {

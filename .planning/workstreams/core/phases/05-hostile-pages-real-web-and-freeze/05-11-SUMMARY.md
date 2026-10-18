@@ -33,3 +33,13 @@ The core owner confirmed this hackathon has no public-form URL and asked Core to
 ## Remaining release step
 
 Local Phase 5 acceptance is complete for GATE-06, GATE-07, PROT-03, local synthetic I3, exact demo-cache prewarm, and the fake fallback. DEMO-03 remains explicitly deferred. The `demo-safe` tag is not created on this integration branch: the team's contribution rules require teammate review of changes to the Executor/gate before mainline merge and release tagging.
+
+## HO-8 voice reducer integration follow-up
+
+- Fetched `origin/voice/phase-2-dialogue-gateport` at `2f22bb5` and merged its Phase 2 reducer/runtime into the core integration branch.
+- Connected the reducer's `arm`, `clear`, and `redeem` lifecycle through `createCoreDialogueGatePort`; the server remains the only owner of the one-use grant and `ConsumedGrant` dispatch.
+- Added automated checks for server-tracked read-back `speakId`, exact `submit survey`, refusal of bare `yes`, one-use submission, and grant invalidation on cancel, stop/repeat, PTT, or page change.
+- Ran the integrated reducer through the production extension in a harness-owned browser profile against the local synthetic form. The exact phrase produced one submit and the page's confirmation result; the read-back did not reveal the fictional card number.
+- Verification: `npm test -- --maxWorkers=1` passed (113 files, 1,189 tests; 16 files and 26 tests skipped); `npm run typecheck`, `npm run ext:build`, and `npm run build --workspace @blip/voice` passed; `BLIP_E2E_BROWSER=1 npx vitest run apps/extension/test/e2e/gated-flow.e2e.test.ts` passed (2/2).
+
+The HO-8 implementation is complete on the integration branch. Teammate review and mainline promotion remain external release steps before `demo-safe` tagging. DEMO-03 stays deferred because no public-form URL exists for this hackathon.

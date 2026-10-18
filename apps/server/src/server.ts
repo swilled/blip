@@ -55,6 +55,8 @@ export type StartServerOptions = {
   repairTimeoutMs?: number;
   /** Message handlers by type; anything without one gets not-implemented (D-14). Plan 01-05 fills these. */
   handlers?: Handlers;
+  /** Build server-integrated handlers after the Hub exists, with its live grant/executor context. */
+  handlersFactory?: (context: GatedContext) => Handlers;
   /** How long a snapshot.request waits for its reply (used by plan 01-05). Default 5000. */
   snapshotTimeoutMs?: number;
   /** Maximum model age for read_form and what's_required. Default 2000. */
@@ -252,6 +254,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     },
   };
 
+  const handlers: Handlers = { ...defaultHandlers, ...options.handlers };
   const hub = createHub({
     server,
     session,
@@ -260,7 +263,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     extensionId: options.extensionId ?? EXTENSION_ID,
     extraVoiceOrigins,
     ...(options.helloTimeoutMs !== undefined ? { helloTimeoutMs: options.helloTimeoutMs } : {}),
-    handlers: { ...defaultHandlers, ...options.handlers },
+    handlers,
   });
 
   const repairProvider = options.repairProvider ?? claudeProvider ?? undefined;
@@ -279,6 +282,17 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     timeoutMs: snapshotTimeoutMs,
     onAccepted: (snapshot) => repairCoordinator?.accept(snapshot),
   });
+
+  if (options.handlersFactory !== undefined) {
+    Object.assign(handlers, options.handlersFactory({
+      hub,
+      gatePort: createGatePort(hub, session.grants),
+      session,
+      refresher,
+      clock,
+      ...(schedule !== undefined ? { schedule } : {}),
+    }));
+  }
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

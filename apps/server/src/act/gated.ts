@@ -1,4 +1,5 @@
 import { isGatedKind, newId, type ActResult, type Intent, type SpeakDonePayload } from "@blip/protocol";
+import { formDigest, requiredEmpty } from "@blip/dialogue";
 import { matchesConfirmationPhrase, phraseForKind } from "@blip/policy/confirmation";
 import type { Hub } from "../hub/hub";
 import { createGatePort, type GatePort } from "./gate-port";
@@ -44,6 +45,7 @@ export type GatedCommand = GatedIntent | {
   /** Present for the reducer protocol; legacy typed/recognized utterances use the server session. */
   grantId?: string;
   speakId?: string;
+  utteranceId?: string;
 };
 
 function audit(outcome: "allowed" | "refused", reason: string, kind?: string, targetId?: string): void {
@@ -59,7 +61,7 @@ function audit(outcome: "allowed" | "refused", reason: string, kind?: string, ta
 
 function speak(ctx: GatedContext, text: string, category: "answer" | "error" | "confirm-prompt", speakId = newId()): string | null {
   if (!ctx.hub.send("voice", "speak", { speakId, text, category, interrupt: category === "confirm-prompt" })) return null;
-  ctx.session.trackSpeech(speakId);
+  ctx.session.trackSpeech(speakId, category);
   ctx.session.lastSpoken = text;
   return speakId;
 }
@@ -150,6 +152,92 @@ function safeBinding(session: Session, targetId: string, kind: NonNullable<Sessi
         value: field.sensitive === "none" ? field.value : null,
       })),
     },
+  };
+}
+
+export type DialogueReadbackArmRequest = {
+  actionId: string;
+  kind: string;
+  title: string;
+  digest: string;
+  speakId: string;
+};
+
+export type DialogueReadbackArmResult =
+  | { ok: true; grantId: string; speakId: string; phrase: string; expiresAt: number }
+  | { ok: false; reason: string };
+
+/**
+ * Arm the core grant for a completed, server-tracked dialogue read-back. The reducer supplies
+ * correlation hints; core refreshes and compares them to its current model before minting a grant.
+ */
+export async function armDialogueReadback(
+  ctx: GatedContext,
+  request: DialogueReadbackArmRequest,
+): Promise<DialogueReadbackArmResult> {
+  const { session } = ctx;
+  const refuse = (reason: string): DialogueReadbackArmResult => {
+    audit("refused", reason, request.kind, request.actionId);
+    return { ok: false, reason };
+  };
+  invalidateGatedAction(ctx, "cancelled", "superseded-by-new-action");
+
+  if (!session.extensionConnected) return refuse("extension-disconnected");
+  const refreshed = await ctx.refresher.request("refresh");
+  if (!refreshed.ok || session.model === null || session.stale || session.tabId === null) {
+    return refuse("read-failed");
+  }
+
+  const model = session.model;
+  const target = model.actions.find((candidate) => candidate.id === request.actionId);
+  if (target === undefined || !isGatedKind(target.kind) || target.kind !== request.kind || phraseForKind(target.kind) === undefined) {
+    return refuse("not-gated");
+  }
+  if (model.title !== request.title || formDigest(model) !== request.digest || requiredEmpty(model).length > 0) {
+    return refuse("value-changed");
+  }
+
+  const speech = session.speechCompletion(request.speakId);
+  if (speech === null || speech.category !== "readback" || speech.interrupted) {
+    return refuse("untracked-readback");
+  }
+
+  let now: number;
+  try {
+    now = (ctx.clock ?? Date.now)();
+  } catch {
+    now = Number.NaN;
+  }
+  if (!Number.isFinite(now) || speech.completedAt > now || now - speech.completedAt > 30_000) {
+    return refuse("readback-expired");
+  }
+
+  const phrase = phraseForKind(target.kind)!;
+  const binding = safeBinding(session, target.id, target.kind);
+  const grant = session.grants.arm(binding);
+  if (grant === null) return refuse("grant-unavailable");
+
+  session.pendingGatedAction = {
+    targetId: target.id,
+    kind: target.kind,
+    actionLabel: spokenText(target.label).slice(0, 120),
+    phrase,
+    tabId: session.tabId,
+    url: model.url,
+    snapshotVersion: model.snapshotVersion,
+    speakId: request.speakId,
+    speechCompletedAt: speech.completedAt,
+    readyAt: speech.completedAt + COOLDOWN_MS,
+    binding,
+    grantId: grant.grantId,
+    expiresAt: grant.expiresAt,
+  };
+  return {
+    ok: true,
+    grantId: grant.grantId,
+    speakId: request.speakId,
+    phrase,
+    expiresAt: grant.expiresAt,
   };
 }
 
@@ -330,7 +418,13 @@ export function handleGatedSpeakDone(
   payload: SpeakDonePayload,
 ): boolean {
   const { session } = ctx;
-  if (!session.completeSpeech(payload.speakId)) return false;
+  let now: number;
+  try {
+    now = (ctx.clock ?? Date.now)();
+  } catch {
+    now = Number.NaN;
+  }
+  if (!session.completeSpeech(payload.speakId, payload.interrupted, Number.isFinite(now) ? now : Date.now())) return false;
   const pending = session.pendingGatedAction;
   if (pending === null || pending.speakId !== payload.speakId || pending.speechCompletedAt !== null) return false;
   if (payload.interrupted) {
@@ -338,12 +432,6 @@ export function handleGatedSpeakDone(
     return true;
   }
 
-  let now: number;
-  try {
-    now = (ctx.clock ?? Date.now)();
-  } catch {
-    now = Number.NaN;
-  }
   if (!Number.isFinite(now)) {
     finishPending(ctx, pending, "clock-unavailable", { wireReason: "cancelled", reply: MSG_READ_FAILED });
     return true;
@@ -375,8 +463,9 @@ async function acceptConfirmation(ctx: GatedContext, command: Extract<GatedComma
   if (pending.dispatching) return;
 
   if (
-    (command.grantId !== undefined || command.speakId !== undefined) &&
-    (command.grantId !== pending.grantId || command.speakId !== pending.speakId || pending.speechCompletedAt === null)
+    (command.grantId !== undefined || command.speakId !== undefined || command.utteranceId !== undefined) &&
+    (command.grantId !== pending.grantId || command.speakId !== pending.speakId ||
+      typeof command.utteranceId !== "string" || command.utteranceId.length === 0 || pending.speechCompletedAt === null)
   ) {
     return finishPending(ctx, pending, "voice-redeem-binding-mismatch", {
       wireReason: "cancelled",

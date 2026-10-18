@@ -78,7 +78,7 @@ function speak(hub: Hub, session: Session, text: string, category: SpeakCategory
   // Filler is never repeated, and "repeat"/"stop" must not overwrite what the user wants repeated.
   const speakId = newId();
   if (!hub.send("voice", "speak", { speakId, text, category, interrupt: opts.interrupt === true })) return;
-  session.trackSpeech(speakId);
+  session.trackSpeech(speakId, category);
   if (category !== "filler" && opts.record !== false) session.lastSpoken = text;
 }
 

@@ -10,26 +10,26 @@
 
 ### Voice I/O
 
-- [ ] **VOX-01**: User can press a global push-to-talk key that works while the form tab has focus
-- [ ] **VOX-02**: User's speech is transcribed per push-to-talk press (Web Speech API) and sent to the server as an utterance
-- [ ] **VOX-03**: User can type any command instead of speaking it
-- [ ] **VOX-04**: Blip speaks replies with its own voice, plays earcons (listening / thinking / blocked), and says "one moment" when a reply takes over ~1.5 s
-- [ ] **VOX-05**: The user can interrupt Blip by speaking (barge-in). The confirm phrase is never accepted while Blip is speaking or within 1 s after it stops, so Blip's own speech can't confirm a submit. Echo handling is settled by a Phase 1 spike.
-- [ ] **VOX-06**: User can say "stop" to cut off speech immediately
+- [x] **VOX-01**: User can press a global push-to-talk key that works while the form tab has focus
+- [x] **VOX-02**: User's speech is transcribed per push-to-talk press (Web Speech API) and sent to the server as an utterance
+- [x] **VOX-03**: User can type any command instead of speaking it
+- [x] **VOX-04**: Blip speaks replies with its own voice, plays earcons (listening / thinking / blocked), and says "one moment" when a reply takes over ~1.5 s
+- [ ] **VOX-05** (PARTIAL: interrupt by holding push-to-talk or typed "stop" works; voice barge-in is built but forced off until core merges GATE-08, because Spike F showed Blip hears itself): The user can interrupt Blip by speaking (barge-in). The confirm phrase is never accepted while Blip is speaking or within 1 s after it stops, so Blip's own speech can't confirm a submit. Echo handling is settled by a Phase 1 spike.
+- [x] **VOX-06**: User can say "stop" to cut off speech immediately
 - [ ] **VOX-07**: User can say "faster" / "slower" to change Blip's speech rate
 - [ ] **VOX-08**: In screen-reader mode, Blip's replies are spoken through NVDA (controller client DLL) instead of Blip's own voice, without double speech
 
 ### Dialogue & Commands
 
-- [ ] **DLG-01**: User can ask "what's here" and hear a short counts-first summary (form title, step, number of fields, number required)
-- [ ] **DLG-02**: User can say "read the form" and hear each field in page order with its label and whether it's required
-- [ ] **DLG-03**: User can dictate a value into the current or a named field and hear it echoed back
+- [x] **DLG-01**: User can ask "what's here" and hear a short counts-first summary (form title, step, number of fields, number required)
+- [x] **DLG-02**: User can say "read the form" and hear each field in page order with its label and whether it's required
+- [x] **DLG-03**: User can dictate a value into the current or a named field and hear it echoed back
 - [ ] **DLG-04**: User can say "spell X" and hear the field's value spelled letter by letter
 - [ ] **DLG-05**: User can say "fill from my profile" and matching fields are filled from a local profile mapped by autocomplete tokens; the model only ever sees profile keys, never values
 - [ ] **DLG-06**: User can say "change X to Y" to edit a filled field
-- [ ] **DLG-07**: For selects/radios, Blip reads options numbered in page order and the user can pick by number or name
-- [ ] **DLG-08**: User can say "read back" and hear every field and value grouped, with empty required fields called out and sensitive values masked
-- [ ] **DLG-09**: Before a gated action, Blip gives a full read-back, then states the distinct phrase (e.g. "say 'submit survey'"); a bare "yes" is rejected
+- [x] **DLG-07**: For selects/radios, Blip reads options numbered in page order and the user can pick by number or name
+- [x] **DLG-08**: User can say "read back" and hear every field and value grouped, with empty required fields called out and sensitive values masked
+- [x] **DLG-09**: Before a gated action, Blip gives a full read-back, then states the distinct phrase (e.g. "say 'submit survey'"); a bare "yes" is rejected
 - [ ] **DLG-10**: User can ask "where am I" (site, step, current field) and "what's required" (remaining required fields)
 - [ ] **DLG-11**: When a label was guessed, Blip says so and why ("I think this is phone, based on the text next to it")
 - [ ] **DLG-12**: On password or card fields, Blip announces the field and hands off to the user to type; those values are never spoken or sent to the model
@@ -38,12 +38,12 @@
 
 ### Visibility
 
-- [ ] **VIS-01**: The voice window shows a live transcript of what the user said and what Blip said
-- [ ] **VIS-02**: While a gated action awaits confirmation, a prominent "BLOCKED — say 'submit …'" banner is shown
+- [x] **VIS-01**: The voice window shows a live transcript of what the user said and what Blip said
+- [x] **VIS-02**: While a gated action awaits confirmation, a prominent "BLOCKED — say 'submit …'" banner is shown
 
 ### Demo
 
-- [ ] **DEMO-01**: A self-hosted deliberately broken form (W3C WAI BAD "Survey" style: unlabeled inputs, placeholder-only labels, div buttons, color-only errors) is available locally
+- [x] **DEMO-01**: A self-hosted deliberately broken form (W3C WAI BAD "Survey" style: unlabeled inputs, placeholder-only labels, div buttons, color-only errors) is available locally
 - [ ] **DEMO-02**: A fictional demo profile and a one-command reset script restore the demo state between runs
 - [ ] **DEMO-03**: At least one real public form (e.g. a team-owned Google Form) can be completed end to end by voice
 - [ ] **DEMO-04**: The demo has a fallback kit: offline copies of the demo sites, a phone hotspot plan, a backup video, and a rehearsed plan-B script
@@ -93,22 +93,22 @@
 | VOX-07 | voice | Phase 4 | Pending |
 | VOX-08 | voice | Phase 4 | Pending |
 | DLG-01 | voice | Phase 1 | Pending |
-| DLG-02 | voice | Phase 2 | Pending |
-| DLG-03 | voice | Phase 2 | Pending |
+| DLG-02 | voice | Phase 2 | Complete |
+| DLG-03 | voice | Phase 2 | Complete |
 | DLG-04 | voice | Phase 3 | Pending |
 | DLG-05 | voice | Phase 3 | Pending |
 | DLG-06 | voice | Phase 3 | Pending |
-| DLG-07 | voice | Phase 2 | Pending |
-| DLG-08 | voice | Phase 2 | Pending |
-| DLG-09 | voice | Phase 2 | Pending |
+| DLG-07 | voice | Phase 2 | Complete |
+| DLG-08 | voice | Phase 2 | Complete |
+| DLG-09 | voice | Phase 2 | Complete |
 | DLG-10 | voice | Phase 3 | Pending |
 | DLG-11 | voice | Phase 3 | Pending |
 | DLG-12 | voice | Phase 3 | Pending |
 | DLG-13 | voice | Phase 3 | Pending |
 | DLG-14 | voice | Phase 3 | Pending |
 | VIS-01 | voice | Phase 1 | Pending |
-| VIS-02 | voice | Phase 2 | Pending |
-| DEMO-01 | voice | Phase 2 | Pending |
+| VIS-02 | voice | Phase 2 | Complete |
+| DEMO-01 | voice | Phase 2 | Complete |
 | DEMO-02 | voice | Phase 2 | Pending |
 | DEMO-03 | voice | Phase 4 | Pending |
 | DEMO-04 | voice | Phase 4 | Pending |

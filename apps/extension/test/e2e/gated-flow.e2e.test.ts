@@ -92,6 +92,47 @@ async function completeReadbackAndWaitForArm(
 }
 
 describe("real voice-role gated submit and result flow", () => {
+  it.skipIf(!enabled)("runs the dialogue reducer through the core gate and production extension", async () => {
+    const fixture = await openFixturePage(PAGE_PATH, { dialogueRunner: true });
+    const cardNumber = "4111111111111111";
+    try {
+      const fillEmail = await fixture.voiceClient.sendUtterance("fill Email address ada@gator.edu");
+      expect(speakText(fillEmail)).toContain("Email address, ada at gator dot edu. Replacing the old value.");
+
+      const readback = await fixture.voiceClient.sendUtterance("submit survey");
+      const readbackSpeak = speakMessages(readback).find((frame) => frame.payload.category === "readback");
+      expect(readbackSpeak?.payload.text).toContain("Reading back");
+      expect(readbackSpeak?.payload.text).not.toContain(cardNumber);
+      if (!readbackSpeak) throw new Error("the dialogue reducer did not emit a read-back");
+      const armedFrame = await waitForMessage(fixture, 0, (frame) => frame.type === "confirm.armed", 5_000);
+      if (armedFrame.type !== "confirm.armed") throw new Error("unexpected voice frame while waiting for the core grant");
+      const armed = armedFrame;
+      expect(armed?.payload.phrase).toBe(CONFIRMATION_PHRASE);
+      expect(armed?.payload.speakId).toBe(readbackSpeak?.payload.speakId);
+      expect(speakMessages(fixture.voiceClient.frames()).some((frame) =>
+        frame.payload.category === "confirm-prompt" && frame.payload.text.includes("submit survey"),
+      )).toBe(true);
+
+      const actsBeforeBareYes = fixture.actResults().length;
+      const yes = await fixture.voiceClient.sendUtterance("yes");
+      expect(speakText(yes)).toContain(`Not submitting. I need you to say '${CONFIRMATION_PHRASE}'.`);
+      expect(fixture.actResults()).toHaveLength(actsBeforeBareYes);
+      await delay(1_100);
+
+      const submitted = await fixture.voiceClient.sendUtterance(CONFIRMATION_PHRASE);
+      expect(speakText(submitted)).toContain("The page confirms the action. Confirmation number GH-2048.");
+      const reports = await waitForReportCount(fixture, "booking-confirmed", 1);
+      expect(reportCount(reports, "booking-submit")).toBe(1);
+      expect(reportCount(reports, "booking-confirmed")).toBe(1);
+      expect(fixture.actResults()).toHaveLength(actsBeforeBareYes + 1);
+      expect(fixture.actResults().at(-1)).toMatchObject({ ok: true, liveKind: "submit" });
+      expect(JSON.stringify(fixture.voiceClient.frames())).not.toContain(cardNumber);
+      expect(JSON.stringify(fixture.actResults())).not.toContain(cardNumber);
+    } finally {
+      await fixture.close();
+    }
+  }, 180_000);
+
   it.skipIf(!enabled)("requires a fresh read-back, completed speech, cooldown, and explicit page evidence", async () => {
     const fixture = await openFixturePage(PAGE_PATH, {
       fakeRequestActionId: "f0e1",

@@ -42,7 +42,7 @@ Both workstreams hit these same checkpoints. Each one also appears in the succes
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Spikes and Push-to-Talk Loop** - Risk spikes in hours 0–3, then a voice window that listens on a held key, talks back, and answers "what's here" at I1
+- [x] **Phase 1: Spikes and Push-to-Talk Loop** - Risk spikes in hours 0–3, then a voice window that listens on a held key, talks back, and answers "what's here" at I1 (completed 2026-10-17)
 - [ ] **Phase 2: Fill and Gated Submit on the Broken Form** - Read the form, dictate values, full read-back, distinct confirm phrase and BLOCKED banner, end to end at I2
 - [ ] **Phase 3: Full Command Set with Real Claude** - Profile fill, spell / change / undo, where am I, guessed-label and injection warnings, sensitive-field handoff, verified at I3
 - [ ] **Phase 4: NVDA Mode and Demo-Safe** - Screen-reader mode through NVDA, speech rate, the real public form end to end, fallback kit and backup video
@@ -50,6 +50,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Spikes and Push-to-Talk Loop
+
 **Goal**: The user can hold a key while the form tab is focused, speak or type a command, and hear Blip answer in its own voice, with the transcript on screen. This works first against the voice track's own mock server, then against the real server at I1.
 **Mode:** mvp
 **Depends on**: Nothing (first phase; runs in parallel with core's protocol work)
@@ -65,7 +66,7 @@ Decimal phases appear between their surrounding integers in numeric order.
      - Global push-to-talk: uiohook-napi hold-to-talk or `chrome.commands` toggle?
      - The voice-window layout chosen from those results.
   3. With the Chrome form tab focused, the user holds the push-to-talk key, speaks and releases. The voice window's live transcript shows what they said and what Blip replied. Typing the same command into the text box gives the same reply.
-  4. Blip replies in its own voice and plays earcons (listening on key-down, thinking while waiting, blocked). It says "one moment" once when a reply takes over ~1.5 s. The mic is never open while Blip is speaking. Saying "stop" (or pressing push-to-talk) cuts Blip off right away.
+  4. Blip replies in its own voice and plays earcons (listening on key-down, thinking while waiting, blocked). It says "one moment" once when a reply takes over ~1.5 s. The user can interrupt Blip by speaking or by holding push-to-talk; the server never accepts a confirm phrase while Blip speaks or within 1 s after (core GATE-08). Saying "stop" (or pressing push-to-talk) cuts Blip off right away.
   5. **I1 (~h6–8):** With the real server in place of the mock, the user says "what's here" on a page served through the fake or real extension. They hear a short counts-first summary from the reducer, such as "Survey form. 6 fields, 3 required."
 
 **Notes**:
@@ -74,11 +75,27 @@ Decimal phases appear between their surrounding integers in numeric order.
   - uiohook-napi fails: use the `chrome.commands` toggle (press to start, press to stop).
   - NVDA DLL fails: route speech to an in-page live region through the extension's `announce` (decided in Phase 4).
 - Typed input is the safety net everywhere.
-**Plans**: TBD
+
+**Plans**: 11 plans
+
+Plans:
+- [x] 01-01-PLAN.md — M0 sign-off: review frozen protocol, ptt.hold request, GATE-08 reliance, Effect/Event types, doc fixes
+- [x] 01-02-PLAN.md — Package gate (uiohook-napi, koffi), voice workspaces, additive root config, PTT state machine
+- [x] 01-03-PLAN.md — Spike tooling (spike page, log server, PTT/pin/NVDA scripts)
+- [x] 01-04-PLAN.md — Run spikes A-F and record 01-SPIKE-DECISIONS.md
+- [x] 01-05-PLAN.md — Broken-form model fixture, dialogue reducer, mock server on the frozen protocol
+- [x] 01-06-PLAN.md — Voice status machine, speech queue with per-speak completion, window markup and styles
+- [x] 01-07-PLAN.md — Protocol client, speak.done bridge, earcons, main wiring, Vite build
+- [x] 01-08-PLAN.md — Listening/barge-in state (forced ptt-only until GATE_08_PRESENT), echo filter, STT wrapper, global PTT hook wrapper (wave 6, after 07)
+- [x] 01-09-PLAN.md — Talk controller, hold delivery (ptt.hold or sidecar), window wiring
+- [x] 01-10-PLAN.md — Window launcher, in-process dev and real runners, manual PTT run
+- [x] 01-11-PLAN.md — I1 hand-offs and real-server cutover run
+
 **UI hint**: yes
 
 ### Phase 2: Fill and Gated Submit on the Broken Form
-**Goal**: On the self-hosted broken survey form, the user can hear the fields, fill them by dictation, hear a full read-back, and submit only by saying the distinct phrase. A bare "yes" never submits. This runs end to end at I2.
+
+**Goal**: As a person completing the self-hosted survey, I want to hear its fields, fill them by dictation, review my answers, and have submission accepted only after I say submit survey, so that a generic confirmation like yes can never submit the form.
 **Mode:** mvp
 **Depends on**: Phase 1
 **Needs from core**: The real extension with ACT-01/02/04 (fills plus the observed value for echo), PAGE-03 action kinds, and GATE-01..05 (grants, phrase table, values-hash binding).
@@ -94,10 +111,22 @@ Decimal phases appear between their surrounding integers in numeric order.
      - While Blip waits, the voice window shows a prominent "BLOCKED — say 'submit survey'" banner and the blocked earcon plays.
      - A bare "yes" is refused and the banner stays.
      - Only "submit survey" submits.
-**Plans**: TBD
+
+**Plans**: 7/7 plans executed
+
+Plans:
+- [x] 02-01-PLAN.md — Broken survey form page, voice-owned snapshot and generated survey FormModel (DEMO-01)
+- [x] 02-02-PLAN.md — Pure helpers: spoken-text normalizers, field/option resolver, phrase matcher, templates
+- [x] 02-03-PLAN.md — BLOCKED banner model, renderer and window wiring (VIS-02)
+- [x] 02-04-PLAN.md — Reducer contracts plus read-the-form, option pick and dictation fill with page-sourced echo
+- [x] 02-05-PLAN.md — Read-back, submit, arm-after-read-back, armed-mode refusal, seeded invariant test
+- [x] 02-06-PLAN.md — Dialogue runner, fail-closed stub gate, run-real wiring, end-to-end test, HO-8 hand-offs
+- [x] 02-07-PLAN.md — One-command reset, demo profile, human I2 run
+
 **UI hint**: yes
 
 ### Phase 3: Full Command Set with Real Claude
+
 **Goal**: With real Claude in the loop, the user can fill from their profile, inspect and correct what Blip did, and always hear Blip be honest about guessed labels, sensitive fields and instructions planted in the page.
 **Mode:** mvp
 **Depends on**: Phase 2
@@ -116,9 +145,11 @@ Decimal phases appear between their surrounding integers in numeric order.
      - Opening the seeded injection page makes Blip speak the injection warning before anything else.
      - The confirm gate never arms from page text.
      - The team-owned public form (created by ~h12 so core can test it) can be described and filled by voice.
+
 **Plans**: TBD
 
 ### Phase 4: NVDA Mode and Demo-Safe
+
 **Goal**: Blip can be demoed live alongside NVDA and on a real public form, and the demo survives a failure of the voice input, the network or the live site.
 **Mode:** mvp
 **Depends on**: Phase 3
@@ -139,6 +170,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - Double-speech risk: NVDA's own focus announcements can overlap `speakText`. Tune this with the form tab focused.
 - If the NVDA path isn't solid by ~h30, demo in agent-voice mode and show NVDA only in the opening hook.
 - The demo script follows the four beats in research/FEATURES.md: hook, repair, fill, then the gate (bare "yes" blocked, injection ignored, phrase submits).
+
 **Plans**: TBD
 
 ## Progress
@@ -148,7 +180,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Spikes and Push-to-Talk Loop | 0/TBD | Not started | - |
-| 2. Fill and Gated Submit on the Broken Form | 0/TBD | Not started | - |
+| 1. Spikes and Push-to-Talk Loop | 11/11 | Complete    | 2026-10-17 |
+| 2. Fill and Gated Submit on the Broken Form | 6/7 | In Progress | - |
 | 3. Full Command Set with Real Claude | 0/TBD | Not started | - |
 | 4. NVDA Mode and Demo-Safe | 0/TBD | Not started | - |

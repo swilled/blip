@@ -1,14 +1,20 @@
 ---
-workstream: voice
-created: 2026-10-16
-gsd_state_version: '1.0'
-status: planning
+gsd_state_version: "1.0"
+milestone: v1.0
+current_phase: 02
+current_phase_name: Fill and Gated Submit on the Broken Form
+status: executing
+stopped_at: Completed 02-06-PLAN.md
+last_updated: "2026-10-17T05:46:51.983Z"
+last_activity: 2026-10-17
+last_activity_desc: Plan 02-06 complete; Plan 02-07 ready
+state_head: 0c4ad6a133867e56a57fb10d1b2ef5b918f36897
 progress:
   total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 18
+  completed_plans: 17
+milestone_name: milestone
 ---
 
 # Project State
@@ -19,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-10-16)
 Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 
 **Core value:** A blind user can complete a real web form by voice and trust it: Blip never submits anything without a full read-back and a distinct spoken confirmation phrase, and that gate lives in deterministic code the model cannot bypass.
-**Current focus:** Phase 1 — Spikes and Push-to-Talk Loop
+**Current focus:** Phase 02 — Fill and Gated Submit on the Broken Form
 
 ## Current Position
 
-Phase: 1 of 4 (Spikes and Push-to-Talk Loop)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-10-16 — Voice roadmap created (4 phases, 28/28 requirements mapped)
+Phase: 02 (Fill and Gated Submit on the Broken Form) — EXECUTING
+Plan: 7 of 7
+Status: Ready to execute
+Last activity: 2026-10-17 — Plan 02-06 complete; Plan 02-07 ready
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -43,7 +49,8 @@ Progress: [░░░░░░░░░░] 0%
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
+
+- Total plans completed: 11
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -51,9 +58,19 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 1 | 11 | - | - |
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 02 P01 | 8min | 2 tasks | 5 files |
+| Phase 02 P02 | 10 min | 3 tasks | 8 files |
+| Phase 02 P03 | 8min | 2 tasks | 5 files |
+| Phase 02 P04 | 18min | 3 tasks | 13 files |
+| Phase 02 P05 | 12min | 3 tasks | 6 files |
+| Phase 02 P06 | 14min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -66,6 +83,12 @@ Recent decisions affecting the voice track:
 - [Roadmap]: Grammar first. Unmatched utterances become a `parseIntent` effect (core BRAIN-02)
 - [Roadmap]: Half-duplex audio. The confirm phrase is matched in server code; the voice UI never decides
 - [Pending, Phase 1 spikes by ~h3]: voice-window layout; PTT route (uiohook-napi hold vs `chrome.commands` toggle); NVDA route (controller DLL via koffi vs in-page live region)
+- [Phase 02]: The phone field keeps autocomplete=tel, with form-level autocomplete=off and reset hooks covering restoration safety.
+- [Phase 02]: Field matching uses normalized token lists and returns ambiguity instead of guessing. — This keeps page text out of regular expressions and makes uncertain dictation fail closed.
+- [Phase 02]: Confirmation accepts only the exact requested token sequence with a one-second gate window. — Affirmatives and near-phrases cannot arm or satisfy the submit gate.
+- [Phase 02]: Spoken echo and read-back use observed page values and hide sensitive fields. — The user hears what the page holds while password and card values remain undisclosed.
+- [Phase 02]: Keep kind: armConfirm as the Effect discriminant and name its ActionKind payload actionKind. — An Effect object cannot carry two different kind properties; this keeps the type contract unambiguous and aligned with Plans 02-05 and 02-06.
+- [Phase 02]: Keep the development GatePort fail-closed until core supplies a grant-bound Executor. — The voice runner can verify the confirmation path without allowing an unconnected gate to submit.
 
 ### Pending Todos
 
@@ -87,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-10-16
-Stopped at: Roadmap created. Next: `/gsd-plan-phase 1` with `GSD_WORKSTREAM=voice`
+Last session: 2026-10-17T05:46:51.815Z
+Stopped at: Completed 02-06-PLAN.md
 Resume file: None

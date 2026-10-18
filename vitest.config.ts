@@ -8,6 +8,7 @@ export default defineConfig({
       "packages/*",
       "apps/*",
       "tools/*",
+      "dev/*",
     ],
     passWithNoTests: true,
     testTimeout: 15000,
