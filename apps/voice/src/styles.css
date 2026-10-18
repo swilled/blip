@@ -257,6 +257,34 @@ header {
   cursor: pointer;
 }
 
+#speech-rate-value {
+  min-width: 3.5em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+#hold-to-talk {
+  width: 100%;
+  min-height: 56px;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-accent);
+  color: var(--color-bg);
+  border: 0;
+  border-radius: var(--space-sm);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: none;
+}
+
+#hold-to-talk[aria-pressed="true"] {
+  background: var(--color-danger);
+}
+
+#hold-to-talk-help {
+  margin-top: calc(-1 * var(--space-md));
+}
+
 #caption {
   background: var(--color-surface);
   padding: var(--space-md);

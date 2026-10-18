@@ -11,9 +11,9 @@ export interface SpeechRateAdjustment {
 }
 
 const DEFAULT_RATE = 1.0;
-const MIN_RATE = 0.8;
-const MAX_RATE = 1.5;
-const RATE_STEP = 0.1;
+const MIN_RATE = 0.5;
+const MAX_RATE = 2.0;
+const RATE_STEP = 0.2;
 
 export function createSpeechRate(): number {
   return DEFAULT_RATE;

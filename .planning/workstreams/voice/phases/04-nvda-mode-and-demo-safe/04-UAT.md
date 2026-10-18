@@ -14,7 +14,7 @@ updated: 2026-10-18T03:42:15Z
 number: 1
 name: Demo startup and audible rate controls
 expected: |
-  Start with `npm.cmd run demo`. Confirm the voice window opens and keyboard/assistive-technology controls work. Use faster/slower by voice and buttons; the next speech should audibly use the bounded rate, without restarting current speech.
+  Start with `npm.cmd run demo`. Confirm the voice window opens and both the on-screen hold button and Right Ctrl + Space can start speech recognition. Use faster/slower by voice and buttons; compare the next utterance at 0.5× and 2.0× without restarting current speech.
 awaiting: user response
 
 ## Tests
@@ -51,10 +51,12 @@ blocked: 0
 ## Observations
 
 - Test 1 is still pending. The first visible page was the legacy `Talk to Blip` interface from `apps/voice/public`; the updated launcher now builds and serves the Phase 4 client from `apps/voice/dist`. After restarting, the user confirmed both Phase 4 control groups were visible. Clicking Faster and then Slower produced audible confirmations, with Slower clearly slower. The “Press Space to start Blip” screen disappeared after activation. The initial voice-command attempt was inconclusive because the legacy page was active; retest the voice shortcut and record whether the launcher opens a visible window automatically.
+- The live demo server currently listening on port 7777 was launched at 12:13 a.m., before the PTT launcher fix committed at 12:20 a.m. The reported post-restart shortcut failure therefore did not exercise that fix. The demo now waits for the PTT sidecar, reports whether the global hook started, and includes an on-screen hold-to-talk control that starts speech recognition from a direct user gesture. If the browser does not expose SpeechRecognition, Blip now reports that visibly instead of throwing from the hold action.
+- Speech-rate controls now change in 0.2 steps from 0.5× through 2.0× and show the current value. The earlier spoken confirmation check only confirmed the control labels; the new range still needs a live comparison using the same phrase at both ends.
 
 ## Gaps
 
-- On the updated page, the user could not speak through the shortcut and reported no perceptible slowdown at the minimum rate. The demo was not starting the existing `startPttWire` hook/sidecar; it is now wired into the demo lifecycle. The minimum-rate report remains a live UAT issue until a spoken phrase is compared after restart.
+- On the updated page, the user could not speak through the shortcut and reported no perceptible slowdown at the minimum rate. The live process predates the PTT wiring fix, so voice input remains a live UAT issue until the updated demo is restarted and tested. The wider rate range also remains a live UAT issue until a spoken phrase is compared at both ends.
 
-- Restart with PTT wired in, verify the voice shortcut reaches speech recognition, compare a phrase at the minimum rate, and record whether the launcher itself opens a visible voice window.
+- Restart the updated demo, verify the hold button and voice shortcut reach speech recognition, compare the same phrase at 0.5× and 2.0×, and record whether the launcher itself opens a visible voice window.
 

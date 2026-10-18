@@ -9,6 +9,7 @@ export const MSG_DIDNT_CATCH = "I didn't catch that. Hold the keys and try again
 export const MSG_MIC =
   "I can't hear the microphone. Allow microphone access for this window, or type your command below.";
 export const MSG_CLICK_WINDOW = "Click this window once, then hold the keys again.";
+export const MSG_STT_UNAVAILABLE = "Speech recognition isn't available in this browser. Type your command instead.";
 
 export interface SttAlternative {
   transcript: string;
@@ -126,12 +127,18 @@ export function createStt(opts: SttOptions): Stt {
         opts.onError({ kind: "unfocused", message: MSG_CLICK_WINDOW });
         return;
       }
-      const r = opts.makeRecognition();
+      settled = false;
+      let r: RecognitionLike;
+      try {
+        r = opts.makeRecognition();
+      } catch {
+        report({ kind: "other", message: MSG_STT_UNAVAILABLE });
+        return;
+      }
       r.lang = "en-US";
       r.continuous = false;
       r.interimResults = true;
       r.maxAlternatives = MAX_ALTERNATIVES;
-      settled = false;
       let latestResult: SttResultEvent | null = null;
       r.onresult = (e) => {
         if (rec !== r) return;

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { createServer } from "node:http";
 import { WebSocket } from "ws";
 import { SIDECAR_ALLOWED_ORIGIN, startPttSidecar, type PttSidecar } from "./ptt-sidecar";
 
@@ -60,5 +61,17 @@ describe("ptt sidecar", () => {
     const src = readFileSync(new URL("./ptt-sidecar.ts", import.meta.url), "utf8");
     expect(src).toContain('"127.0.0.1"');
     expect(src).not.toContain("console.log");
+  });
+
+  it("reports a busy port as unavailable and closes cleanly", async () => {
+    const occupied = createServer();
+    await new Promise<void>((resolve) => occupied.listen(0, "127.0.0.1", resolve));
+    const address = occupied.address();
+    if (!address || typeof address === "string") throw new Error("expected an ephemeral TCP address");
+    sc = startPttSidecar({ port: address.port });
+    await expect(sc.listening).resolves.toBe(-1);
+    await sc.close();
+    sc = null;
+    await new Promise<void>((resolve) => occupied.close(() => resolve()));
   });
 });

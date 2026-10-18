@@ -222,6 +222,7 @@ const outputMode = createOutputModeController({
 function rateAcknowledgement(direction: SpeechRateDirection): string {
   const result = adjustSpeechRate(speechRate, direction);
   speechRate = result.rate;
+  el<HTMLOutputElement>("speech-rate-value").value = `${speechRate.toFixed(1)}×`;
   if (result.limit === "fastest") return "Already at the fastest rate.";
   if (result.limit === "slowest") return "Already at the slowest rate.";
   return `Speech rate is now ${speechRate.toFixed(1)}.`;
@@ -304,9 +305,44 @@ talk = createTalkController({
 // Global hold (PTT_DELIVERY B): loopback sidecar next to the hub connection.
 createHoldClient({
   makeWebSocket: (url) => new WebSocket(url) as never,
-  onHold: (h) => talk.onHold(h),
+  onHold: (h) => {
+    if (!manualHoldActive) talk.onHold(h);
+  },
   setTimer: (fn, ms) => setTimeout(fn, ms),
 });
+
+let manualHoldActive = false;
+const holdButton = el<HTMLButtonElement>("hold-to-talk");
+function setManualHold(active: boolean): void {
+  if (manualHoldActive === active) return;
+  manualHoldActive = active;
+  holdButton.setAttribute("aria-pressed", String(active));
+  holdButton.textContent = active ? "Listening — release to send" : "Hold to talk";
+  talk.onHold(active ? "start" : "end");
+}
+
+holdButton.addEventListener("pointerdown", (ev) => {
+  if (!ev.isPrimary || ev.button !== 0) return;
+  ev.preventDefault();
+  holdButton.setPointerCapture(ev.pointerId);
+  setManualHold(true);
+});
+holdButton.addEventListener("pointerup", () => setManualHold(false));
+holdButton.addEventListener("pointercancel", () => setManualHold(false));
+holdButton.addEventListener("lostpointercapture", () => setManualHold(false));
+holdButton.addEventListener("keydown", (ev) => {
+  if ((ev.key === " " || ev.key === "Enter") && !ev.repeat) {
+    ev.preventDefault();
+    setManualHold(true);
+  }
+});
+holdButton.addEventListener("keyup", (ev) => {
+  if (ev.key === " " || ev.key === "Enter") {
+    ev.preventDefault();
+    setManualHold(false);
+  }
+});
+window.addEventListener("blur", () => setManualHold(false));
 
 // Typed input.
 const input = el<HTMLInputElement>("typed-input");

@@ -35,7 +35,7 @@ export function startPttSidecar(opts: PttSidecarOptions = {}): PttSidecar {
   });
   wss.on("error", () => {});
   const listening = new Promise<number>((resolve) => {
-    http.on("error", () => resolve(-1)); // port busy: holds just do not reach the window
+    http.once("error", () => resolve(-1)); // port busy: holds just do not reach the window
     http.listen(port, "127.0.0.1", () => {
       const a = http.address();
       resolve(typeof a === "object" && a ? a.port : port);
@@ -50,6 +50,10 @@ export function startPttSidecar(opts: PttSidecarOptions = {}): PttSidecar {
     close() {
       return new Promise((resolve) => {
         for (const c of wss.clients) c.terminate();
+        if (!http.listening) {
+          resolve();
+          return;
+        }
         wss.close(() => http.close(() => resolve()));
       });
     },

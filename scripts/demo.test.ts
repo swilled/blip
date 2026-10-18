@@ -71,6 +71,8 @@ describe("Phase 4 voice client in the demo", () => {
       expect(html).toContain("Speech output");
       expect(html).toContain("Screen reader (NVDA)");
       expect(html).toContain("Blip voice speed");
+      expect(html).toContain("id=\"hold-to-talk\"");
+      expect(html).toContain("id=\"speech-rate-value\"");
       expect(html).not.toContain("Talk to Blip");
     } finally {
       await server.close();

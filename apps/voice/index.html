@@ -58,6 +58,7 @@
       <fieldset id="speech-rate" aria-describedby="speech-rate-help">
         <legend>Blip voice speed</legend>
         <button type="button" data-speech-rate="slower" aria-label="Speak slower">Slower</button>
+        <output id="speech-rate-value" aria-label="Current Blip voice speed">1.0×</output>
         <button type="button" data-speech-rate="faster" aria-label="Speak faster">Faster</button>
         <p id="speech-rate-help" class="label muted">Changes apply to the next Blip voice utterance. NVDA speech speed is unchanged.</p>
       </fieldset>
@@ -69,10 +70,13 @@
       <main>
         <div id="log-empty" class="log-empty">
           <h2>Nothing yet</h2>
-          <p>Hold Right Ctrl + Space and say what you want, or type it below. Try: what's here.</p>
+          <p>Hold the button or Right Ctrl + Space while you speak, or type below. Try: what's here.</p>
         </div>
         <ol id="log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation" tabindex="0"></ol>
       </main>
+
+      <button id="hold-to-talk" type="button" aria-pressed="false">Hold to talk</button>
+      <p id="hold-to-talk-help" class="label muted">Hold while speaking, then release to send. You can also use Right Ctrl + Space.</p>
 
       <form id="typed" autocomplete="off">
         <label for="typed-input">Type a command</label>

@@ -4,6 +4,7 @@ import {
   MSG_DIDNT_CATCH,
   MSG_MIC,
   MSG_CLICK_WINDOW,
+  MSG_STT_UNAVAILABLE,
   type RecognitionLike,
   type SttFinal,
   type SttError,
@@ -159,5 +160,18 @@ describe("stt", () => {
     stt.press();
     expect(f.calls.start).toBe(0);
     expect(errors).toEqual([{ kind: "unfocused", message: MSG_CLICK_WINDOW }]);
+  });
+
+  it("reports an unavailable browser speech API instead of throwing", () => {
+    const errors: SttError[] = [];
+    const stt = createStt({
+      makeRecognition: () => { throw new Error("missing browser API"); },
+      onInterim: () => {},
+      onFinal: () => {},
+      onError: (error) => errors.push(error),
+      canListen: () => true,
+    });
+    expect(() => stt.press()).not.toThrow();
+    expect(errors).toEqual([{ kind: "other", message: MSG_STT_UNAVAILABLE }]);
   });
 });
