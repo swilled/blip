@@ -82,9 +82,9 @@ describe("parseBrowserCommand", () => {
   });
 
   it("clarifies when a link selector is missing, ambiguous, or unavailable", () => {
-    expect(parseBrowserCommand("open link missing", capture).type).toBe("clarify");
-    expect(parseBrowserCommand("open link account settings", capture).type).toBe("clarify");
-    expect(parseBrowserCommand("open link help center").type).toBe("clarify");
+    expect(parseBrowserCommand("open link missing", capture)?.type).toBe("clarify");
+    expect(parseBrowserCommand("open link account settings", capture)?.type).toBe("clarify");
+    expect(parseBrowserCommand("open link help center")?.type).toBe("clarify");
   });
 
   it.each([
@@ -99,10 +99,10 @@ describe("parseBrowserCommand", () => {
     "scroll down 5000 pixels",
     "switch to tab 88",
   ])("clarifies unsafe or ambiguous request %s", (text) => {
-    expect(parseBrowserCommand(text, capture).type).toBe("clarify");
+    expect(parseBrowserCommand(text, capture)?.type).toBe("clarify");
   });
 
-  it.each(["yes", "yeah", "okay"]) ("does not parse bare %s as authorization", (text) => {
-    expect(parseBrowserCommand(text, capture)).toEqual({ type: "clarify", question: "I didn't understand that browser request." });
+  it.each(["yes", "yeah", "okay"])("does not parse bare %s as authorization", (text) => {
+    expect(parseBrowserCommand(text, capture)).toBeNull();
   });
 });

@@ -24,6 +24,7 @@ const validOperations: BrowserOperationType[] = [
   { op: "search", route: "browser-default", query: "recent articles", authorizationId: "auth-2" },
   { op: "tabs", action: "list" },
   { op: "tabs", action: "switch", targetTabId: 8 },
+  { op: "tabs", action: "open-blank" },
   { op: "list-links" },
   { op: "read-content", kind: "heading", target: "Latest stories", identity },
   { op: "open-link", linkId: "link-1", identity, authorizationId: "auth-3" },
@@ -89,6 +90,7 @@ describe("BrowserOperation", () => {
     }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "scroll", direction: "down", pixels: 0 }).success).toBe(false);
     expect(BrowserOperation.safeParse({ op: "tabs", action: "switch" }).success).toBe(false);
+    expect(BrowserOperation.safeParse({ op: "tabs", action: "open-blank", targetTabId: 8 }).success).toBe(false);
   });
 });
 

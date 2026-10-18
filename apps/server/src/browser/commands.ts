@@ -2,12 +2,14 @@ import type {
   BrowserContentBlock,
   BrowserLinkRecord,
   BrowserPageIdentity,
-  BrowserTabsResult,
+  BrowserResultPayload,
 } from "@blip/protocol";
+
+type BrowserTabsResult = Extract<BrowserResultPayload, { ok: true; operation: "tabs" }> ["result"];
 
 /** The latest visible, extension-captured page data available to deterministic commands. */
 export type BrowserCapture = {
-  identity: BrowserPageIdentity;
+  identity?: BrowserPageIdentity;
   blocks: BrowserContentBlock[];
   links: BrowserLinkRecord[];
   tabs?: BrowserTabsResult;
@@ -106,7 +108,7 @@ function parseDestination(raw: string): Destination {
 }
 
 function resolveLink(selector: string, capture: BrowserCapture | null): BrowserCommand {
-  if (capture === null) return clarify("I need a fresh list of visible links before I can open one.");
+  if (capture === null || capture.identity === undefined) return clarify("I need a fresh list of visible links before I can open one.");
   const wanted = normalizeSelector(selector);
   if (wanted === "") return clarify("Say the visible link label you want to open.");
   const exact = capture.links.filter((link) => normalizeSelector(link.label) === wanted);
@@ -146,7 +148,7 @@ function selectedTab(selector: string, capture: BrowserCapture | null): BrowserC
  * for command intent, destinations, queries, or tab selection; it is used only to resolve an
  * explicitly named visible link/tab against fresh extension-provided identifiers.
  */
-export function parseBrowserCommand(utterance: string, currentCapture: BrowserCapture | null = null): BrowserCommand {
+export function parseBrowserCommand(utterance: string, currentCapture: BrowserCapture | null = null): BrowserCommand | null {
   if (utterance.length > MAX_COMMAND_LENGTH || INVALID_TEXT.test(utterance)) {
     return clarify("That browser request is too long or contains unsupported control characters.");
   }
@@ -160,10 +162,10 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
   if (["list links", "what links are here", "read the links"].includes(lower)) return { type: "list-links" };
   if (["list tabs", "what tabs are open", "show browser tabs"].includes(lower)) return { type: "list-tabs" };
   if (["read this page", "read the page", "read page", "read the headings"].includes(lower)) {
-    return { type: "read-page", ...(currentCapture !== null ? { identity: currentCapture.identity } : {}) };
+    return { type: "read-page", ...(currentCapture?.identity !== undefined ? { identity: currentCapture.identity } : {}) };
   }
   if (["summarize this page", "summarize the page", "give me a summary of this page"].includes(lower)) {
-    return { type: "summary", ...(currentCapture !== null ? { identity: currentCapture.identity } : {}) };
+    return { type: "summary", ...(currentCapture?.identity !== undefined ? { identity: currentCapture.identity } : {}) };
   }
   if (lower === "go back" || lower === "back") return { type: "history", direction: "back" };
   if (lower === "go forward" || lower === "forward") return { type: "history", direction: "forward" };
@@ -219,16 +221,16 @@ export function parseBrowserCommand(utterance: string, currentCapture: BrowserCa
     const query = exactTail(input, input.length - question[1]!.length);
     return query === null
       ? clarify("Say what you want to ask about the page.")
-      : { type: "question", query, ...(currentCapture !== null ? { identity: currentCapture.identity } : {}) };
+      : { type: "question", query, ...(currentCapture?.identity !== undefined ? { identity: currentCapture.identity } : {}) };
   }
   const readTarget = /^read\s+(?:the\s+)?(heading|paragraph)\s+(?:about|named|containing)\s+([\s\S]+)$/iu.exec(input);
   if (readTarget !== null) {
     const target = exactTail(input, input.length - readTarget[2]!.length);
     if (target === null) return clarify("Say the heading or paragraph you want me to read.");
-    return currentCapture === null
+    return currentCapture?.identity === undefined
       ? clarify("I need a fresh page capture before I can read that content.")
       : { type: "read-page", identity: currentCapture.identity, kind: readTarget[1]!.toLocaleLowerCase() as "heading" | "paragraph", target };
   }
 
-  return clarify("I didn't understand that browser request.");
+  return null;
 }

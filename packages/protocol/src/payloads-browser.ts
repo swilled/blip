@@ -133,7 +133,7 @@ export const BrowserOperation = z.discriminatedUnion("op", [
   }),
   z.object({
     op: z.literal("tabs"),
-    action: z.enum(["list", "switch"]),
+    action: z.enum(["list", "switch", "open-blank"]),
     targetTabId: TabId.optional(),
   }).refine((value) => (value.action === "switch") === (value.targetTabId !== undefined), {
     message: "targetTabId is required only when switching tabs",

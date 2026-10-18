@@ -13,7 +13,7 @@ import { createFakeBrain, type IntentBrain } from "./brain/fake-brain";
 import { createAgyProvider, type AgyProvider } from "./brain/agy/provider";
 import { RepairCoordinator, type RepairDiagnostic, type RepairProvider } from "./brain/agy/repair-coordinator";
 import type { AgyCliAdapter, AgySessionOptions } from "./brain/agy/session";
-import { handleDialogueFallback, handleUtterance, sayRepeat, sayStop } from "./turn";
+import { handleBrowserSpeakDone, handleDialogueFallback, handleUtterance, sayRepeat, sayStop } from "./turn";
 import { handleGatedSpeakDone, invalidateGatedAction, type GatedContext } from "./act/gated";
 import { createGatePort } from "./act/gate-port";
 import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
@@ -227,6 +227,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     },
     "speak.done": ({ message, hub: h, session: s }) => {
       if (message.type !== "speak.done") return;
+      if (handleBrowserSpeakDone({ hub: h, session: s, clock, ...(schedule !== undefined ? { schedule } : {}) }, message.payload)) return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       handleGatedSpeakDone(gatedContext, message.payload);
     },
@@ -241,6 +242,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
         ...(schedule !== undefined ? { schedule } : {}),
       };
       clearPendingThroughVoiceGate(gatedContext, "cancelled", "output-mode-changed");
+      s.clearBrowserAuthorization();
+      s.browserCapture = null;
       // An empty interrupt frame cancels current browser speech without adding a new spoken line.
       h.send("voice", "speak", { speakId: newId(), text: "", category: "answer", interrupt: true });
       h.setOutputMode(message.payload.outputMode);
@@ -249,16 +252,19 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       if (message.type !== "ptt" || message.payload.state !== "start") return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       clearPendingThroughVoiceGate(gatedContext, "cancelled", "push-to-talk-interrupted");
+      s.clearBrowserAuthorization();
     },
     control: ({ message, hub: h, session: s }) => {
       if (message.type !== "control") return;
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       if (message.payload.cmd === "stop") {
         clearPendingThroughVoiceGate(gatedContext, "cancelled", "stop-command");
+        s.clearBrowserAuthorization();
         return sayStop(h, s);
       }
       if (message.payload.cmd === "repeat") {
         clearPendingThroughVoiceGate(gatedContext, "cancelled", "repeat-command");
+        s.clearBrowserAuthorization();
         return sayRepeat(h, s);
       }
       // reconnect-browser has nothing to reconnect yet.
@@ -273,6 +279,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       const gatedContext: GatedContext = { hub: h, gatePort: createGatePort(h, s.grants), session: s, refresher, clock, ...(schedule !== undefined ? { schedule } : {}) };
       clearPendingThroughVoiceGate(gatedContext, "page-changed", "page-changed");
       s.stale = true;
+      s.clearBrowserAuthorization();
+      s.browserCapture = null;
       void refresher.request("refresh").then((result) => {
         if (result.ok) repairCoordinator?.schedulePending();
       });

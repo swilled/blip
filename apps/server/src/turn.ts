@@ -1,7 +1,8 @@
 // One utterance, start to finish: transcript, routing, snapshot fetch, reply, state pushes (D-23, D-24).
 // The fake and (later) real brain can only produce an Intent. Ungated Intents enter the established
 // field action path; gated Intents enter the deterministic Executor and never authorize themselves.
-import { newId, type Intent, type Message, type PayloadOf } from "@blip/protocol";
+import { newId, type Intent, type Message, type PayloadOf, type SpeakDonePayload } from "@blip/protocol";
+import type { BrowserOperation, BrowserPageIdentity, BrowserContentBlock, BrowserResultPayload } from "@blip/protocol";
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
 import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
@@ -17,6 +18,9 @@ import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
 import type { Refresher } from "./session/refresh";
 import type { Session } from "./session/session";
+import { parseBrowserCommand, type BrowserCapture, type BrowserCommand } from "./browser/commands";
+import { createBrowserExecutor, type BrowserExecutorResult } from "./browser/executor";
+import { BROWSER_AUTHORIZATION_GUARD_MS, BROWSER_AUTHORIZATION_TTL_MS, type BrowserAuthorizationTarget } from "./browser/authorization";
 
 export type TurnContext = {
   message: Message;
@@ -82,6 +86,438 @@ function speak(hub: Hub, session: Session, text: string, category: SpeakCategory
   if (!hub.send("voice", "speak", { speakId, text, category, interrupt: opts.interrupt === true })) return;
   session.trackSpeech(speakId, category);
   if (category !== "filler" && opts.record !== false) session.lastSpoken = text;
+}
+
+function speakTracked(hub: Hub, session: Session, text: string, category: SpeakCategory, opts: SpeakOptions = {}): string | null {
+  const speakId = newId();
+  if (!hub.send("voice", "speak", { speakId, text, category, interrupt: opts.interrupt === true })) return null;
+  session.trackSpeech(speakId, category);
+  if (category !== "filler" && opts.record !== false) session.lastSpoken = text;
+  return speakId;
+}
+
+const MSG_BROWSER_NO_EXTENSION = "I can't reach the browser extension, so nothing was done.";
+const MSG_BROWSER_READ_FAILED = "I couldn't safely read the current browser page.";
+const MSG_BROWSER_AUTH_REFUSED = "That browser confirmation was not accepted. Nothing was done.";
+const MSG_BROWSER_AUTH_EXPIRED = "That browser confirmation expired. Nothing was done.";
+const MSG_BROWSER_AUTH_PAGE_CHANGED = "The browser page changed. Nothing was done; please ask again.";
+const MSG_SITE_SEARCH_FIELD = "I couldn't uniquely identify a visible search field and submit action on this page, so nothing was submitted.";
+const MSG_SITE_SEARCH_VALUE = "I couldn't verify the search query in the field, so nothing was submitted.";
+
+function browserFailureText(result: BrowserExecutorResult): string {
+  if (!result.ok) {
+    switch (result.reason) {
+      case "no-extension": return MSG_BROWSER_NO_EXTENSION;
+      case "no-current-tab": return "There is no current browser tab to use.";
+      case "invalid-request": return "That browser request could not be validated.";
+      case "invalid-result": return MSG_BROWSER_READ_FAILED;
+      case "request-failed": return "The browser did not complete that request.";
+    }
+  }
+  if (!result.payload.ok) {
+    switch (result.payload.error.code) {
+      case "restricted-page": return "The browser page is restricted, so I can't read or control it.";
+      case "unsupported-page": return "This page does not support that browser operation.";
+      case "stale-page":
+      case "stale-capture": return MSG_BROWSER_AUTH_PAGE_CHANGED;
+      case "not-found": return "I couldn't find that target on the current page.";
+      case "ambiguous": return "More than one target matches. Please say a more specific target.";
+      case "unauthorized": return MSG_BROWSER_AUTH_REFUSED;
+      case "invalid-target": return "That browser target could not be used safely.";
+      case "timeout": return "The browser request timed out.";
+      case "unavailable": return "That browser feature is unavailable.";
+      case "exception": return "The browser could not complete that operation.";
+    }
+  }
+  return MSG_BROWSER_READ_FAILED;
+}
+
+function speakBrowserFailure(ctx: TurnContext, result: BrowserExecutorResult): void {
+  speak(ctx.hub, ctx.session, browserFailureText(result), "error");
+}
+
+function identityMatches(left: BrowserPageIdentity, right: BrowserPageIdentity): boolean {
+  return left.captureId === right.captureId && left.captureRevision === right.captureRevision &&
+    left.tabId === right.tabId && left.pageUrl === right.pageUrl;
+}
+
+function idleDialogue(session: Session): "ready" | "no-page" {
+  return session.model !== null && session.extensionConnected && !session.stale ? "ready" : "no-page";
+}
+
+function commandCapture(session: Session): BrowserCapture | null {
+  const current = session.browserCapture;
+  if (current !== null) return current;
+  return null;
+}
+
+function speakLinks(ctx: TurnContext, result: Extract<BrowserResultPayload, { ok: true; operation: "list-links" }> | undefined): void {
+  if (result === undefined) return speak(ctx.hub, ctx.session, "I couldn't safely read the current links.", "error");
+  if (result.result.status === "restricted") return speak(ctx.hub, ctx.session, "This page does not expose readable links.", "answer");
+  if (result.result.links.length === 0) return speak(ctx.hub, ctx.session, "I couldn't find any visible links on this page.", "answer");
+  const links = result.result.links.slice(0, 12).map((link, index) =>
+    `${index + 1}. ${link.label}${link.hostHint === null ? "" : `, ${link.hostHint}`}.`,
+  );
+  speak(ctx.hub, ctx.session, `I found ${result.result.links.length} visible links. ${links.join(" ")} Say the link label you want to open.`, "answer");
+}
+
+function speakContent(ctx: TurnContext, blocks: BrowserContentBlock[], mode: "read" | "summary" | "question", query?: string): void {
+  if (blocks.length === 0) return speak(ctx.hub, ctx.session, "I couldn't find readable page content.", "answer");
+  if (mode === "question") {
+    const matches = blocks.filter((block) => block.kind === "paragraph" && block.text.toLocaleLowerCase().includes(query!.toLocaleLowerCase()));
+    if (matches.length === 0) return speak(ctx.hub, ctx.session, `I couldn't find page text about ${query}.`, "answer");
+    return speak(ctx.hub, ctx.session, `I found this page text about ${query}: ${matches.slice(0, 2).map((block) => block.text).join(" ")}`, "answer");
+  }
+  if (mode === "summary") {
+    const heading = blocks.find((block) => block.kind === "heading")?.text;
+    const paragraphs = blocks.filter((block) => block.kind === "paragraph").slice(0, 2).map((block) => block.text);
+    const parts = [heading, ...paragraphs].filter((part): part is string => part !== undefined && part !== "");
+    return speak(ctx.hub, ctx.session, parts.length === 0 ? "I couldn't find a readable page summary." : `Page summary. ${parts.join(" ")}`, "answer");
+  }
+  speak(ctx.hub, ctx.session, blocks.map((block) => block.text).join(" "), "answer");
+}
+
+function authorizedPhrase(target: BrowserAuthorizationTarget, command?: BrowserCommand): string {
+  switch (target.op) {
+    case "navigate": return `open ${new URL(target.url).host.toLocaleLowerCase()}`;
+    case "search": return `search for ${target.query} with browser default search`;
+    case "open-link": {
+      const host = command?.type === "open-link" ? command.hostHint : null;
+      return host === null ? `open link ${command?.type === "open-link" ? command.label : target.linkId}` : `open ${host.toLocaleLowerCase()}`;
+    }
+  }
+}
+
+function authorizedPrompt(target: BrowserAuthorizationTarget, command?: BrowserCommand): string {
+  const phrase = authorizedPhrase(target, command);
+  if (target.op === "navigate") return `To open ${new URL(target.url).host.toLocaleLowerCase()}, say: ${phrase}.`;
+  if (target.op === "search") return `To search for ${target.query} with browser default search, say: ${phrase}.`;
+  const label = command?.type === "open-link" ? command.label : target.linkId;
+  const host = command?.type === "open-link" ? command.hostHint : null;
+  return `To open the visible link ${label}${host === null ? "" : ` at ${host}`}, say: ${phrase}.`;
+}
+
+type BrowserLifecycleContext = Pick<TurnContext, "hub" | "session" | "clock" | "schedule">;
+
+function scheduleBrowserAuthorizationExpiry(ctx: BrowserLifecycleContext, authorizationId: string, expiresAt: number): void {
+  const schedule = ctx.schedule ?? ((callback: () => void, delay: number) => setTimeout(callback, delay));
+  const clock = ctx.clock ?? Date.now;
+  let now: number;
+  try { now = clock(); } catch { now = Number.NaN; }
+  const delay = Math.max(1, expiresAt - (Number.isFinite(now) ? now : Date.now()));
+  schedule(() => {
+    const pending = ctx.session.pendingBrowserAuthorization;
+    if (pending === null || pending.authorizationId !== authorizationId) return;
+    let now: number;
+    try { now = clock(); } catch { now = Number.NaN; }
+    if (!Number.isFinite(now) || now >= expiresAt) {
+      ctx.session.clearBrowserAuthorization();
+      ctx.session.dialogue = idleDialogue(ctx.session);
+      speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_EXPIRED, "error");
+      ctx.hub.pushState();
+    } else {
+      scheduleBrowserAuthorizationExpiry(ctx, authorizationId, expiresAt);
+    }
+  }, delay);
+}
+
+function scheduleBrowserAuthorizationArm(ctx: BrowserLifecycleContext, authorizationId: string, readyAt: number): void {
+  const schedule = ctx.schedule ?? ((callback: () => void, delay: number) => setTimeout(callback, delay));
+  const clock = ctx.clock ?? Date.now;
+  const pending = ctx.session.pendingBrowserAuthorization;
+  if (pending === null || pending.authorizationId !== authorizationId) return;
+  let now: number;
+  try { now = clock(); } catch { now = Number.NaN; }
+  if (!Number.isFinite(now) || now >= pending.expiresAt) {
+    ctx.session.clearBrowserAuthorization();
+    ctx.session.dialogue = idleDialogue(ctx.session);
+    speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_EXPIRED, "error");
+    ctx.hub.pushState();
+    return;
+  }
+  if (now < readyAt) {
+    schedule(() => scheduleBrowserAuthorizationArm(ctx, authorizationId, readyAt), Math.max(1, readyAt - now));
+    return;
+  }
+  if (ctx.session.browserAuthorizations.arm(now)) {
+    ctx.session.dialogue = "awaiting-confirm";
+    ctx.hub.pushState();
+  }
+}
+
+/** Accept only the tracked browser read-back completion and arm after the one-second guard. */
+export function handleBrowserSpeakDone(ctx: BrowserLifecycleContext, payload: SpeakDonePayload): boolean {
+  const pending = ctx.session.pendingBrowserAuthorization;
+  if (pending === null || pending.readbackSpeakId !== payload.speakId) return false;
+  if (pending.speechCompletedAt !== null) return true;
+  let now: number;
+  try { now = (ctx.clock ?? Date.now)(); } catch { now = Number.NaN; }
+  if (!Number.isFinite(now)) {
+    ctx.session.clearBrowserAuthorization();
+    ctx.session.dialogue = idleDialogue(ctx.session);
+    speak(ctx.hub, ctx.session, MSG_BROWSER_READ_FAILED, "error");
+    ctx.hub.pushState();
+    return true;
+  }
+  if (!ctx.session.completeSpeech(payload.speakId, payload.interrupted, now)) {
+    ctx.session.clearBrowserAuthorization();
+    ctx.session.dialogue = idleDialogue(ctx.session);
+    speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_REFUSED, "error");
+    ctx.hub.pushState();
+    return true;
+  }
+  if (!ctx.session.browserAuthorizations.completeSpeech(payload.speakId, payload.interrupted, now)) {
+    ctx.session.dialogue = idleDialogue(ctx.session);
+    if (payload.interrupted) speak(ctx.hub, ctx.session, "The browser confirmation read-back was interrupted. Nothing was done.", "error");
+    ctx.hub.pushState();
+    return true;
+  }
+  const readyAt = ctx.session.pendingBrowserAuthorization?.readyAt;
+  if (readyAt !== null && readyAt !== undefined) scheduleBrowserAuthorizationArm(ctx, pending.authorizationId, readyAt);
+  return true;
+}
+
+async function beginBrowserAuthorization(
+  ctx: TurnContext,
+  target: BrowserAuthorizationTarget,
+  command?: BrowserCommand,
+): Promise<void> {
+  const { session } = ctx;
+  if (session.pendingGatedAction !== null) return speak(ctx.hub, session, "Please finish or cancel the current form confirmation first.", "error");
+  if (session.outputMode !== "agent-voice") return speak(ctx.hub, session, "I can't verify the browser confirmation read-back in the current output mode. Nothing was done.", "error");
+  const executor = createBrowserExecutor({ hub: ctx.hub, session });
+  const captured = await executor.execute({ op: "capture" });
+  if (!captured.ok || !captured.payload.ok || captured.payload.operation !== "capture") return speakBrowserFailure(ctx, captured);
+  const identity = captured.payload.result;
+  if (target.op === "open-link" && !identityMatches(target.identity, identity)) {
+    return speak(ctx.hub, session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+  }
+  if (identity.status !== "supported" && target.op === "open-link") return speak(ctx.hub, session, "This page does not expose links that can be opened.", "error");
+  if (session.tabId !== null && session.tabId !== identity.tabId) return speak(ctx.hub, session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+  if (!session.stale && session.model !== null && session.model.url !== identity.pageUrl) return speak(ctx.hub, session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+
+  let now: number;
+  try { now = (ctx.clock ?? Date.now)(); } catch { now = Number.NaN; }
+  if (!Number.isFinite(now)) return speak(ctx.hub, session, MSG_BROWSER_READ_FAILED, "error");
+  const prompt = authorizedPrompt(target, command);
+  const phrase = authorizedPhrase(target, command);
+  const speakId = speakTracked(ctx.hub, session, prompt, "confirm-prompt", { interrupt: true });
+  if (speakId === null) return;
+  const authorization = session.browserAuthorizations.begin({
+    target,
+    sourcePageIdentity: identity,
+    readbackSpeakId: speakId,
+    phrase,
+    now,
+  });
+  if (authorization === null) {
+    session.clearBrowserAuthorization();
+    return speak(ctx.hub, session, MSG_BROWSER_READ_FAILED, "error");
+  }
+  session.dialogue = "awaiting-confirm";
+  scheduleBrowserAuthorizationExpiry(ctx, authorization.authorizationId, authorization.expiresAt);
+  ctx.hub.pushState();
+}
+
+function matchesSearchField(snapshot: Snapshot, model: NonNullable<Session["model"]>): Array<NonNullable<Session["model"]>["fields"][number]> {
+  const visibleFields = new Set(snapshot.elements.filter((element) => element.category === "field" && element.visible).map((element) => element.id));
+  return model.fields.filter((field) => {
+    if (!visibleFields.has(field.id) || field.disabled || field.sensitive !== "none") return false;
+    if (!["text", "email", "url", "textarea"].includes(field.type)) return false;
+    return /search/iu.test([field.label, field.role, field.autocomplete ?? ""].join(" "));
+  });
+}
+
+async function trySiteSearch(ctx: TurnContext, query: string, forced: boolean): Promise<"submitted" | "not-site-search" | "refused"> {
+  const captured = await captureIntentPage(ctx);
+  if (!captured.ok) {
+    speak(ctx.hub, ctx.session, captured.reply, "error");
+    return "refused";
+  }
+  const fields = matchesSearchField(captured.snapshot, captured.model);
+  if (fields.length === 0) return forced ? (speak(ctx.hub, ctx.session, MSG_SITE_SEARCH_FIELD, "error"), "refused") : "not-site-search";
+  if (fields.length !== 1) {
+    speak(ctx.hub, ctx.session, "More than one visible search field matches. Nothing was submitted.", "error");
+    return "refused";
+  }
+  const submitActions = captured.model.actions.filter((action) => action.kind === "submit");
+  if (submitActions.length !== 1) {
+    speak(ctx.hub, ctx.session, MSG_SITE_SEARCH_FIELD, "error");
+    return "refused";
+  }
+  const field = fields[0]!;
+  const fill = await executeUngated(ctx, { type: "set_fields", fills: [{ fieldId: field.id, value: query }] });
+  if (fill.category === "error") {
+    speak(ctx.hub, ctx.session, fill.text, "error");
+    return "refused";
+  }
+  const observed = ctx.session.model?.fields.find((candidate) => candidate.id === field.id);
+  if (observed === undefined || observed.value !== query || !observed.hasValue) {
+    speak(ctx.hub, ctx.session, MSG_SITE_SEARCH_VALUE, "error");
+    return "refused";
+  }
+  // The existing form Executor owns the tracked full-form read-back and exact submit phrase.
+  await createVoiceGateAdapter(ctx).arm({ actionId: submitActions[0]!.id });
+  return "submitted";
+}
+
+function speakBrowserResult(ctx: TurnContext, payload: BrowserResultPayload, command: BrowserCommand): void {
+  if (!payload.ok) return speak(ctx.hub, ctx.session, browserFailureText({ ok: true, payload }), "error");
+  switch (payload.operation) {
+    case "location": {
+      const url = new URL(payload.result.pageUrl);
+      return speak(ctx.hub, ctx.session, payload.result.status === "restricted"
+        ? `You are on a restricted browser page at ${url.host || url.protocol}.`
+        : `You are on ${payload.result.title || url.host}.`, "answer");
+    }
+    case "capture":
+      return speakContent(ctx, payload.result.blocks, command.type === "summary" ? "summary" : command.type === "question" ? "question" : "read", command.type === "question" ? command.query : undefined);
+    case "list-links": return speakLinks(ctx, payload);
+    case "tabs": {
+      if (command.type === "open-blank") return speak(ctx.hub, ctx.session, "Opened a blank tab.", "answer");
+      if (payload.result.tabs.length === 0) return speak(ctx.hub, ctx.session, "There are no browser tabs available.", "answer");
+      const tabs = payload.result.tabs.slice(0, 12).map((tab, index) => `${index + 1}. ${tab.title || tab.hostHint || "Untitled tab"}.`);
+      return speak(ctx.hub, ctx.session, `I found ${payload.result.tabs.length} browser tabs. ${tabs.join(" ")} Say the tab number to switch.`, "answer");
+    }
+    case "scroll": return speak(ctx.hub, ctx.session, payload.result.moved ? "Scrolled the page." : "The page could not scroll further in that direction.", "answer");
+    case "find": return speak(ctx.hub, ctx.session, payload.result.found ? `I found ${payload.result.matchCount} matches for ${command.type === "find" ? command.query : "that text"}.` : "I couldn't find that text on the page.", "answer");
+    case "navigate": return speak(ctx.hub, ctx.session, "Opened the requested website.", "answer");
+    case "search": return speak(ctx.hub, ctx.session, "Browser-default search was submitted.", "answer");
+    case "open-link": return speak(ctx.hub, ctx.session, "Opened the selected visible link.", "answer");
+    case "history": return speak(ctx.hub, ctx.session, "Moved through browser history.", "answer");
+    case "reload": return speak(ctx.hub, ctx.session, "Reloaded the current page.", "answer");
+    case "read-content": return speakContent(ctx, payload.result.blocks, "read");
+  }
+}
+
+async function executeAuthorizedBrowserCommand(ctx: TurnContext, auth: ReturnType<Session["browserAuthorizations"]["begin"]>): Promise<void> {
+  if (auth === null) return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_REFUSED, "error");
+  let now: number;
+  try { now = (ctx.clock ?? Date.now)(); } catch { now = Number.NaN; }
+  const identity = ctx.session.browserCapture?.identity ?? null;
+  const currentIdentityMatches = identity !== null && identity.tabId === auth.sourceTabId && identity.pageUrl === auth.sourcePageUrl;
+  const consumed = ctx.session.browserAuthorizations.consume({
+    phrase: ctx.message.type === "utterance" ? ctx.message.payload.text : "",
+    source: ctx.message.type === "utterance" ? ctx.message.payload.source : "typed",
+    tabId: ctx.session.tabId === auth.sourceTabId ? ctx.session.tabId : null,
+    pageUrl: currentIdentityMatches ? identity.pageUrl : null,
+    pageIdentity: currentIdentityMatches ? identity : null,
+    now,
+  });
+  if (!consumed.ok) {
+    ctx.session.dialogue = idleDialogue(ctx.session);
+    ctx.hub.pushState();
+    return speak(ctx.hub, ctx.session, consumed.reason === "expired" ? MSG_BROWSER_AUTH_EXPIRED :
+      consumed.reason === "page-changed" || consumed.reason === "tab-changed" ? MSG_BROWSER_AUTH_PAGE_CHANGED : MSG_BROWSER_AUTH_REFUSED, "error");
+  }
+
+  const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+  const target = consumed.authorization.target;
+  let operation: BrowserOperation;
+  switch (target.op) {
+    case "navigate": operation = { ...target, authorizationId: consumed.authorization.authorizationId }; break;
+    case "search": operation = { ...target, authorizationId: consumed.authorization.authorizationId }; break;
+    case "open-link": operation = { ...target, authorizationId: consumed.authorization.authorizationId }; break;
+  }
+  const result = await executor.execute(operation);
+  ctx.session.dialogue = idleDialogue(ctx.session);
+  ctx.hub.pushState();
+  if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
+  const userCommand = target.op === "navigate"
+    ? { type: "navigate", url: target.url, host: new URL(target.url).host } as const
+    : target.op === "search"
+      ? { type: "search", query: target.query, route: "browser-default" } as const
+      : { type: "open-link", linkId: target.linkId, identity: target.identity, label: "selected link", hostHint: null } as const;
+  if (target.op === "search") {
+    const list = await executor.execute({ op: "list-links" });
+    if (!list.ok || !list.payload.ok || list.payload.operation !== "list-links") {
+      speak(ctx.hub, ctx.session, "Search was submitted. I couldn't read the visible results yet.", "answer");
+      return;
+    }
+    speakLinks(ctx, list.payload);
+    return;
+  }
+  speakBrowserResult(ctx, result.payload, userCommand);
+}
+
+async function runBrowserCommand(ctx: TurnContext, command: BrowserCommand, source: "voice" | "typed"): Promise<void> {
+  if (command.type === "clarify") return speak(ctx.hub, ctx.session, command.question, "answer");
+  if (command.type === "search") {
+    if (command.route === "site" && source !== "typed") return speak(ctx.hub, ctx.session, "Use the typed site-search command to search this page.", "error");
+    if (command.route !== "browser-default") {
+      const site = await trySiteSearch(ctx, command.query, command.route === "site");
+      if (site !== "not-site-search") return;
+    }
+    return beginBrowserAuthorization(ctx, { op: "search", route: "browser-default", query: command.query }, command);
+  }
+  if (command.type === "navigate") {
+    return beginBrowserAuthorization(ctx, { op: "navigate", url: command.url }, command);
+  }
+  if (command.type === "open-link") {
+    const current = ctx.session.browserCapture?.identity;
+    if (current === undefined || !identityMatches(current, command.identity)) return speak(ctx.hub, ctx.session, MSG_BROWSER_AUTH_PAGE_CHANGED, "error");
+    return beginBrowserAuthorization(ctx, { op: "open-link", linkId: command.linkId, identity: command.identity }, command);
+  }
+
+  const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+  if (command.type === "read-page" || command.type === "summary" || command.type === "question") {
+    if (command.type === "read-page" && command.kind !== undefined && command.target !== undefined) {
+      const capture = await executor.execute({ op: "capture" });
+      if (!capture.ok || !capture.payload.ok || capture.payload.operation !== "capture") return speakBrowserFailure(ctx, capture);
+      return speakContent(ctx, capture.payload.result.blocks.filter((block) => block.kind === command.kind && block.text.toLocaleLowerCase().includes(command.target!.toLocaleLowerCase())), "read");
+    }
+    const capture = await executor.execute({ op: "capture" });
+    if (!capture.ok || !capture.payload.ok || capture.payload.operation !== "capture") return speakBrowserFailure(ctx, capture);
+    if (capture.payload.result.status === "restricted") return speak(ctx.hub, ctx.session, "This page is restricted and does not expose readable content.", "answer");
+    return speakContent(ctx, capture.payload.result.blocks, command.type === "summary" ? "summary" : command.type === "question" ? "question" : "read", command.type === "question" ? command.query : undefined);
+  }
+
+  if (command.type === "switch-tab") {
+    const result = await executor.execute({ op: "tabs", action: "switch", targetTabId: command.targetTabId });
+    if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
+    return speak(ctx.hub, ctx.session, "Switched to the selected browser tab.", "answer");
+  }
+  let operation: BrowserOperation;
+  switch (command.type) {
+    case "location": operation = { op: "location" }; break;
+    case "list-links": operation = { op: "list-links" }; break;
+    case "list-tabs": operation = { op: "tabs", action: "list" }; break;
+    case "open-blank": operation = { op: "tabs", action: "open-blank" }; break;
+    case "history": operation = { op: "history", direction: command.direction }; break;
+    case "reload": operation = { op: "reload" }; break;
+    case "scroll": operation = { op: "scroll", direction: command.direction, pixels: command.pixels }; break;
+    case "find": operation = { op: "find", query: command.query }; break;
+    default: return speak(ctx.hub, ctx.session, "I couldn't safely carry out that browser request.", "error");
+  }
+  const result = await executor.execute(operation);
+  if (!result.ok || !result.payload.ok) return speakBrowserFailure(ctx, result);
+  speakBrowserResult(ctx, result.payload, command);
+}
+
+async function handleBrowserUtterance(ctx: TurnContext): Promise<boolean> {
+  if (ctx.message.type !== "utterance") return false;
+  const { text, source } = ctx.message.payload;
+  const executor = createBrowserExecutor({ hub: ctx.hub, session: ctx.session });
+
+  // Resolve user-selected links and tabs only against a fresh bounded capture/list.
+  if (/^(?:open|click)\s+(?:the\s+)?link\b/iu.test(text)) {
+    const listed = await executor.execute({ op: "list-links" });
+    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "list-links") {
+      speakBrowserFailure(ctx, listed);
+      return true;
+    }
+  } else if (/^(?:switch to|go to)\s+tab\b/iu.test(text)) {
+    const listed = await executor.execute({ op: "tabs", action: "list" });
+    if (!listed.ok || !listed.payload.ok || listed.payload.operation !== "tabs") {
+      speakBrowserFailure(ctx, listed);
+      return true;
+    }
+  }
+
+  const command = parseBrowserCommand(text, commandCapture(ctx.session));
+  if (command === null) return false;
+  await runBrowserCommand(ctx, command, source);
+  return true;
 }
 
 /** `stop`: cut off whatever the voice UI is saying. */
@@ -335,6 +771,8 @@ export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
     return;
   }
 
+  if (await handleBrowserUtterance(ctx)) return;
+
   hub.send("voice", "earcon", { name: "thinking" });
   speak(hub, session, MSG_FILLER, "filler");
   if (ctx.agyProvider !== undefined) {
@@ -361,15 +799,16 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
   const { utteranceId, text } = message.payload;
 
   const hasPendingConfirmation = session.pendingGatedAction !== null;
+  const pendingBrowserAuthorization = hasPendingConfirmation ? null : session.pendingBrowserAuthorization;
   const command = hasPendingConfirmation ? null : matchGrammar(text);
-  const fieldPhrase = hasPendingConfirmation ? null : matchFieldPhrase(text);
+  const fieldPhrase = hasPendingConfirmation || pendingBrowserAuthorization !== null ? null : matchFieldPhrase(text);
   const privateUtterance = containsSensitiveUtterance(text);
   hub.send("voice", "transcript", {
     utteranceId,
     heardAs: privateUtterance
       ? "private content withheld"
-      : hasPendingConfirmation ? text : fieldPhrase === null ? text : safePhraseForTranscript(fieldPhrase),
-    routedTo: hasPendingConfirmation || command !== null || fieldPhrase !== null ? "grammar" : "model",
+      : hasPendingConfirmation || pendingBrowserAuthorization !== null ? text : fieldPhrase === null ? text : safePhraseForTranscript(fieldPhrase),
+    routedTo: hasPendingConfirmation || pendingBrowserAuthorization !== null || command !== null || fieldPhrase !== null ? "grammar" : "model",
   });
 
   session.busy = true;
@@ -382,13 +821,26 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
       return;
     }
 
+    if (pendingBrowserAuthorization !== null) {
+      const cancelText = text.toLocaleLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/gu, " ").trim();
+      if (command?.type === "stop" || command?.type === "repeat" || ["cancel", "never mind", "nevermind"].includes(cancelText)) {
+        session.clearBrowserAuthorization();
+        session.dialogue = idleDialogue(session);
+        if (command !== null) await runIntent(ctx, command);
+        else speak(hub, session, "Cancelled. Nothing was done.", "answer");
+        return;
+      }
+      await executeAuthorizedBrowserCommand(ctx, pendingBrowserAuthorization);
+      return;
+    }
+
     if (command !== null) await runIntent(ctx, command);
     else await handleDialogueFallback(ctx);
   } finally {
     session.busy = false;
     session.dialogue = session.pendingGatedAction !== null
       ? session.pendingGatedAction.grantId === undefined ? "reading-back" : "awaiting-confirm"
-      : session.model !== null && session.extensionConnected ? "ready" : "no-page";
+      : idleDialogue(session);
     hub.pushState();
   }
 }

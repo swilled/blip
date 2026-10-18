@@ -1,6 +1,8 @@
 import { newId, type ActionKind, type DialogueStateName, type FormModel, type PayloadOf, type Snapshot, type StatePayload } from "@blip/protocol";
 import { createGrantStore, type GrantBinding, type GrantStore } from "../act/grants";
 import { buildBaselineFormModel, summarizeFormModel } from "../baseline";
+import { createBrowserAuthorizationStore, type BrowserAuthorization, type BrowserAuthorizationStore } from "../browser/authorization";
+import type { BrowserCapture } from "../browser/commands";
 
 export const SERVER_VERSION = "0.1.0";
 
@@ -63,7 +65,10 @@ export class Session {
 
   #extensionConnected = false;
   /** Whether the current voice-role socket is bound to this session. */
-  voiceConnected = false;
+  #voiceConnected = false;
+  /** Current bounded browser capture and one-use authorization are separate from form submit grants. */
+  browserCapture: BrowserCapture | null = null;
+  readonly browserAuthorizations: BrowserAuthorizationStore = createBrowserAuthorizationStore();
   #snapshotOrder: { tabId: number; version: number; capturedAt: number } | null = null;
   #snapshotRevision = 0;
 
@@ -137,6 +142,8 @@ export class Session {
    * until the next fetch, but `ensureSnapshot` refuses to speak about an unconnected page.
    */
   set extensionConnected(value: boolean) {
+    const browserAuthorization = this.browserAuthorizations.invalidate();
+    this.browserCapture = null;
     if (value) {
       this.clearPendingGatedAction();
       this.stale = true;
@@ -145,6 +152,42 @@ export class Session {
       this.clearPendingGatedAction();
     }
     this.#extensionConnected = value;
+    if (browserAuthorization !== null) this.dialogue = this.model !== null && value && !this.stale ? "ready" : "no-page";
+  }
+
+  get voiceConnected(): boolean {
+    return this.#voiceConnected;
+  }
+
+  set voiceConnected(value: boolean) {
+    if (!value) {
+      this.clearBrowserAuthorization();
+      this.browserCapture = null;
+    }
+    this.#voiceConnected = value;
+  }
+
+  get pendingBrowserAuthorization(): BrowserAuthorization | null {
+    return this.browserAuthorizations.pending;
+  }
+
+  clearBrowserAuthorization(): BrowserAuthorization | null {
+    const pending = this.browserAuthorizations.invalidate();
+    if (pending !== null) this.dialogue = this.model !== null && this.extensionConnected && !this.stale ? "ready" : "no-page";
+    return pending;
+  }
+
+  applyBrowserCapture(capture: BrowserCapture): void {
+    const previous = this.browserCapture?.identity;
+    const next = capture.identity;
+    if (previous !== undefined && next !== undefined && (
+      previous.captureId !== next.captureId || previous.captureRevision !== next.captureRevision ||
+      previous.tabId !== next.tabId || previous.pageUrl !== next.pageUrl
+    )) {
+      this.clearBrowserAuthorization();
+      this.stale = true;
+    }
+    this.browserCapture = capture;
   }
 
   /** Drop any pending confirmation and its inaccessible one-use grant. */
@@ -168,6 +211,10 @@ export class Session {
     }
 
     const model = buildBaselineFormModel(snapshot);
+    this.clearBrowserAuthorization();
+    if (this.browserCapture?.identity !== undefined && (
+      this.browserCapture.identity.tabId !== snapshot.tabId || this.browserCapture.identity.pageUrl !== model.url
+    )) this.browserCapture = null;
     const pending = this.pendingGatedAction;
     if (pending !== null && (
       snapshot.tabId !== pending.tabId ||
