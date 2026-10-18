@@ -14,9 +14,8 @@ updated: 2026-10-17
 
 ### 1. Read the live Microsoft Form and check required fields
 expected: Blip reads the current form and reports the required fields that remain.
-result: partial — live retest in progress
-reported: After the rebuilt extension was reloaded and the live form refreshed, Blip reported “6 required fields are empty” and began listing “2. Employment type Single choice,” “3. Department Single choice,” and “Other answer,” then offered to continue. On “continue,” it listed “5. Leave type Single choice,” “6. Leave date Date,” and “7. Return date Date.” This names all five required questions visible on the form, but it also counts the conditional “Other answer” box as a sixth required field and includes question-type metadata in labels, so the check remains partial pending the follow-up fix and retest.
-
+result: partial - live retest in progress
+reported: After the corrected bundle was copied to the extension folder loaded by the demo Chrome profile and Blip was restarted, the user asked "what's required?" on the live form. Blip replied "Vacation and sick leave form. 8 fields, 5 required, 9 actions." The required count is now correct, but this is a page summary rather than the required-field names, so the check remains partial. The reducer's focused tests confirm the exact phrase routes to the required-field list; verify the recognized transcript or use the less ambiguous supported phrase "which fields are required?" in the live voice retest.
 ### 2. Fill from my profile
 expected: Blip fills eligible empty profile matches or reports which fields it skipped.
 result: pending
@@ -38,6 +37,5 @@ blocked: 0
 
 ## Gaps
 
-The first live required-field check exposed an extension snapshot gap. Microsoft Forms places an accessible “Required to answer” marker in the question title while setting the field's `aria-required` to `false`; the previous extractor missed that marker. The first fix detects the real required questions, but the live form also exposes a conditional “Other answer” textbox inside a required radio question. The question-level marker was incorrectly inherited by that auxiliary textbox, and Microsoft Forms appends “Single choice” and “Date” metadata to accessible labels. A follow-up fix scopes the marker to the radio question and cleans those suffixes; reload that extension and repeat test 1 before passing it.
-
+The first live required-field check exposed an extension snapshot gap. Microsoft Forms places an accessible "Required to answer" marker in the question title while setting the field's aria-required attribute to false; the previous extractor missed that marker. A follow-up fix scopes the marker to the radio question and removes the conditional "Other answer" textbox and type suffixes. The live snapshot now reports five required fields, but the latest voice response was only the page summary. Confirm the recognized transcript and rerun test 1 with "which fields are required?"; pass only when Blip lists the field names.
 The separate Phase 2 connected-gate I2 run remains outside this UAT result and must be tracked independently.
