@@ -9,6 +9,7 @@ import { Session } from "../src/session/session";
 import { createCoreDialogueGatePort } from "../src/voice/core-gate-port";
 import { createDialogueHandlers } from "../src/voice/dialogue-runner";
 import fixtureJson from "../../../fixtures/forms/broken-form.model.json" with { type: "json" };
+import { createStt, type RecognitionLike } from "../../voice/src/stt";
 
 type Sent = { role: string; type: string; payload: any };
 
@@ -112,6 +113,55 @@ describe("dialogue reducer to core GatePort integration", () => {
   function clicks(rig: ReturnType<typeof makeRig>) {
     return rig.requests.filter(r => r.type === "act.request" && (r.payload as ActRequest).action.op === "click");
   }
+  it("carries recovered final recognition through speech failure, fresh readback and exact confirmation", async () => {
+    const rig = makeRig();
+    const recognizers: RecognitionLike[] = [];
+    const timers = new Map<object, { run: () => void; ms: number }>();
+    const deliveries: Promise<void>[] = [];
+    const stt = createStt({
+      now: () => rig.clock, canListen: () => true,
+      setTimer(run, ms) { const id = {}; timers.set(id, { run, ms }); return id; },
+      clearTimer(id) { timers.delete(id as object); },
+      makeRecognition() {
+        const rec: RecognitionLike = { lang: "", continuous: false, interimResults: false, maxAlternatives: 0,
+          onresult: null, onerror: null, onend: null, start() { this.onstart?.(); }, stop() {}, abort() {} };
+        recognizers.push(rec); return rec;
+      },
+      onInterim() {}, onError(error) { throw new Error(error.message); },
+      onFinal(final) { deliveries.push(rig.handle("voice", "utterance", { utteranceId: `recognized-${rig.clock}`, source: "voice", text: final.text })); },
+    });
+    const result = (text: string) => ({ results: { length: 1, 0: { isFinal: true, length: 1, 0: { transcript: text, confidence: 0.95 } } } });
+    async function recoverAndFinish() {
+      await rig.handle("voice", "ptt", { state: "start" });
+      stt.press();
+      for (let n = 0; n < 2; n++) {
+        recognizers.at(-1)!.onend!();
+        const restart = [...timers].find(([, timer]) => timer.ms === 1000)!;
+        timers.delete(restart[0]); rig.clock += 1000; restart[1].run();
+      }
+      expect(deliveries).toHaveLength(0);
+      const native = recognizers.at(-1)!;
+      native.onresult!(result("submit survey"));
+      expect(deliveries).toHaveLength(0);
+      await rig.handle("voice", "ptt", { state: "end" });
+      stt.release(); native.onend!(); await Promise.all(deliveries.splice(0));
+    }
+    await arm(rig);
+    await finishSpeech(rig);
+    await rig.handle("voice", "settings", { outputMode: "agent-voice", rate: 1.59 });
+    const failed = rig.frames("speak").at(-1)!;
+    await rig.handle("voice", "speak.done", { speakId: failed.payload.speakId, interrupted: true });
+    expect(rig.session.pendingGatedAction).toBeNull();
+    await finishSpeech(rig);
+    await recoverAndFinish(); // New finalized command starts a new readback, never submits.
+    expect(clicks(rig)).toHaveLength(0);
+    await finishSpeech(rig); // Readback arms a fresh tracked confirmation prompt.
+    await finishSpeech(rig); // Complete that prompt and the guard.
+    await rig.handle("voice", "speak.done", { speakId: "unknown-old-output", interrupted: false });
+    await recoverAndFinish();
+    expect(clicks(rig)).toHaveLength(1);
+    expect(timers.size).toBe(0);
+  });
   it("rejects spoken near phrases then accepts a fresh exact hold", async () => {
     const rig = makeRig();
     await arm(rig);
