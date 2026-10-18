@@ -1,0 +1,3 @@
+# Deferred Items — Phase 03
+
+- The extension workspace wrapper `npm run ext:test` runs `apps/extension/test/build.test.ts` with `process.cwd()` set to `apps/extension`, while that test constructs its manifest path as if the current directory were the repository root. The wrapper therefore fails with `ENOENT` for `apps/extension/apps/extension/manifest.template.json`. The full extension suite passed from repository root with `npx vitest run apps/extension/test --no-file-parallelism` (28 files, 133 tests passed; 12 files and 21 tests skipped by default browser gating). Root `npm test` also passed and includes the build test. The wrapper/path assumption is pre-existing and outside Plan 03-06 scope.

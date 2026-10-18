@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>No-grant submit barrier</title>
+    <script src="/report.js"></script>
+    <script>
+      window.addEventListener("submit", (event) => {
+        const submitter = event.submitter instanceof HTMLElement ? event.submitter.id : "";
+        window.blipReport("window-submit-capture", { submitter });
+      }, true);
+    </script>
+    <style>
+      main { max-width: 40rem; margin: 2rem auto; font: 1rem/1.5 sans-serif; }
+      form { display: grid; gap: 1rem; }
+      #div-submit { width: max-content; padding: .5rem 1rem; border: 1px solid #333; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Idle submit guard fixture</h1>
+      <form id="bypass-form" action="/submit-sink.html" method="get" target="sink-frame">
+        <button id="native-submit" type="submit">Send to local sink</button>
+        <label for="enter-input">Enter key target</label>
+        <input id="enter-input" name="message" type="text" value="valid request">
+        <div id="div-submit" role="button" tabindex="0">Try div submit</div>
+      </form>
+      <iframe id="sink-frame" name="sink-frame" src="about:blank" title="Local form target"></iframe>
+    </main>
+    <script>
+      const bypassForm = document.querySelector("#bypass-form");
+      bypassForm.addEventListener("submit", () => {
+        window.blipReport("submit-form-handler", {});
+      });
+
+      document.querySelector("#div-submit").addEventListener("click", () => {
+        window.blipReport("div-click-handler", {});
+        window.blipReport("div-request-submit-attempt", {});
+        bypassForm.requestSubmit();
+      });
+    </script>
+  </body>
+</html>

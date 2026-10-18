@@ -1,4 +1,4 @@
-import type { LabelSource } from "@blip/protocol";
+import type { RawLabelSource } from "@blip/protocol";
 
 /**
  * Page text is untrusted (T-01-13). This strips C0/C1 control characters, collapses whitespace,
@@ -31,18 +31,18 @@ export function cleanText(input: string | undefined | null, max: number): string
 
 export interface LabelCandidate {
   text: string;
-  source: LabelSource;
+  source: RawLabelSource;
   confidence: number;
 }
 
 export interface PickedLabel {
   label: string;
-  labelSource: LabelSource;
+  labelSource: RawLabelSource;
   confidence: number;
 }
 
 // Tie-break order from D-12: aria, label, nearby-text, placeholder, inferred.
-const SOURCE_RANK: Record<LabelSource, number> = {
+const SOURCE_RANK: Record<RawLabelSource, number> = {
   aria: 0,
   label: 1,
   "nearby-text": 2,

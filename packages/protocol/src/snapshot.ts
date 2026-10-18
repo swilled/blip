@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { ActionKind } from "./action-kind";
 
-export const LabelSource = z.enum(["aria", "label", "nearby-text", "placeholder", "inferred"]);
-export type LabelSource = z.infer<typeof LabelSource>;
+// Raw extension evidence is deterministic; model provenance exists only after server resolution.
+export const RawLabelSource = z.enum(["aria", "label", "nearby-text", "placeholder", "inferred"]);
+export type RawLabelSource = z.infer<typeof RawLabelSource>;
 
 export const Sensitivity = z.enum(["none", "password", "card-number", "card-cvc", "otp", "ssn"]);
 export type Sensitivity = z.infer<typeof Sensitivity>;
@@ -38,7 +39,7 @@ const RawElementBase = z.object({
     z.object({
       // ALL candidates, best first; the server picks
       text: z.string().max(200),
-      source: LabelSource,
+      source: RawLabelSource,
       confidence: z.number().min(0).max(1),
     }),
   ),
@@ -85,9 +86,8 @@ export const Snapshot = z.object({
   stepHint: z.string().max(100).optional(), // "Step 2 of 4" if detected
   elements: z.array(RawElement).max(250),
   truncated: z.boolean(),
+  untrustedInstructionDetected: z.boolean().optional(), // warning-only local detector result; no page prose
   structuralHash: z.string(), // hash of (tag,type,name,role,labelCandidate[0]) per element; EXCLUDES values
   capturedAt: z.number(),
-  // Warning-only GATE-07 signal. It contains neither page text nor action authority.
-  untrustedInstructionDetected: z.boolean().optional(),
 });
 export type Snapshot = z.infer<typeof Snapshot>;

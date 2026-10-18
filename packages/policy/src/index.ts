@@ -1,3 +1,4 @@
-// Stub (Phase 1). D-11: there is ONE ActionKind enum and it lives in @blip/protocol.
-// The classification rules and the Executor gate arrive in Phase 2/3.
+// The protocol remains the source of action kinds; browser-safe classifiers live in the local subpath.
 export { ActionKind, GATED_KINDS, isGatedKind } from "@blip/protocol";
+export * from "./classify";
+export * from "./confirmation";

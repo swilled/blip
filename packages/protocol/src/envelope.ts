@@ -32,7 +32,7 @@ export type Hello = z.infer<typeof Hello>;
 export const Welcome = z.object({
   sessionId: z.string(),
   serverVersion: z.string(),
-  brain: z.enum(["claude", "fake"]),
+  brain: z.enum(["agy", "fake"]),
 });
 export type Welcome = z.infer<typeof Welcome>;
 

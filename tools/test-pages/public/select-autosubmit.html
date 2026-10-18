@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Select auto-submit</title>
+    <script src="/report.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Select auto-submit regression fixture</h1>
+      <p>Changing the select calls requestSubmit from its native change handler.</p>
+      <form id="select-form" action="/__submit-sink" method="get">
+        <label for="room-type">Room type</label>
+        <select id="room-type" name="room">
+          <option value="">Choose a room</option>
+          <option value="standard">Standard</option>
+          <option value="deluxe">Deluxe</option>
+          <option value="suite">Suite</option>
+        </select>
+      </form>
+    </main>
+    <script>
+      const form = document.getElementById("select-form");
+      const select = document.getElementById("room-type");
+      select.addEventListener("change", () => {
+        window.blipReport("direct-submit-attempt", {});
+        form.submit();
+        form.requestSubmit();
+      });
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        window.blipReport("select-autosubmit", { form: "select-form" });
+      });
+    </script>
+  </body>
+</html>

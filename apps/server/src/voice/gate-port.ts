@@ -6,18 +6,21 @@ export type ArmRequest = {
   kind: string;
   title: string;
   digest: string;
+  speakId: string;
 };
 
 export type ArmResult =
-  | { ok: true; grantId: string; phrase: string; expiresAt: number }
-  | { ok: false; reason: "not-gated" };
+  | { ok: true; grantId: string; speakId: string; phrase: string; expiresAt: number }
+  | { ok: false; reason: string };
 
 export type GateRefusal = { ok: false; reason: string };
+export type GateRedemption = GateRefusal | { ok: true; handledByCore?: true };
 
 export interface GatePort {
   arm(request: ArmRequest): Promise<ArmResult>;
-  clear(grantId: string, reason: ConfirmClearedPayload["reason"]): void | Promise<void>;
-  redeem(grantId: string): Promise<GateRefusal>;
+  clear(grantId: string, reason: ConfirmClearedPayload["reason"]): boolean | void | Promise<boolean | void>;
+  redeem(request: { grantId: string; speakId: string; utteranceId: string; phrase: string }): Promise<GateRedemption>;
+  invalidate?(reason: "cancelled" | "page-changed"): void | Promise<void>;
 }
 
 const PHRASE_NOUNS = ["booking", "order", "application", "message", "survey"] as const;
@@ -55,6 +58,7 @@ export function createStubGate(now: () => number): GatePort {
       return {
         ok: true,
         grantId: newId(),
+        speakId: request.speakId,
         phrase,
         expiresAt: now() + 30_000,
       };

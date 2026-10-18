@@ -51,15 +51,26 @@ export const EarconPayload = z.object({
 });
 export type EarconPayload = z.infer<typeof EarconPayload>;
 
-/** Informational only: the UI shows "Say: <phrase>". Arming and matching happen in server code. */
+/** UI correlation state only; the identifiers are not authority, and the server owns the grant. */
 export const ConfirmArmedPayload = z.object({
   grantId: z.string().min(1).max(64),
+  /** Server speakId for the uninterrupted read-back that armed this grant. */
+  speakId: z.string().min(1).max(64),
   phrase: z.string().min(1),
   kind: ActionKind,
   actionLabel: z.string(),
   expiresAt: z.number(),
 });
 export type ConfirmArmedPayload = z.infer<typeof ConfirmArmedPayload>;
+
+/** Voice reducer redeems only the grant and tracked read-back currently shown to the user. */
+export const ConfirmRedeemPayload = z.object({
+  grantId: z.string().min(1).max(64),
+  speakId: z.string().min(1).max(64),
+  utteranceId: z.string().min(1).max(64),
+  phrase: z.string().min(1).max(128),
+});
+export type ConfirmRedeemPayload = z.infer<typeof ConfirmRedeemPayload>;
 
 export const ConfirmClearedPayload = z.object({
   grantId: z.string().min(1).max(64),
@@ -77,14 +88,13 @@ export const StatePayload = z.object({
       step: z.string().optional(),
       fieldCount: z.number().int(),
       requiredEmpty: z.number().int(), // counted with hasValue, never from a sensitive value
-      // Warning-only projection of Snapshot.untrustedInstructionDetected.
-      untrustedInstructionDetected: z.boolean().optional(),
+      untrustedInstructionDetected: z.boolean().optional(), // warning-only; does not grant action authority
     })
     .nullable(),
   focusFieldId: z.string().optional(),
   busy: z.boolean(),
   extensionConnected: z.boolean(),
-  brain: z.enum(["claude", "fake"]),
+  brain: z.enum(["agy", "fake"]),
 });
 export type StatePayload = z.infer<typeof StatePayload>;
 

@@ -1,4 +1,5 @@
 export { reduce } from "./reduce";
+export { formDigest, requiredEmpty } from "./fields";
 export { classifyUtterancePrivacy } from "./sensitive";
 export type { UtterancePrivacy } from "./sensitive";
 export type { Effect, DialogueState, DialogueContext } from "./effects";

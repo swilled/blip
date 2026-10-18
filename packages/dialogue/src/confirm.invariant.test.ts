@@ -50,7 +50,7 @@ function armedState(): DialogueState {
   if (readBackId === undefined) throw new Error("submit did not produce a read-back speak id");
   const readBackDone = reduce(submitted.state, speakDone(readBackId), context(filledSurvey, 10_000));
   const armed = reduce(readBackDone.state, {
-    type: "confirm.armed", grantId: "grant-1", phrase: PHRASE, expiresAt: 40_000,
+    type: "confirm.armed", grantId: "grant-1", speakId: readBackId, phrase: PHRASE, expiresAt: 40_000,
   }, context(filledSurvey, 10_100));
   if (armed.state.mode !== "awaiting-confirm" || armed.state.confirm === null) {
     throw new Error("the real submit/read-back/confirm sequence did not arm");
@@ -112,7 +112,9 @@ describe("confirm gate reducer invariant", () => {
     if (refusalId === undefined) throw new Error("the 999 ms refusal did not speak");
     const refusalDone = reduce(tooSoon.state, speakDone(refusalId), context(filledSurvey, 21_000));
     const atBoundary = reduce(refusalDone.state, utterance(PHRASE), context(filledSurvey, 22_000));
-    expect(atBoundary.effects).toEqual([{ kind: "redeem", grantId: "grant-1" }]);
+    expect(atBoundary.effects).toEqual([{
+      kind: "redeem", grantId: "grant-1", speakId: "b1", phrase: PHRASE, utteranceId: "u-test",
+    }]);
     expect(atBoundary.state.mode).toBe("executing");
   });
 

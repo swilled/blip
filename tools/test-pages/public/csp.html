@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; object-src 'none'">
+    <title>Strict policy contact form</title>
+    <link rel="stylesheet" href="/csp.css">
+    <script defer src="/report.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Strict policy contact form</h1>
+      <p>This page allows only same-origin scripts, styles, reports, and form actions.</p>
+      <form action="/csp.html" method="get">
+        <label for="csp-name">Full name</label>
+        <input id="csp-name" name="name" type="text" autocomplete="name">
+        <label for="csp-message">Message</label>
+        <textarea id="csp-message" name="message"></textarea>
+        <button type="submit">Save contact details</button>
+      </form>
+    </main>
+  </body>
+</html>

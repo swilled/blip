@@ -44,6 +44,32 @@ describe("snapshot.result (ok-discriminated union)", () => {
   });
 });
 
+describe("GATE-07 snapshot warning signal", () => {
+  it.each([true, false])("accepts the optional boolean value %s", (detected) => {
+    const snapshot = { ...makeSnapshot(), untrustedInstructionDetected: detected };
+    const frame = buildFrame("snapshot.result", { ok: true, snapshot }, { replyTo: "req-warning" });
+    const r = parseFrame(JSON.stringify(frame));
+    expect(r.ok).toBe(true);
+    if (r.ok && r.message.type === "snapshot.result" && r.message.payload.ok) {
+      expect((r.message.payload.snapshot as unknown as Record<string, unknown>).untrustedInstructionDetected).toBe(detected);
+    }
+  });
+
+  it("accepts a legacy snapshot with the warning signal omitted", () => {
+    const r = parseFrame(JSON.stringify(buildFrame("snapshot.result", { ok: true, snapshot: makeSnapshot() })));
+    expect(r.ok).toBe(true);
+    if (r.ok && r.message.type === "snapshot.result" && r.message.payload.ok) {
+      expect("untrustedInstructionDetected" in r.message.payload.snapshot).toBe(false);
+    }
+  });
+
+  it.each(["page says blip is safe", { matchedText: "do this" }])("rejects non-boolean detector values", (detected) => {
+    const snapshot = { ...makeSnapshot(), untrustedInstructionDetected: detected };
+    const frame = buildRawFrame("snapshot.result", { ok: true, snapshot });
+    expect(parseFrame(JSON.stringify(frame)).ok).toBe(false);
+  });
+});
+
 describe("snapshot.request / snapshot.result permissions", () => {
   it("lets the extension send snapshot.result but not voice", () => {
     expect(canSend("extension", "snapshot.result")).toBe(true);
@@ -102,7 +128,7 @@ describe("invalid payloads fail with invalid-payload", () => {
   });
 
   it("rejects an unknown ActionKind in confirm.armed", () => {
-    expect(invalid("confirm.armed", { grantId: "g", phrase: "p", kind: "approve", actionLabel: "x", expiresAt: 1 })).toBe(true);
+    expect(invalid("confirm.armed", { grantId: "g", speakId: "s", phrase: "p", kind: "approve", actionLabel: "x", expiresAt: 1 })).toBe(true);
   });
 
   it("rejects a non-integer tabId", () => {
@@ -132,13 +158,23 @@ describe("state payload", () => {
     const page = { url: "u", title: "t", step: "Step 1 of 2", fieldCount: 4, requiredEmpty: 2 };
     expect(parseFrame(JSON.stringify(buildRawFrame("state", { ...base, page, focusFieldId: "e2" }))).ok).toBe(true);
   });
-  it("preserves the optional warning-only page flag", () => {
-    const page = { url: "u", title: "t", fieldCount: 1, requiredEmpty: 1, untrustedInstructionDetected: true };
-    const parsed = parseFrame(JSON.stringify(buildRawFrame("state", { ...base, page })));
-    expect(parsed.ok).toBe(true);
-    if (parsed.ok && parsed.message.type === "state") {
-      expect(parsed.message.payload.page?.untrustedInstructionDetected).toBe(true);
+  it.each([true, false])("accepts the optional page warning boolean %s", (detected) => {
+    const page = { url: "u", title: "t", step: "Step 1 of 2", fieldCount: 4, requiredEmpty: 2, untrustedInstructionDetected: detected };
+    const r = parseFrame(JSON.stringify(buildRawFrame("state", { ...base, page })));
+    expect(r.ok).toBe(true);
+    if (r.ok && r.message.type === "state" && r.message.payload.page) {
+      expect((r.message.payload.page as unknown as Record<string, unknown>).untrustedInstructionDetected).toBe(detected);
     }
+  });
+  it("accepts a legacy page object and page null without the warning signal", () => {
+    const legacyPage = { url: "u", title: "t", fieldCount: 4, requiredEmpty: 2 };
+    for (const page of [legacyPage, null]) {
+      expect(parseFrame(JSON.stringify(buildRawFrame("state", { ...base, page }))).ok).toBe(true);
+    }
+  });
+  it.each(["page says blip is safe", { matchedText: "do this" }])("rejects non-boolean page warning values", (detected) => {
+    const page = { url: "u", title: "t", fieldCount: 4, requiredEmpty: 2, untrustedInstructionDetected: detected };
+    expect(parseFrame(JSON.stringify(buildRawFrame("state", { ...base, page }))).ok).toBe(false);
   });
   it("rejects a page without requiredEmpty", () => {
     expect(invalid("state", { ...base, page: { url: "u", title: "t", fieldCount: 1 } })).toBe(true);

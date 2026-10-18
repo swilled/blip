@@ -42,7 +42,7 @@ function armEffect(form = filledSurvey) {
 function armed(form = filledSurvey) {
   const armRequest = armEffect(form);
   return reduce(armRequest.state, {
-    type: "confirm.armed", grantId: "g1", phrase: "submit survey", expiresAt: 30_000,
+    type: "confirm.armed", grantId: "g1", speakId: armRequest.state.readBack!.speakId, phrase: "submit survey", expiresAt: 30_000,
   }, ctx(form, 1201));
 }
 
@@ -117,6 +117,7 @@ describe("submit and read-back flow", () => {
       actionKind: "submit",
       title: filledSurvey.title,
       digest: formDigest(filledSurvey),
+      speakId: "b1",
     }]);
     expect(completed.state.outstanding).toEqual([]);
     expect(completed.state.lastDoneAt).toBe(1200);
@@ -173,6 +174,7 @@ describe("submit and read-back flow", () => {
       actionKind: form.actions[0]!.kind,
       title: form.title,
       digest: formDigest(form),
+      speakId: "b1",
     }]);
   });
 
@@ -191,6 +193,7 @@ describe("submit and read-back flow", () => {
       actionKind: form.actions[0]!.kind,
       title: form.title,
       digest: formDigest(form),
+      speakId: "b1",
     }]);
   });
 
@@ -198,11 +201,11 @@ describe("submit and read-back flow", () => {
     const request = submitted();
     const doneReadBack = reduce(request.state, done("b1"), ctx(filledSurvey, 1000));
     const armed = reduce(doneReadBack.state, {
-      type: "confirm.armed", grantId: "g1", phrase: "submit survey", expiresAt: 30_000,
+      type: "confirm.armed", grantId: "g1", speakId: "b1", phrase: "submit survey", expiresAt: 30_000,
     }, ctx(filledSurvey, 1100));
     expect(armed.state.mode).toBe("awaiting-confirm");
     expect(armed.state.confirm).toEqual({
-      grantId: "g1", phrase: "submit survey", actionId: "e7", digest: formDigest(filledSurvey), expiresAt: 30_000,
+      grantId: "g1", speakId: "b1", phrase: "submit survey", actionId: "e7", digest: formDigest(filledSurvey), expiresAt: 30_000,
     });
     expect(armed.effects).toEqual([
       { kind: "speak", speakId: "b2", text: confirmPromptText("submit survey"), category: "confirm-prompt", interruptible: true },
@@ -214,7 +217,7 @@ describe("submit and read-back flow", () => {
   it("clears a confirm grant returned outside reading-back", () => {
     const state = initialState();
     const result = reduce(state, {
-      type: "confirm.armed", grantId: "g1", phrase: "submit survey", expiresAt: 30_000,
+      type: "confirm.armed", grantId: "g1", speakId: "b1", phrase: "submit survey", expiresAt: 30_000,
     }, ctx(filledSurvey));
     expect(result).toEqual({
       state,
@@ -226,7 +229,7 @@ describe("submit and read-back flow", () => {
     const armed = {
       ...initialState(),
       mode: "awaiting-confirm" as const,
-      confirm: { grantId: "g1", phrase: "submit survey", actionId: "e7", digest: formDigest(filledSurvey), expiresAt: 30_000 },
+      confirm: { grantId: "g1", speakId: "b1", phrase: "submit survey", actionId: "e7", digest: formDigest(filledSurvey), expiresAt: 30_000 },
     };
     const refused = reduce(armed, { type: "confirm.refused", reason: "expired" }, ctx(filledSurvey));
     expect(refused.state.mode).toBe("ready");
@@ -249,7 +252,7 @@ describe("submit and read-back flow", () => {
     const state: DialogueState = {
       ...initialState(),
       mode: "awaiting-confirm",
-      confirm: { grantId: "g1", phrase: "submit survey", actionId: "e7", digest: formDigest(filledSurvey), expiresAt: 30_000 },
+      confirm: { grantId: "g1", speakId: "b1", phrase: "submit survey", actionId: "e7", digest: formDigest(filledSurvey), expiresAt: 30_000 },
     };
     const result = reduce(state, { type: "confirm.cleared", grantId: "g1", reason }, ctx(filledSurvey));
     expect(result.state.mode).toBe("ready");
@@ -267,7 +270,7 @@ describe("submit and read-back flow", () => {
     const state: DialogueState = {
       ...initialState(),
       mode: "awaiting-confirm",
-      confirm: { grantId: "g1", phrase: "submit survey", actionId: "e7", digest: formDigest(filledSurvey), expiresAt: 30_000 },
+      confirm: { grantId: "g1", speakId: "b1", phrase: "submit survey", actionId: "e7", digest: formDigest(filledSurvey), expiresAt: 30_000 },
     };
     const changed = FormModel.parse({
       ...filledSurvey,
@@ -377,7 +380,9 @@ describe("submit and read-back flow", () => {
       expect(tooSoon.effects.some((effect) => effect.kind === "redeem")).toBe(false);
       const refusalDoneAgain = reduce(tooSoon.state, done("b5"), ctx(filledSurvey, 4300));
       const redeemed = reduce(refusalDoneAgain.state, say("submit survey"), ctx(filledSurvey, 5300));
-      expect(redeemed.effects).toEqual([{ kind: "redeem", grantId: "g1" }]);
+      expect(redeemed.effects).toEqual([{
+        kind: "redeem", grantId: "g1", speakId: "b1", phrase: "submit survey", utteranceId: "u1",
+      }]);
       expect(redeemed.state.mode).toBe("executing");
       expect(reduce(redeemed.state, say("submit survey"), ctx(filledSurvey, 7000)).effects).toEqual([]);
     });
@@ -392,7 +397,9 @@ describe("submit and read-back flow", () => {
       expect(tooSoon.effects.some((effect) => effect.kind === "redeem")).toBe(false);
       const refusalDone = reduce(tooSoon.state, done("b3"), ctx(filledSurvey, 4000));
       const redeemed = reduce(refusalDone.state, say("submit survey"), ctx(filledSurvey, 5000));
-      expect(redeemed.effects).toEqual([{ kind: "redeem", grantId: "g1" }]);
+      expect(redeemed.effects).toEqual([{
+        kind: "redeem", grantId: "g1", speakId: "b1", phrase: "submit survey", utteranceId: "u1",
+      }]);
       expect(redeemed.state.mode).toBe("executing");
     });
 
@@ -408,30 +415,37 @@ describe("submit and read-back flow", () => {
       expect(result.state.outstanding).toContain("b3");
     });
 
-    it("keeps the armed mode when stop cancels speech using a tracked Stopped speakId", () => {
+    it("clears the armed grant when stop cancels speech using a tracked Stopped speakId", () => {
       const start = armed();
       const result = reduce(start.state, { type: "control", cmd: "stop" }, ctx(filledSurvey, 2000));
-      expect(result.effects).toEqual([{ kind: "cancelSpeech", speakId: "b3" }]);
-      expect(result.state.mode).toBe("awaiting-confirm");
-      expect(result.state.confirm).toEqual(start.state.confirm);
+      expect(result.effects).toEqual([
+        { kind: "clearConfirm", grantId: "g1", reason: "cancelled" },
+        { kind: "cancelSpeech", speakId: "b3" },
+      ]);
+      expect(result.state.mode).toBe("ready");
+      expect(result.state.confirm).toBeNull();
       // The runner renders this tracked cancelSpeech as “Stopped.” with the same id.
       expect(result.state.outstanding).toContain("b3");
     });
 
-    it("repeats and reads back through tracked speaks while remaining armed", () => {
+    it("clears the armed grant before tracked repeat and read-back speech", () => {
       const start = armed();
       const repeated = reduce(start.state, say("repeat"), ctx(filledSurvey, 2000));
-      expect(repeated.effects).toEqual([{
-        kind: "speak", speakId: "b3", text: start.state.lastSpoken, category: "answer", interruptible: true,
-      }]);
-      expect(repeated.state.mode).toBe("awaiting-confirm");
+      expect(repeated.effects).toEqual([
+        { kind: "clearConfirm", grantId: "g1", reason: "cancelled" },
+        { kind: "speak", speakId: "b3", text: start.state.lastSpoken, category: "answer", interruptible: true },
+      ]);
+      expect(repeated.state.mode).toBe("ready");
+      expect(repeated.state.confirm).toBeNull();
       expect(repeated.state.outstanding).toContain("b3");
 
       const reread = reduce(start.state, say("read back"), ctx(filledSurvey, 2000));
-      expect(reread.effects).toEqual([{
-        kind: "speak", speakId: "b3", text: readBackText(filledSurvey), category: "readback", interruptible: true,
-      }]);
-      expect(reread.state.mode).toBe("awaiting-confirm");
+      expect(reread.effects).toEqual([
+        { kind: "clearConfirm", grantId: "g1", reason: "cancelled" },
+        { kind: "speak", speakId: "b3", text: readBackText(filledSurvey), category: "readback", interruptible: true },
+      ]);
+      expect(reread.state.mode).toBe("ready");
+      expect(reread.state.confirm).toBeNull();
       expect(reread.state.outstanding).toContain("b3");
     });
 

@@ -5,20 +5,21 @@
 //   npm run dev -- --brain=fake
 //   npm run dev -- --no-repl            (stay up so the voice UI can attach)
 //
-// Exit codes: 0 normal, 1 startup failure (port in use), 2 bad flags or --brain=claude.
+// Exit codes: 0 normal, 1 startup failure (including AGY CLI init), 2 bad flags.
 import { parseArgs } from "node:util";
 import { DEFAULT_PORT } from "@blip/protocol";
 import { FIXTURE_NAMES, type FixtureName } from "@blip/protocol/fixtures-loader";
 import { parseAllowedOrigin } from "../apps/server/src/hub/guard";
-import { BrainUnavailableError, CLAUDE_BRAIN_UNAVAILABLE, startServer, type RunningServer } from "../apps/server/src/server";
+import { startServer, type RunningServer } from "../apps/server/src/server";
 import { startFakeExtension } from "../tools/fake-extension/src/fake-extension";
 import { startRepl } from "../tools/repl/src/repl";
 
 const USAGE = `usage: npm run dev -- [options]
-  --brain=fake|claude        default fake (claude arrives in Phase 4 and exits 2)
+  --brain=fake|agy        default fake
   --port <n>                 default ${DEFAULT_PORT}; 0 picks a free port
   --fake-delay <ms>          how long a model-routed turn waits, default 1500
   --fixture=booking|broken   page the fake extension serves, default booking
+  --no-fake-extension        leave the extension slot open for a real browser
   --no-repl                  skip the typed REPL and stay up for the voice UI (Ctrl+C to stop)
   --allow-origin <origin>    extra loopback http origin allowed to act as voice (repeatable)
   --fake-request-action <id> TEST ONLY: the fake brain requests this action; the server still refuses it
@@ -45,6 +46,7 @@ async function main(): Promise<void> {
         port: { type: "string" },
         "fake-delay": { type: "string" },
         fixture: { type: "string", default: "booking" },
+        "no-fake-extension": { type: "boolean", default: false },
         "no-repl": { type: "boolean", default: false },
         "allow-origin": { type: "string", multiple: true },
         "fake-request-action": { type: "string" },
@@ -61,8 +63,7 @@ async function main(): Promise<void> {
     process.stdout.write(`${USAGE}\n`);
     process.exit(0);
   }
-  if (values.brain === "claude") die(CLAUDE_BRAIN_UNAVAILABLE, 2);
-  if (values.brain !== "fake") die(`--brain must be fake (claude arrives in Phase 4), got "${values.brain}"`, 2);
+  if (values.brain !== "fake" && values.brain !== "agy") die(`--brain must be fake or agy, got "${values.brain}"`, 2);
   if (!(FIXTURE_NAMES as readonly string[]).includes(values.fixture)) {
     die(`--fixture must be one of ${FIXTURE_NAMES.join(", ")}, got "${values.fixture}"`, 2);
   }
@@ -84,34 +85,37 @@ async function main(): Promise<void> {
     server = await startServer({
       port,
       dev: true,
-      brain: "fake",
+      brain: values.brain,
       fakeDelayMs,
       extraVoiceOrigins,
       ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
     });
   } catch (err) {
-    if (err instanceof BrainUnavailableError) die(err.message, 2);
     if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
       die(`port ${port} is already in use; stop the other process or pick another with --port <n> (0 picks a free port)`, 1);
     }
     die(`failed to start: ${(err as Error).message}`, 1);
   }
-  process.stdout.write(`listening on ${server.url} (brain=fake, dev=true)\n`);
+  process.stdout.write(`listening on ${server.url} (brain=${server.config.brain}, dev=true)\n`);
 
-  const extension = startFakeExtension({ url: server.url, fixture });
-  try {
-    await extension.connected;
-  } catch (err) {
-    await server.close();
-    die(`fake extension failed to attach: ${(err as Error).message}`, 1);
+  const extension = values["no-fake-extension"] ? undefined : startFakeExtension({ url: server.url, fixture });
+  if (extension !== undefined) {
+    try {
+      await extension.connected;
+    } catch (err) {
+      await server.close();
+      die(`fake extension failed to attach: ${(err as Error).message}`, 1);
+    }
+    process.stdout.write(`fake extension attached (${fixture})\n`);
+  } else {
+    process.stdout.write("fake extension disabled; waiting for the real extension\n");
   }
-  process.stdout.write(`fake extension attached (${fixture})\n`);
 
   let closing = false;
   const shutdown = async (code: number): Promise<never> => {
     if (!closing) {
       closing = true;
-      extension.close();
+      extension?.close();
       await server.close();
     }
     process.exit(code);
@@ -128,7 +132,7 @@ async function main(): Promise<void> {
     url: server.url,
     input: process.stdin,
     output: process.stdout,
-    controls: { setFixture: (name) => extension.setFixture(name as FixtureName) },
+    ...(extension !== undefined ? { controls: { setFixture: (name) => extension.setFixture(name as FixtureName) } } : {}),
   });
   try {
     await repl.ready;

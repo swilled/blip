@@ -15,7 +15,7 @@ Each person works through their own workstream roadmap (`workstreams/core/ROADMA
 | C5 | Action kinds (fail-closed rules) | core P2 | h3 | — | — | Every control classified; gated kinds refused |
 | C6 | Policy gate, Executor, grants, audit log | core P3 | h8 | Phrase-match rules (voice reviews) | — | Adversarial tests pass in `packages/policy` |
 | C7 | Result reading (RES-01/02) | core P3 | h10 | Speech templates (voice) | Plain text reply | Result page read back |
-| C8 | Claude brain: `parseIntent`, locked-down config | core P4 | h12 | Intent handling in the reducer | `--brain=fake` | Starts only with clean tool list; intents valid |
+| C8 | AGY Gemini brain: `parseIntent`, generated no-tools agents | core P4 | h12 | Intent handling in the reducer | `--brain=fake` | Starts only with the expected isolated agent; intents valid |
 | C9 | Label repair, cache | core P4 | h14 | `labelSource` display (voice) | Baseline labels only | Broken-form labels repaired in background |
 | C10 | Injection defense, `injection.html`, real-site fixes | core P5 | h17 | Injection warning text | Flag only, no speech | Seeded page blocked and flagged |
 | C11 | One-command startup, `demo-safe` tag, plan-B mode | core P5 | h22 | Demo script | Manual startup | One command works on both machines |
@@ -32,7 +32,7 @@ Each person works through their own workstream roadmap (`workstreams/core/ROADMA
 | V6 | Read-back, confirm states, BLOCKED banner, earcons | voice P2 | h8 | C6 gate events | Fake executor that always replies "blocked" | Bare "yes" refused; phrase path tested |
 | V7 | Profile fill, spell, change, undo (grammar side) | voice P3 | h12 | C4 fill actions | Fake fills | Each command works on the fake extension |
 | V8 | Guessed-label and injection warnings (speech) | voice P3 | h12 | C9 `labelSource`, C10 flags | Fixture flags | Warning spoken from fixture flag |
-| V9 | Public demo form, sensitive-field handoff | voice P3 | h12 | C8 for real Claude | Fixture form | Form exists by h12 for core to test |
+| V9 | Public demo form, sensitive-field handoff | voice P3 | h12 | C8 for real AGY Gemini | Fixture form | Form exists by h12 for core to test |
 | V10 | NVDA screen-reader mode | voice P4 | h16 | — | Agent-voice mode only | Speech through NVDA, no double speech |
 | V11 | Rate control, real-form rehearsals, fallback kit, backup video | voice P4 | h20 | C11 startup, C7 result reading | Manual start | 3 clean runs; video by h36 |
 
@@ -47,7 +47,7 @@ Each person works through their own workstream roadmap (`workstreams/core/ROADMA
 | ~h8 | voice → core | Phrase-match rules and BLOCKED wording (V6) | Core's rules from the roadmap |
 | ~h12 (I2) | core → voice | Gate and Executor (C6), result reading (C7) | Fake executor, plain-text result |
 | ~h12 | voice → core | Public demo form created and shared (V9) | Core's own test pages |
-| ~h12–14 | core → voice | Claude brain (C8) | `--brain=fake` |
+| ~h12–14 | core → voice | AGY Gemini brain (C8) | `--brain=fake` |
 | ~h17 (I3) | core → voice | Label repair (C9), injection flags (C10) | Fixture flags |
 | ~h20 | core → voice | One-command startup (C11) | Manual start |
 | ~h30 (Freeze) | both | Demo script agreed, `demo-safe` tagged | — |

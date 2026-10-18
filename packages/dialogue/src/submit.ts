@@ -96,12 +96,26 @@ export function handleArmedUtterance(
   ctx: DialogueContext,
 ): DialogueResult {
   if (event.type === "control") {
+    const confirm = state.confirm;
+    const reset: DialogueState = { ...state, mode: "ready", readBack: null, confirm: null };
     if (event.cmd === "stop") {
-      const stopped = cancelEffect(state);
-      return { state: stopped.state, effects: [stopped.effect] };
+      const stopped = cancelEffect(reset);
+      return {
+        state: stopped.state,
+        effects: [
+          ...(confirm === null ? [] : [{ kind: "clearConfirm" as const, grantId: confirm.grantId, reason: "cancelled" as const }]),
+          stopped.effect,
+        ],
+      };
     }
-    const repeated = speakEffect(state, state.lastSpoken ?? "There's nothing to repeat.", "answer", { interruptible: true });
-    return { state: repeated.state, effects: [repeated.effect] };
+    const repeated = speakEffect(reset, state.lastSpoken ?? "There's nothing to repeat.", "answer", { interruptible: true });
+    return {
+      state: repeated.state,
+      effects: [
+        ...(confirm === null ? [] : [{ kind: "clearConfirm" as const, grantId: confirm.grantId, reason: "cancelled" as const }]),
+        repeated.effect,
+      ],
+    };
   }
 
   const raw = event.utterance.text;
@@ -110,7 +124,16 @@ export function handleArmedUtterance(
 
   if (confirm !== null && phraseMatches(raw, confirm.phrase)) {
     if (confirmWindowOpen(state.outstanding.length, state.lastDoneAt, ctx.now)) {
-      return { state: { ...state, mode: "executing" }, effects: [{ kind: "redeem", grantId: confirm.grantId }] };
+      return {
+        state: { ...state, mode: "executing" },
+        effects: [{
+          kind: "redeem",
+          grantId: confirm.grantId,
+          speakId: confirm.speakId,
+          phrase: raw,
+          utteranceId: event.utterance.utteranceId,
+        }],
+      };
     }
     return refuseArmed(state);
   }
@@ -128,20 +151,41 @@ export function handleArmedUtterance(
   }
 
   if (STOP_COMMANDS.has(norm)) {
-    const stopped = cancelEffect(state);
-    return { state: stopped.state, effects: [stopped.effect] };
+    const reset = { ...state, mode: "ready" as const, readBack: null, confirm: null };
+    const stopped = cancelEffect(reset);
+    return {
+      state: stopped.state,
+      effects: [
+        ...(confirm === null ? [] : [{ kind: "clearConfirm" as const, grantId: confirm.grantId, reason: "cancelled" as const }]),
+        stopped.effect,
+      ],
+    };
   }
 
   if (REPEAT_COMMANDS.has(norm)) {
-    const repeated = speakEffect(state, state.lastSpoken ?? "There's nothing to repeat.", "answer", { interruptible: true });
-    return { state: repeated.state, effects: [repeated.effect] };
+    const reset = { ...state, mode: "ready" as const, readBack: null, confirm: null };
+    const repeated = speakEffect(reset, state.lastSpoken ?? "There's nothing to repeat.", "answer", { interruptible: true });
+    return {
+      state: repeated.state,
+      effects: [
+        ...(confirm === null ? [] : [{ kind: "clearConfirm" as const, grantId: confirm.grantId, reason: "cancelled" as const }]),
+        repeated.effect,
+      ],
+    };
   }
 
   if (READ_BACK_COMMANDS.has(norm)) {
+    const reset = { ...state, mode: "ready" as const, readBack: null, confirm: null };
     const repeatedReadBack = ctx.form === null
-      ? speakEffect(state, "I can't see a page yet.", "error", { interruptible: true })
-      : speakEffect(state, readBackText(ctx.form), "readback", { interruptible: true });
-    return { state: repeatedReadBack.state, effects: [repeatedReadBack.effect] };
+      ? speakEffect(reset, "I can't see a page yet.", "error", { interruptible: true })
+      : speakEffect(reset, readBackText(ctx.form), "readback", { interruptible: true });
+    return {
+      state: repeatedReadBack.state,
+      effects: [
+        ...(confirm === null ? [] : [{ kind: "clearConfirm" as const, grantId: confirm.grantId, reason: "cancelled" as const }]),
+        repeatedReadBack.effect,
+      ],
+    };
   }
 
   const preflight = resolveEdit(state, raw, ctx);
@@ -214,6 +258,7 @@ function finishReadback(state: DialogueState, event: Extract<DialogueEvent, { ty
       actionKind: action.kind,
       title: ctx.form.title,
       digest: readBack.digest,
+      speakId: readBack.speakId,
     }],
   };
 }
@@ -238,6 +283,7 @@ function handleConfirmArmed(state: DialogueState, event: Extract<DialogueEvent, 
     readBack: null,
     confirm: {
       grantId: event.grantId,
+      speakId: event.speakId,
       phrase: event.phrase,
       actionId: readBack.actionId,
       digest: readBack.digest,
@@ -277,6 +323,7 @@ function handleFormChanged(state: DialogueState, ctx: DialogueContext): Dialogue
 
 function handleGatedResult(state: DialogueState, event: Extract<DialogueEvent, { type: "gated.result" }>): DialogueResult {
   const reset: DialogueState = { ...state, mode: "ready", readBack: null, confirm: null };
+  if (event.silent) return { state: reset, effects: [] };
   if (event.ok) return speak(reset, "Submitted.", "answer");
   if (event.reason === "gate-not-connected") {
     const result = speakEffect(reset, "Blocked. The safety gate is not connected, so nothing was submitted.", "error", { interruptible: true });

@@ -11,12 +11,12 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 ### Constraints
 
 - **Timeline**: 36–48 hours of build time (GatorHacks) — everything optimizes for a reliable live demo, not completeness
-- **Model access**: Claude subscription only, no API key — agent must run through Claude Code headless / Claude Agent SDK on each developer's logged-in subscription; subject to subscription rate limits and Anthropic's terms for subscription auth (fine for personal hackathon use on own machine; do not ship as hosted product)
+- **Model access**: each developer runs the Antigravity CLI (`agy`) using their own signed-in subscription; Blip uses Gemini Flash and does not require a Gemini API key
 - **Tech stack**: TypeScript everywhere (extension, agent server, voice app) — one toolchain for both developers
 - **Platform**: Both machines Windows; Chrome; demo screen reader is NVDA
-- **Latency**: measured Agent SDK turns: Haiku 5.5 0.7–1.8 s, Sonnet 5.5 (low effort) 1.6–2.5 s; keep it low with grammar-first commands, background cached label repair, filler speech ("one moment"), Haiku for intents, snapshots capped ~8k tokens
-- **Security**: every page is untrusted input; Claude Code built-in tools must be disabled so prompt injection can't reach a shell or filesystem; passwords/card numbers never sent to the model
-- **Collaboration**: two people on separate machines; both have Claude subscriptions and can run the agent locally
+- **Latency**: keep response time low with grammar-first commands, background cached label repair, filler speech ("one moment"), Gemini Flash for intents, and snapshots capped at the wire limit
+- **Security**: every page is untrusted input; generated AGY agents have no tools and run in isolated temporary directories; passwords/card numbers never reach the model
+- **Collaboration**: two people on separate machines; each signs in to the Antigravity CLI using their own subscription
 
 <!-- GSD:project-end -->
 
@@ -28,8 +28,8 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 
 | Layer | Use | Version | Confidence |
 |---|---|---|---|
-| Agent runtime | `@anthropic-ai/claude-agent-sdk` `query()` in **streaming-input mode** (one long-lived session), with in-process tools via `createSdkMcpServer()` + `tool()` | 0.3.301 (bundles Claude Code 2.1.301) | **HIGH (verified live)** |
-| Tool schemas / protocol | `zod` | 4.6.x (SDK peer: `^4.0.0`) | HIGH |
+| Agent runtime | Antigravity CLI (`agy`) in persistent NDJSON mode with generated `tools: []` agents and Gemini Flash | CLI version checked at launch | **HIGH (verified live)** |
+| Tool schemas / protocol | `zod` | 4.6.x | HIGH |
 | Runtime | Node.js **24 LTS** ("Krypton") | 24.14+ (latest 24.22.0) | HIGH |
 | TS runner (server) | `tsx watch` | 4.23.x | HIGH |
 | WebSocket | `ws` (+ `@types/ws`) | 8.22.0 | HIGH |
@@ -46,46 +46,22 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 | Dev orchestration | `concurrently` for `npm run dev`; a `scripts/start.ts` for one-command demo startup | concurrently 10.0.6 | HIGH |
 | Typecheck | TypeScript **6.0.3**, not 7.x (see below) | 6.0.3 | MEDIUM |
 
-## 1. Running Claude headlessly on a subscription: Agent SDK, not raw `claude -p`
+## 1. Running Gemini through the Antigravity subscription
 
-### Verdict: use `@anthropic-ai/claude-agent-sdk` 0.3.301. Confidence: HIGH (verified live)
+The server launches the installed `agy` CLI with `--input-format stream-json --output-format stream-json`, one persistent conversation per role, and explicit Gemini Flash model IDs. The headless CLI uses credentials cached by an interactive Antigravity sign-in; the server does not use an SDK or a Gemini API key. Install the CLI, sign in once with `agy`, and verify local model slugs with `agy models`.
 
-- `system/init` reported `apiKeySource: "none"`, `model: "claude-haiku-5-5"` and `tools: ["mcp__blip__get_snapshot"]`, with no built-in tools at all. The MCP server status was `connected`, source `sdk`.
-- Asked to run the shell command `dir`, the model replied: "I can't run `dir` because I have no shell tool in this session." So `tools: []` really removes the shell.
-- **Latency, one long-lived streaming session:** about 1.0–1.6 s from spawn to init. Haiku 5.5 turns took 0.7–1.8 s, including one in-process tool round trip. Sonnet 5.5 at `effort: "low"` took 1.6–2.5 s per turn. That beats the 2–5 s assumed in PROJECT.md.
-- The SDK installs its own native Claude Code binary (`@anthropic-ai/claude-agent-sdk-win32-x64`) as an optional dependency, so no separate `claude` install is needed. The logged-in subscription credential is still required, and the SDK reads it from `%USERPROFILE%\.claude\.credentials.json`.
+Each role gets a generated primary agent with `tools: []`, `mainAgent: true`, and `subagent: false` in a new temporary working directory. The CLI init payload reports its global tool inventory even when this agent has no tools, so startup validates the selected agent and restricted permission mode instead of expecting an empty inventory. Any runtime tool step closes the role. Do not pass `--dangerously-skip-permissions`; the command also runs in terminal sandbox mode.
 
-### Exact configuration (verified option names, from the TS reference)
+The intent role uses `gemini-3.8-flash-low`; label repair uses `gemini-3.8-flash-medium`. Application schemas remain locally validated before any output reaches deterministic policy code. The model never has access to the page executor, GatePort, or submission grant.
 
-- `tools: []` means "all built-ins are removed. Claude can only use your MCP tools." Use this rather than `disallowedTools: ["*"]`, which **also strips MCP tools** because `*` matches every tool.
-- `allowedTools` grants permission only. It doesn't restrict which tools exist. Unanchored globs (`"*"`, `"mcp__*"`) are ignored. The server segment must be literal, as in `mcp__blip__*`.
-- Under `bypassPermissions`, `allowedTools` doesn't constrain anything. Use `dontAsk`, never `bypassPermissions`.
-- Tool search is on by default and defers SDK MCP tool schemas. `alwaysLoad: true` on the server avoids the extra ToolSearch hop. With `tools: []` no ToolSearch tool appeared anyway (verified).
-- `tool()` accepts Zod 3 or 4 schemas. Return `isError: true` to compose the error text the model reads. A thrown exception becomes a raw error result, and the loop continues.
-- A tool result over 25,000 tokens (or 50,000 characters) is **saved to a file**, and the model is told to Read it. Read is disabled here, so an oversized snapshot silently breaks the turn. Keep `get_snapshot` output to the trimmed form model, not the raw AX tree.
-- MCP tool calls time out (`MCP_TOOL_TIMEOUT`, or the per-server `timeout` on `createSdkMcpServer`). **Don't make `ask_user` a tool that blocks waiting for speech.** End the turn with the question and send the user's answer as the next `SDKUserMessage`. Deterministic code owns the confirm-phrase wait.
+## 2. Model tools: disabled
 
-### Sessions and models
-
-- Run **one long-lived conversational session** (`haiku`, `effort: "low"`) for utterance → intent/values.
-- Run a **separate session for page → form schema** (`sonnet`, `effort: "low"`, or `opus` if label repair quality is poor). Prewarm it with `startup()` at boot so it's ready when a page loads.
-- On subscription accounts the aliases currently resolve to Opus 5.5, Sonnet 5.5 and Haiku 5.5. Effort levels for these models: `low|medium|high|xhigh|max`, default `medium`.
-
-### Subscription-auth terms (read before the pitch). Confidence: HIGH (official pages)
-
-- The Agent SDK overview says: "Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK."
-- The Legal & Compliance page says developers building products "should use API key authentication", and that Anthropic does not permit routing "requests through Free, Pro, or Max plan credentials on behalf of their users." It also says advertised Pro/Max limits "assume ordinary, individual usage of Claude Code and the Agent SDK."
-- Support article 15036540: "You can still use the Claude Agent SDK, `claude -p`, and third-party apps with your subscription limits." The previously announced change to SDK billing was **paused on 2026-06-15**. As of 2026-10-07, Max and Team plans also include monthly API credits that cover the Agent SDK and `claude -p`.
-- **Implication:** each developer running Blip on their own machine with their own login is ordinary individual use, which is fine for the hackathon. **Do not** host Blip or offer "sign in with Claude" to other users. The pitch should say production would use per-user API keys, or each user's own sign-in to the unmodified Claude Code binary, which the legal page explicitly allows. Don't brand the product "Claude Code". "Blip, powered by Claude" is allowed.
-- **Gotcha:** in non-interactive mode, a present `ANTHROPIC_API_KEY` is always used and outranks the subscription login. Strip it from `env` as shown above.
-
-## 2. MCP server SDK: not needed
-
+No tools or MCP server are passed to the model. The application sends only privacy-filtered projections; all browser actions and gated submission remain in deterministic code.
 ## 3. Local server
 
 | Piece | Choice | Why |
 |---|---|---|
-| Node | **24 LTS** (24.14 installed; 24.22.0 is the latest LTS) | Active LTS. Node 26 isn't LTS until late Oct 2026, so don't switch mid-hackathon. SDK engines: `>=18`. |
+| Node | **24 LTS** (24.14 installed; 24.22.0 is the latest LTS) | Active LTS. Node 26 isn't LTS until late Oct 2026, so don't switch mid-hackathon. AGY runs as a separate installed process. |
 | Run TS | `tsx watch src/main.ts` (tsx 4.23.x) | Zero config, handles workspace TS imports. Node 24's native type stripping can't handle enums and needs explicit `.ts` extensions, so it's not worth the friction. |
 | HTTP + static | `node:http` + `sirv` 3.0.2 serving `apps/voice/dist` | Tiny, with one port for HTTP and both WebSockets. Express or Hono add nothing here. |
 | WebSocket | `ws` 8.22.0 with `noServer` + `server.on("upgrade")` routing `/ext` (extension) and `/ui` (voice page) | The standard choice. Validate every message with zod on receipt. |
@@ -162,7 +138,7 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 
 - One `@blip/protocol` package, imported by all three apps, is the executable version of `PROTOCOL.md`. Both sides `parse()` every inbound message, so a contract drift fails loudly at the boundary.
 - Vite, WXT and tsx all transpile workspace TS source directly, so the protocol package needs no build step.
-- Use **zod 4** everywhere, matching the Agent SDK peer. If the extension bundle size matters, `zod/mini` is available, but it isn't needed.
+- Use **zod 4** everywhere for protocol and local model-output validation. If the extension bundle size matters, `zod/mini` is available, but it isn't needed.
 
 ## Installation
 
@@ -172,7 +148,7 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 
 # apps/server
 
-# DO NOT install with --omit=optional: it drops @anthropic-ai/claude-agent-sdk-win32-x64 (the bundled CLI)
+# The agent provider uses the locally installed Antigravity CLI; npm does not bundle a model SDK.
 
 # apps/extension
 
@@ -184,9 +160,9 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 
 | Recommended | Alternative | When to use the alternative |
 |---|---|---|
-| Agent SDK `query()` + `createSdkMcpServer` | `claude -p --input-format stream-json --output-format stream-json` with a stdio/HTTP MCP server | Never for this project. Only for a non-JS host. |
-| In-process SDK MCP tools | `@modelcontextprotocol/sdk` v1 `McpServer` over Streamable HTTP | To debug the tools from MCP Inspector or the stock CLI |
-| One long-lived Haiku session plus a prewarmed Sonnet schema session | One Sonnet session for everything | When Haiku misparses intents too often. It costs roughly +1 s per turn. |
+| Antigravity CLI NDJSON sessions | Gemini API SDK with an API key | Not for the subscription-backed local demo. |
+| No model tools | MCP tools or shell commands | Tools would let page injection cross the deterministic model boundary. |
+| Separate persistent Gemini Flash sessions for intent and label repair | One session for both roles | Keep role prompts and failure recovery isolated. |
 | WXT | Plain esbuild + static manifest | When WXT config or reload problems cost more than 30 minutes. The extension is tiny. |
 | WXT | CRXJS 3.0.0 | When the team already knows CRXJS |
 | CDP AX tree | Content-script DOM walk + `dom-accessibility-api` | When the debugger infobar is unacceptable and the flag can't be used |
@@ -202,18 +178,17 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 
 | Avoid | Why | Use instead |
 |---|---|---|
-| `permissionMode: "bypassPermissions"` | `allowedTools` doesn't constrain it, so every tool gets approved | `tools: []` + `allowedTools: ["mcp__blip__*"]` + `permissionMode: "dontAsk"` |
-| `disallowedTools: ["*"]` to kill built-ins | `*` also matches and removes your MCP tools | `tools: []` |
-| Default `settingSources` (all sources) | Loads the developer's `~/.claude` settings, hooks, CLAUDE.md, skills and plugins into an agent that reads untrusted pages | `settingSources: []` + `strictMcpConfig: true` |
-| Leaving `ANTHROPIC_API_KEY` in the env | Outranks the subscription login in `-p`/SDK mode, so usage bills to the API key | Delete it from `options.env` |
-| Single-message `query()` per utterance | Respawns the process (~1–1.6 s) and loses conversation context each time | Streaming input from an async queue |
-| A blocking `ask_user` tool that waits for speech | Hits the MCP tool timeout, and the model ends up driving the confirm flow | End the turn with the question; deterministic code awaits the phrase |
-| Raw full AX tree as a tool result | Results over 25k tokens are written to a file the model can't read (Read is disabled) | Trimmed form model, a few KB |
+| AGY tool permissions | Untrusted page text could trigger local or browser tools | Generated `tools: []` agents and stop on any tool step |
+| `--dangerously-skip-permissions` | Auto-approves every CLI tool | Never use it |
+| API-key credentials in the child environment | Could bypass the signed-in subscription path | Strip API-key variables and preserve the CLI account cache |
+
+
+
 | `--load-extension` in the launcher | Removed from branded Chrome since 137 | Load unpacked once into a dedicated `--user-data-dir` profile |
 | `SpeechRecognition.continuous = true` | Silent drops, `no-speech`/`network` errors, duplicate sessions on restart | One `start()`/`stop()` per PTT press |
 | STT in an offscreen document | No evidence Web Speech works in hidden documents | A visible voice window or the side panel |
 | `say` npm package | Spawns PowerShell per utterance (slow) | `speechSynthesis`, or a persistent PowerShell child |
-| `@modelcontextprotocol/server` v2 packages | The Agent SDK peers on `@modelcontextprotocol/sdk` ^1.29 | The v1 SDK (types only) |
+
 | Plasmo | Parcel-based and partially maintained | WXT |
 | Unauthenticated `ws://localhost` | Any website can connect to localhost sockets | Check the `Origin` header; bind to 127.0.0.1 |
 
@@ -230,7 +205,7 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 
 | Package | Compatible with | Notes |
 |---|---|---|
-| @anthropic-ai/claude-agent-sdk@0.3.301 | zod ^4.0.0, @modelcontextprotocol/sdk ^1.29.0, @anthropic-ai/sdk >=0.93.0 (peers); Node >=18 | Bundles Claude Code 2.1.301 as an optional dependency `-win32-x64`. Pin the exact version; it releases almost daily. |
+| Antigravity CLI | Installed per developer and authenticated with their Antigravity subscription | No model SDK package is bundled in npm dependencies. |
 | wxt@0.21.4 | vite ^6.3.4 \|\| ^7 \|\| ^8, typescript >=5.4 | Runner uses web-ext (10.8.0); disable it |
 | koffi@3.3.3 | Node 24 win32-x64 (prebuilt) | Verified with `kernel32!lstrlenW(char16_t*)` |
 | uiohook-napi@1.5.5 | Node 24 win32-x64 / arm64 (prebuilds) | Verified load |
@@ -240,23 +215,14 @@ Blip is a voice agent that helps blind users fill out web forms. A local Windows
 
 ## Sources
 
-- Live smoke test, this machine, 2026-10-16: SDK 0.3.301, `apiKeySource: "none"`, tools list = `mcp__blip__get_snapshot` only, Haiku 5.5 / Sonnet 5.5 turn latencies (HIGH)
-- https://code.claude.com/docs/en/agent-sdk/typescript: `query`, Options (`tools`, `allowedTools`, `disallowedTools`, `strictMcpConfig`, `settingSources`, `persistSession`, `env`, `effort`, `permissionPrompts`), `startup()`/`WarmQuery`/`prewarm()`, `tool()`/`createSdkMcpServer()` signatures (HIGH)
-- https://code.claude.com/docs/en/agent-sdk/custom-tools: `tools: []` semantics, `alwaysLoad`, `isError`, annotations (HIGH)
-- https://code.claude.com/docs/en/agent-sdk/permissions: evaluation order, `dontAsk`, the `bypassPermissions` warning, `disallowedTools: ["*"]` removes everything (HIGH)
-- https://code.claude.com/docs/en/agent-sdk/mcp: connection timing, `mcp__server__tool` naming, the 25k-token output-to-file behavior, timeouts (HIGH)
-- https://code.claude.com/docs/en/agent-sdk/streaming-vs-single-mode: streaming input recommended (HIGH)
-- https://code.claude.com/docs/en/agent-sdk/overview: the third-party claude.ai-login restriction and branding rules (HIGH)
-- https://code.claude.com/docs/en/legal-and-compliance: OAuth vs API key policy (HIGH)
-- https://code.claude.com/docs/en/authentication: credential precedence, Windows credential path, `setup-token` (HIGH)
-- https://support.claude.com/articles/15036540: SDK usage still draws on subscription limits; change paused 2026-06-15; Max/Team API credits 2026-10-07 (HIGH)
-- https://code.claude.com/docs/en/model-config: aliases → Opus/Sonnet/Haiku 5.5, effort levels (HIGH)
+- AGY CLI integration, this machine, 2026-10-17: subscription-backed Gemini Flash bootstrap for both isolated roles plus synthetic no-tools request (HIGH)
+- https://www.antigravity.google/docs/cli/headless/: cached login, NDJSON streaming, model selection, and headless permissions (HIGH)
+- https://antigravity.google/docs/cli/subagents: custom agent tool permissions and `tools: []` configuration (HIGH)
 - https://developer.chrome.com/docs/extensions/reference/api/debugger: allowed CDP domains, flat sessions (Chrome 125+), detach reasons (HIGH)
 - https://developer.chrome.com/docs/extensions/how-to/web-platform/websockets: Chrome 116+ service-worker WebSocket keepalive every 20 s (HIGH)
 - https://developer.chrome.com/docs/extensions/reference/api/commands: global commands, Ctrl+Shift+[0-9], no keyup (HIGH)
 - CDP `browser_protocol.json` (ChromeDevTools/devtools-protocol master): Accessibility/Input/Emulation signatures and experimental flags (HIGH)
 - https://groups.google.com/a/chromium.org/g/chromium-extensions/c/1-g8EFx2BBY: `--load-extension` removed in branded Chrome 137 (HIGH)
-- https://help.httpwatch.com/cancelled_by_user_error.html, https://help.dictanote.co/help/general/hiding-the-voice-in-started-debugging-this-browser-message, https://claudeissues.com/issue/69287-claude-in-chrome-started-debugging-this-browser-banner-shows-on-every-tab-please: `--silent-debugger-extension-api` hides the infobar (MEDIUM)
 - https://wxt.dev/guide/essentials/config/browser-startup.html: web-ext runner, disabling it, persistent profile (HIGH)
 - https://wxt.dev/guide/resources/compare and https://merginit.com/blog/23082026-plasmo-vs-wxt-vs-crxjs-extension-js: framework landscape (MEDIUM; vendor and opinion sources)
 - https://github.com/nvaccess/nvda/blob/master/extras/controllerClient/readme.md, the `example_python.py` in the same repo, and https://download.nvaccess.org/releases/stable/ (`nvda_2026.2_controllerClient.zip`): exports, versions, LGPL (HIGH)
@@ -305,9 +271,9 @@ Rules:
 - Branches: `core/*` and `voice/*`; merge to `main` small and often. Integration milestones: M0 ~h0.75 (protocol frozen), I1 ~h6–8, I2 ~h12, I3 ~h20, freeze ~h30 (tag `demo-safe`).
 
 Safety invariants (never weaken without both people agreeing):
-- The model never acts: Claude is only called through tool-less structured-output calls (`repairFormModel`, `parseIntent`). Every page action goes through the Executor.
-- Gated kinds (submit/pay/delete/send/cross-domain) are default-deny; the confirm phrase is matched in code only on utterances from the voice socket.
-- Agent SDK sessions: `tools: []`, `settingSources: []`, `strictMcpConfig: true`, `permissionMode: "dontAsk"`, empty cwd, `ANTHROPIC_API_KEY` stripped, auto-memory and claude.ai connectors disabled, tool list asserted at init. Never `bypassPermissions`.
+- The model never acts: AGY Gemini returns data through tool-less structured-output calls (`repairFormModel`, `parseIntent`). Every page action goes through the Executor.
+- Gated kinds (submit/pay/delete/send/cross-domain) are default-deny; the server matches the fixed phrase after the tracked read-back. The voice reducer sends `confirm.redeem` with its current grant/read-back IDs, while only the server holds the consumed proof sent to GatePort.
+- AGY CLI sessions: generated `tools: []` agent per role, restricted permission mode, isolated temporary working directory, cached subscription auth, API-key environment variables stripped, and every tool step rejected. Never use `--dangerously-skip-permissions`.
 - Passwords/card numbers are never spoken, logged, or sent to the model.
 
 <!-- GSD:workflow-start source:GSD defaults -->

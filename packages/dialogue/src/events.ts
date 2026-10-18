@@ -13,9 +13,9 @@ export type DialogueEvent =
       error?: string;
       observedValue?: string | null;
     }
-  | { type: "confirm.armed"; grantId: string; phrase: string; expiresAt: number }
+  | { type: "confirm.armed"; grantId: string; speakId: string; phrase: string; expiresAt: number }
   | { type: "confirm.refused"; reason: string }
   | { type: "confirm.cleared"; grantId: string; reason: PayloadOf<"confirm.cleared">["reason"] }
-  | { type: "gated.result"; ok: boolean; reason?: string }
+  | { type: "gated.result"; ok: boolean; reason?: string; silent?: boolean }
   | { type: "intent.reply"; text: string }
   | { type: "control"; cmd: "stop" | "repeat" };

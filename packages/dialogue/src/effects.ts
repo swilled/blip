@@ -14,9 +14,9 @@ export type Effect =
   | { kind: "select"; fieldId: string; optionValue: string }
   | { kind: "focus"; fieldId: string }
   | { kind: "refreshForm" }
-  | { kind: "armConfirm"; actionId: string; actionKind: ActionKind; title: string; digest: string }
+  | { kind: "armConfirm"; actionId: string; actionKind: ActionKind; title: string; digest: string; speakId: string }
   | { kind: "clearConfirm"; grantId: string; reason: ConfirmClearedPayload["reason"] }
-  | { kind: "redeem"; grantId: string };
+  | { kind: "redeem"; grantId: string; speakId: string; phrase: string; utteranceId: string };
 
 export type LocalProfile = Readonly<{ name: string; email: string; tel: string }>;
 

@@ -30,14 +30,14 @@ Every frame is an envelope:
 
 ## Messages
 
-In the tables below `from` is the role allowed to put the frame on the wire and `to` is the role that receives it. Roles are `extension`, `voice` and `server`. There are 24 types. The server enforces `from` per connection (D-04): a frame whose type the connection's role may not send is answered with a `role-violation` error and never routed.
+In the tables below `from` is the role allowed to put the frame on the wire and `to` is the role that receives it. Roles are `extension`, `voice` and `server`. There are 25 types. The server enforces `from` per connection (D-04): a frame whose type the connection's role may not send is answered with a `role-violation` error and never routed.
 
 ### Handshake and shared
 
 | type | from | to | payload | notes |
 |---|---|---|---|---|
 | `hello` | extension, voice | server | `{ role, clientVersion, protocolVersion: 1 }` | first frame, within 2 s |
-| `welcome` | server | extension, voice | `{ sessionId, serverVersion, brain: claude or fake }` | reply to `hello` |
+| `welcome` | server | extension, voice | `{ sessionId, serverVersion, brain: agy or fake }` | reply to `hello` |
 | `error` | server | extension, voice | `{ code, message, fatal }` | `code` is an open string, see the error code table |
 
 ### Extension to Server
@@ -47,7 +47,7 @@ Includes the server-to-extension requests, listed next to the replies they expec
 | type | from | to | payload | notes |
 |---|---|---|---|---|
 | `snapshot.request` | server | extension | `{ tabId?: int, reason: page-load, user, post-act or refresh }` | the extension replies `snapshot.result` (timeout 8 s) |
-| `snapshot.result` | extension | server | `{ ok: true, snapshot }` or `{ ok: false, error: { code, message } }` | `ok`-discriminated union, so a failed capture is a typed reply and not a timeout |
+| `snapshot.result` | extension | server | `{ ok: true, snapshot }` or `{ ok: false, error: { code, message } }` | `ok`-discriminated union; `Snapshot.untrustedInstructionDetected?` is an optional warning-only boolean |
 | `act.request` | server | extension | `ActRequest` (see below) | the extension replies `act.result` (timeout 5 s) |
 | `act.result` | extension | server | `ActResult` (see below) | carries `observedValue` for verify-after-write |
 | `page.changed` | extension | server | `{ tabId: int, url, reason: navigation, mutation or tab-activated, structuralHash? }` | debounced 500 ms; the server decides whether to re-snapshot |
@@ -63,14 +63,15 @@ Includes the server-to-voice pushes.
 
 | type | from | to | payload | notes |
 |---|---|---|---|---|
-| `utterance` | voice | server | `{ utteranceId, text (1 to 500 chars), source: voice or typed, sttConfidence?, alternatives? }` | final transcripts only; the confirm phrase is matched in code only on these |
+| `utterance` | voice | server | `{ utteranceId, text (1 to 500 chars), source: voice or typed, sttConfidence?, alternatives? }` | final transcripts only; a mismatch while awaiting confirmation cancels it |
 | `ptt` | voice | server | `{ state: start or end }` | on `start` the server stops speech and cancels the pending brain turn |
 | `speak.done` | voice | server | `{ speakId, interrupted: boolean }` | required for read-back before arming a confirmation |
 | `settings` | voice | server | `{ outputMode: agent-voice, screen-reader or both, rate?: number, verbosity?: short or normal }` | |
 | `control` | voice | server | `{ cmd: stop, repeat or reconnect-browser }` | `stop` also works from a button and a hotkey |
+| `confirm.redeem` | voice | server | `{ grantId, speakId, utteranceId, phrase }` | reducer redemption for the tracked read-back; server rechecks the exact phrase and consumes the grant |
 | `speak` | server | voice | `{ speakId, text, category, interrupt, spell? }` | the UI queues it; `interrupt` flushes the queue. `category` is answer, filler, readback, confirm-prompt, error or result |
 | `earcon` | server | voice | `{ name: listening, thinking, done, blocked or error }` | non-verbal latency cue |
-| `confirm.armed` | server | voice | `{ grantId, phrase, kind: ActionKind, actionLabel, expiresAt: number }` | informational only; the UI displays "Say: submit form" |
+| `confirm.armed` | server | voice | `{ grantId, speakId, phrase, kind: ActionKind, actionLabel, expiresAt: number }` | the UI displays the server-owned confirmation prompt and binds redemption to its read-back id |
 | `confirm.cleared` | server | voice | `{ grantId, reason: executed, cancelled, expired, page-changed or value-changed }` | |
 | `state` | server | voice | `{ dialogue: DialogueStateName, page: object or null, focusFieldId?, busy, extensionConnected, brain }` | pushed on every change; `page` is `{ url, title, step?, fieldCount: int, requiredEmpty: int, untrustedInstructionDetected?: boolean }` |
 | `transcript` | server | voice | `{ utteranceId, heardAs, routedTo: grammar or model }` | debug and demo panel |
@@ -98,7 +99,7 @@ Includes the server-to-voice pushes.
 
 The model (or the grammar) produces an `Intent`, a union on `type` with 16 variants: `describe`, `read_form`, `whats_required`, `what_went_wrong`, `read_back`, `fill_profile`, `go_to_field` (`fieldId`), `set_fields` (`fills`, up to 20 of `{ fieldId, value }`), `spell` (`fieldId`), `undo`, `stop`, `request_action` (`actionId`), `click_safe` (`actionId`), `answer` (`text`), `clarify` (`question`), `unknown`.
 
-There is deliberately no `confirm`, `approve` or `submit_now` variant. The model may request an action but can never grant one; the confirm phrase is matched in server code on `utterance` frames from the voice socket only.
+There is deliberately no `confirm`, `approve` or `submit_now` Intent variant. The model may request an action but can never grant one. Voice may send `confirm.redeem` only with its currently armed grant, tracked read-back id and phrase; the server rechecks all three before it consumes the one-use grant and reaches GatePort. Ordinary `utterance` frames remain available for typed/recognized speech and cancel a pending confirmation when they do not match.
 
 ## DialogueStateName
 
@@ -162,8 +163,9 @@ The wire field `error.code` is an open string so a code added later never breaks
 - **Radio group.** One element, not one per option: `id` is the group id, `inputType` is `radio`, `options[].selected` marks the choice, and `value` is the selected option value or null.
 - **Checkbox.** Uses `checked`, with `value` null. **Select** uses `options` with `selected`, and `value` is the selected option value.
 - **Sensitive values.** When `sensitive` is not `none`, `value` is always null, in `Snapshot`, `FormModel`, and every frame. This is enforced by the schemas.
-- **GATE-07 warning signal.** `Snapshot.untrustedInstructionDetected?` is an optional boolean projected to `state.page.untrustedInstructionDetected?`. It carries no page text and grants no action authority; voice uses it only to speak a warning.
+- **GATE-07 warning signal.** `Snapshot.untrustedInstructionDetected?` and `StatePayload.page.untrustedInstructionDetected?` are optional booleans; older peers may omit them. The local detector sends no matched page prose, URL/query data, form value, or detector detail. The signal is warning-only and never changes an action kind, grant, confirmation, or permission.
 - **Caps.** At most 250 elements per snapshot, 40 headings, 20 alerts. The roughly 8k-token cap is applied at the model-prompt boundary in Phase 4, not on the wire.
+- **Label provenance (D-05).** `RawElement.labelCandidates[].source` is deterministic extension evidence (`aria`, `label`, `nearby-text`, `placeholder`, `inferred`) and excludes `model`. Resolved `Field.labelSource` may additionally be `model` only after server code applies a validated repair. Baseline ranking accepts raw sources only; the protocol lock stores both lists independently.
 - **FormModel conventions** the baseline builder follows:
   - the best label is the highest-confidence candidate, ties broken by source order `aria`, `label`, `nearby-text`, `placeholder`, `inferred`;
   - `required` is true when `requiredSource` is not `none`;
@@ -180,7 +182,7 @@ The wire field `error.code` is an open string so a code added later never breaks
 - Enums are closed. Widening an enum needs both developers' agreement.
 - Never rename or remove a type, field or enum value.
 - Receivers ignore unknown keys (payload objects are non-strict), so an older peer tolerates an additive field.
-- The freeze is mechanical: `packages/protocol/protocol.lock.json` lists every message type with its senders and receivers, the Intent types, ActionKind members, DialogueStateName values and the fixture files. `packages/protocol/test/protocol-lock.test.ts` fails if any locked item is removed or a message's senders or receivers change. New types and members pass.
+- The freeze is mechanical: `packages/protocol/protocol.lock.json` lists every message type with its senders and receivers, the Intent types, ActionKind members, DialogueStateName values, separate raw and resolved label source lists, and the fixture files. `packages/protocol/test/protocol-lock.test.ts` fails if any locked item is removed or a message's senders or receivers change. New types and members pass.
 - Edits to the lock file and to this document ride in the same PR as the additive change they describe. `npm run protocol:lock` regenerates the lock and may be run only inside a protocol PR that both developers approve.
 
 ## M0 sign-off items

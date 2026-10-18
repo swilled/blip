@@ -4,6 +4,7 @@ import { createStubGate } from "./gate-port";
 
 const request = (kind: string, title = "Blah") => ({
   actionId: newId(),
+  speakId: newId(),
   kind,
   title,
   digest: "form-digest",
@@ -27,6 +28,7 @@ describe("createStubGate", () => {
       expect(result).toEqual({
         ok: true,
         grantId: expect.any(String),
+        speakId: expect.any(String),
         phrase: expectedPhrases[index],
         expiresAt: now() + 30_000,
       });
@@ -71,7 +73,7 @@ describe("createStubGate", () => {
     if (minted.ok) grantIds.push(minted.grantId);
 
     for (const grantId of grantIds) {
-      await expect(gate.redeem(grantId)).resolves.toEqual({
+      await expect(gate.redeem({ grantId, speakId: "tracked", utteranceId: "u1", phrase: "submit survey" })).resolves.toEqual({
         ok: false,
         reason: "gate-not-connected",
       });

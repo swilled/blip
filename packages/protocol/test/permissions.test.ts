@@ -27,6 +27,7 @@ const EXPECTED: Record<string, { senders: Role[]; receivers: Role[] }> = {
   "speak.done": { senders: ["voice"], receivers: ["server"] },
   settings: { senders: ["voice"], receivers: ["server"] },
   control: { senders: ["voice"], receivers: ["server"] },
+  "confirm.redeem": { senders: ["voice"], receivers: ["server"] },
   speak: { senders: ["server"], receivers: ["voice"] },
   earcon: { senders: ["server"], receivers: ["voice"] },
   "confirm.armed": { senders: ["server"], receivers: ["voice"] },
@@ -38,9 +39,9 @@ const EXPECTED: Record<string, { senders: Role[]; receivers: Role[] }> = {
 const ROLES: Role[] = ["extension", "voice", "server"];
 
 describe("permission matrix (D-04)", () => {
-  it("has exactly 24 registry types, the same as the hand-written table", () => {
+  it("has exactly 25 registry types, the same as the hand-written table", () => {
     expect(Object.keys(MESSAGES).sort()).toEqual(Object.keys(EXPECTED).sort());
-    expect(Object.keys(MESSAGES)).toHaveLength(24);
+    expect(Object.keys(MESSAGES)).toHaveLength(25);
   });
 
   for (const [type, want] of Object.entries(EXPECTED)) {
@@ -53,7 +54,7 @@ describe("permission matrix (D-04)", () => {
   }
 
   it("never lets the extension send the voice-only types (confirm-phrase path)", () => {
-    for (const t of ["utterance", "ptt", "speak.done", "settings", "control"] as const) {
+    for (const t of ["utterance", "ptt", "speak.done", "settings", "control", "confirm.redeem"] as const) {
       expect(canSend("extension", t)).toBe(false);
       expect(canSend("server", t)).toBe(false);
     }

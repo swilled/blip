@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@blip/dialogue": "*",
+    "@blip/policy": "^0.0.0",
     "@blip/protocol": "*",
     "koffi": "3.3.3",
     "sirv": "3.0.2",
@@ -11,6 +13,7 @@
     "ws": "8.22.0"
   },
   "scripts": {
+    "agy:live-check": "tsx scripts/agy-cli-live-check.ts",
     "start": "tsx src/main.ts"
   }
 }

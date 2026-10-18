@@ -39,7 +39,7 @@ function cleanup(): void {
   }
 }
 process.on("SIGINT", () => {
-  console.log("\nStopping. Tell Claude: done.");
+  console.log("\nStopping. Tell Agy: done.");
   cleanup();
   process.exit(0);
 });
@@ -100,7 +100,7 @@ IN THIS TERMINAL
      space gets typed while you hold.
   E  The Blip window should stay above other windows (try maximizing Chrome).
 
-Press Ctrl+C when finished, then tell Claude "done". Results are saved for you.
+Press Ctrl+C when finished, then tell Agy "done". Results are saved for you.
 ============================================================
 `);
 

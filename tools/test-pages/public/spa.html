@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SPA form workflow</title>
+    <script defer src="/report.js"></script>
+    <script defer>
+      window.addEventListener("DOMContentLoaded", () => {
+        const step = document.querySelector("#form-step");
+
+        function render(currentStep) {
+          if (currentStep === 2) {
+            step.innerHTML = `
+              <h2>Step 2 of 2</h2>
+              <label for="contact-email">Contact email</label>
+              <input id="contact-email" name="email" type="email" autocomplete="email">
+              <button id="back" type="button">Back to step 1</button>
+            `;
+            document.querySelector("#back").addEventListener("click", () => history.back());
+            return;
+          }
+
+          step.innerHTML = `
+            <h2>Step 1 of 2</h2>
+            <label for="preferred-name">Preferred name</label>
+            <input id="preferred-name" name="name" type="text" autocomplete="given-name">
+            <button id="continue" type="button">Continue to step 2</button>
+          `;
+          document.querySelector("#continue").addEventListener("click", () => {
+            const from = location.pathname;
+            history.pushState({ step: 2 }, "", "/spa/step-two");
+            render(2);
+            window.blipReport("spa-navigation", { from, to: location.pathname, method: "pushState" });
+          });
+        }
+
+        window.addEventListener("popstate", () => render(location.pathname.endsWith("step-two") ? 2 : 1));
+        render(location.pathname.endsWith("step-two") ? 2 : 1);
+      });
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Two-step contact form</h1>
+      <div id="form-step" aria-live="polite"></div>
+    </main>
+  </body>
+</html>

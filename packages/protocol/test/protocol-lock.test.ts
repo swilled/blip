@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ActionKind, DialogueStateName, Intent, MESSAGES, PROTOCOL_VERSION } from "../src/index";
+import { ActionKind, DialogueStateName, Intent, LabelSource, MESSAGES, PROTOCOL_VERSION, RawLabelSource } from "../src/index";
 
 // D-17 made mechanical: after M0 the contract grows additively only. The lock lists the frozen v1
 // surface; anything in the lock must still exist unchanged. Things absent from the lock are fine.
@@ -11,6 +11,7 @@ interface Lock {
   intents: string[];
   actionKinds: string[];
   dialogueStates: string[];
+  labelSources: { raw: string[]; resolved: string[] };
   fixtures: string[];
 }
 
@@ -20,7 +21,13 @@ const same = (a: readonly string[], b: readonly string[]) =>
   JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
 /** Everything in the lock that the live contract no longer satisfies. Empty means additive-only. */
-export function lockViolations(lock: Lock, registry: Registry, live: { intents: string[]; actionKinds: string[]; dialogueStates: string[] }): string[] {
+export function lockViolations(lock: Lock, registry: Registry, live: {
+  intents: string[];
+  actionKinds: string[];
+  dialogueStates: string[];
+  rawLabelSources: string[];
+  resolvedLabelSources: string[];
+}): string[] {
   const out: string[] = [];
   for (const [type, entry] of Object.entries(lock.messages)) {
     const now = registry[type];
@@ -33,6 +40,8 @@ export function lockViolations(lock: Lock, registry: Registry, live: { intents: 
   for (const i of lock.intents) if (!live.intents.includes(i)) out.push(`intent removed: ${i}`);
   for (const k of lock.actionKinds) if (!live.actionKinds.includes(k)) out.push(`action kind removed: ${k}`);
   for (const s of lock.dialogueStates) if (!live.dialogueStates.includes(s)) out.push(`dialogue state removed: ${s}`);
+  for (const s of lock.labelSources.raw) if (!live.rawLabelSources.includes(s)) out.push(`raw label source removed: ${s}`);
+  for (const s of lock.labelSources.resolved) if (!live.resolvedLabelSources.includes(s)) out.push(`resolved label source removed: ${s}`);
   return out;
 }
 
@@ -52,16 +61,33 @@ const live = {
   intents: Intent.options.map((o) => o.shape.type.value as string),
   actionKinds: [...ActionKind.options] as string[],
   dialogueStates: [...DialogueStateName.options] as string[],
+  rawLabelSources: [...RawLabelSource.options] as string[],
+  resolvedLabelSources: [...LabelSource.options] as string[],
 };
 
 describe("protocol.lock.json (additive-only freeze)", () => {
-  it("lists all 24 message types and matches the live registry", () => {
-    expect(Object.keys(lock.messages)).toHaveLength(24);
+  it("lists all 25 message types and matches the live registry", () => {
+    expect(Object.keys(lock.messages)).toHaveLength(25);
     expect(lockViolations(lock, MESSAGES, live)).toEqual([]);
   });
 
   it("protocolVersion equals PROTOCOL_VERSION", () => {
     expect(lock.protocolVersion).toBe(PROTOCOL_VERSION);
+  });
+
+  it("locks raw and resolved label source membership independently", () => {
+    expect(lock.labelSources.raw).toEqual(RawLabelSource.options);
+    expect(lock.labelSources.raw).not.toContain("model");
+    expect(lock.labelSources.resolved).toEqual(LabelSource.options);
+    expect(lock.labelSources.resolved).toContain("model");
+    expect(lockViolations(lock, MESSAGES, {
+      ...live,
+      rawLabelSources: live.rawLabelSources.slice(1),
+    })).toContain("raw label source removed: aria");
+    expect(lockViolations(lock, MESSAGES, {
+      ...live,
+      resolvedLabelSources: live.resolvedLabelSources.filter((source) => source !== "model"),
+    })).toContain("resolved label source removed: model");
   });
 
   it("every locked fixture file exists on disk", () => {

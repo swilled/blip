@@ -1,22 +1,42 @@
 // One utterance, start to finish: transcript, routing, snapshot fetch, reply, state pushes (D-23, D-24).
-// Nothing in here acts on the page. The fake and (later) real brain can only produce an Intent, and
-// no Intent causes an act.request or a confirm.armed in Phase 1: the Executor does not exist until
-// Phase 3 (GATE-05 foundation, T-01-26).
+// The fake and (later) real brain can only produce an Intent. Ungated Intents enter the established
+// field action path; gated Intents enter the deterministic Executor and never authorize themselves.
 import { newId, type Intent, type Message, type PayloadOf } from "@blip/protocol";
 import type { IntentBrain } from "./brain/fake-brain";
 import { matchGrammar, type LocalCommand } from "./brain/grammar";
-import { HubRequestError, type Hub } from "./hub/hub";
+import { matchFieldPhrase, resolveFieldPhrase, safePhraseForBrain, safePhraseForTranscript } from "./brain/phrases";
+import { containsSensitiveUtterance, decideUtteranceForBrain } from "./brain/agy/privacy";
+import { routeIntent, type IntentRoutePage } from "./brain/agy/intent-router";
+import type { AgyProvider } from "./brain/agy/provider";
+import type { Snapshot } from "@blip/protocol";
+import { executeUngated } from "./act/ungated";
+import { executeGatedAction, type GatedCommand } from "./act/gated";
+import { createVoiceGateAdapter } from "./act/voice-gate-adapter";
+import { formatResultErrors, interpretCurrentErrors } from "./results/interpret";
+import type { Hub } from "./hub/hub";
 import { describeReply, readFormReply, requiredReply } from "./reply";
+import type { Refresher } from "./session/refresh";
 import type { Session } from "./session/session";
 
 export type TurnContext = {
   message: Message;
   hub: Hub;
   session: Session;
-  /** How long a snapshot.request may take before the turn gives up. */
-  snapshotTimeoutMs: number;
+  /** Maximum cached-model age for intents that explicitly read all field values. */
+  freshnessMs: number;
+  /** Shared page-change and read-intent snapshot path. */
+  refresher: Refresher;
   /** Resolves model-routed utterances to an Intent (the fake brain in Phase 1). */
   brain: IntentBrain;
+  /** Present only in Agy mode; the raw `IntentBrain` seam remains fake-only. */
+  agyProvider?: AgyProvider;
+  /** Injected only for deterministic cooldown/grant tests; production uses the process clock. */
+  clock?: () => number;
+  schedule?: (callback: () => void, delayMs: number) => unknown;
+  /** Injectable watchdog clock; the provider call remains bounded in production too. */
+  intentWatchdog?: { schedule(callback: () => void, delayMs: number): unknown; cancel(handle: unknown): void };
+  /** The dialogue reducer owns gated requests; model output cannot start a parallel gate flow. */
+  dialogueManaged?: boolean;
 };
 
 type SpeakCategory = PayloadOf<"speak">["category"];
@@ -28,14 +48,40 @@ export const MSG_NOTHING_TO_REPEAT = "There's nothing to repeat.";
 export const MSG_STOPPED = "Stopped.";
 export const MSG_UNKNOWN = "I didn't understand that.";
 export const MSG_BRAIN_FAILED = "Something went wrong on my side.";
+export const MSG_MODEL_FAILED = "I couldn't understand that";
 export const MSG_FILLER = "One moment.";
+const MSG_FIELD_PHRASE_TOO_LONG = "That value is too long to fill.";
+const MSG_NO_CURRENT_ERRORS = "There are no errors currently detected.";
+const INTENT_WATCHDOG_MS = 4_000;
+
+const intentRecoveries = new WeakMap<AgyProvider, Promise<void>>();
+
+function startIntentRoleRecovery(provider: AgyProvider): Promise<void> {
+  const pending = intentRecoveries.get(provider);
+  if (pending !== undefined) return pending;
+  const recovery = Promise.resolve()
+    .then(() => provider.abortRole("intent"))
+    .catch(() => {})
+    .then(() => provider.recreateRole("intent"));
+  intentRecoveries.set(provider, recovery);
+  void recovery.finally(() => {
+    if (intentRecoveries.get(provider) === recovery) intentRecoveries.delete(provider);
+  }).catch(() => {});
+  return recovery;
+}
+
+async function waitForIntentRecovery(provider: AgyProvider): Promise<void> {
+  await intentRecoveries.get(provider);
+}
 
 type SpeakOptions = { interrupt?: boolean; record?: boolean };
 
 function speak(hub: Hub, session: Session, text: string, category: SpeakCategory, opts: SpeakOptions = {}): void {
   // Filler is never repeated, and "repeat"/"stop" must not overwrite what the user wants repeated.
+  const speakId = newId();
+  if (!hub.send("voice", "speak", { speakId, text, category, interrupt: opts.interrupt === true })) return;
+  session.trackSpeech(speakId, category);
   if (category !== "filler" && opts.record !== false) session.lastSpoken = text;
-  hub.send("voice", "speak", { speakId: newId(), text, category, interrupt: opts.interrupt === true });
 }
 
 /** `stop`: cut off whatever the voice UI is saying. */
@@ -53,39 +99,149 @@ export function sayRepeat(hub: Hub, session: Session): void {
  * Make sure `session.model` matches the page. Returns an error reply to speak instead when it can't:
  * the extension is not connected, or the snapshot failed or timed out. Never throws.
  */
-async function ensureSnapshot(ctx: TurnContext): Promise<{ ok: true } | { ok: false; reply: string }> {
-  const { session, hub } = ctx;
-  if (!session.extensionConnected) return { ok: false, reply: MSG_NO_EXTENSION };
-  if (session.model !== null && !session.stale) return { ok: true };
+async function ensureSnapshot(
+  ctx: TurnContext,
+  maxAgeMs?: number,
+): Promise<{ ok: true } | { ok: false; reply: string }> {
+  const { session } = ctx;
+  const freshEnough =
+    session.model !== null &&
+    !session.stale &&
+    (maxAgeMs === undefined || (session.modelAgeMs !== null && session.modelAgeMs <= maxAgeMs));
+  if (freshEnough) return { ok: true };
+
+  const result = await ctx.refresher.request("user");
+  if (!result.ok) {
+    return { ok: false, reply: result.kind === "no-extension" ? MSG_NO_EXTENSION : MSG_READ_FAILED };
+  }
+  if (session.model === null || session.stale) return { ok: false, reply: MSG_READ_FAILED };
+  return { ok: true };
+}
+
+async function captureIntentPage(
+  ctx: TurnContext,
+): Promise<{ ok: true; snapshot: Snapshot; model: NonNullable<Session["model"]> } | { ok: false; reply: string }> {
+  const result = await ctx.refresher.request("user");
+  if (!result.ok) {
+    return { ok: false, reply: result.kind === "no-extension" ? MSG_NO_EXTENSION : MSG_READ_FAILED };
+  }
+  const model = ctx.session.model;
+  if (
+    model === null ||
+    ctx.session.stale ||
+    ctx.session.tabId !== result.snapshot.tabId ||
+    model.snapshotVersion !== result.snapshot.version ||
+    model.structuralHash !== result.snapshot.structuralHash ||
+    model.url !== result.snapshot.url
+  ) return { ok: false, reply: MSG_READ_FAILED };
+  return { ok: true, snapshot: result.snapshot, model };
+}
+
+async function handlePrivacyHandoff(
+  ctx: TurnContext,
+  handoff: Extract<ReturnType<typeof decideUtteranceForBrain>, { kind: "withhold-and-handoff" }>['handoff'],
+): Promise<void> {
+  if (handoff.kind === "clarify") {
+    speak(ctx.hub, ctx.session, handoff.spokenText, "answer");
+    return;
+  }
+  const focused = await executeUngated(ctx, { type: "go_to_field", fieldId: handoff.fieldId });
+  if (focused.category === "error") {
+    speak(ctx.hub, ctx.session, focused.text, focused.category);
+    return;
+  }
+  speak(ctx.hub, ctx.session, handoff.spokenText, "answer");
+}
+
+function currentIntentPage(ctx: TurnContext, snapshot: Snapshot, model: NonNullable<Session["model"]>): IntentRoutePage {
+  const isCurrent = (): boolean => {
+    const accepted = ctx.session.model;
+    return !ctx.session.stale && accepted !== null &&
+      ctx.session.tabId === snapshot.tabId &&
+      accepted.url === snapshot.url &&
+      accepted.snapshotVersion === snapshot.version &&
+      accepted.structuralHash === snapshot.structuralHash;
+  };
+  return {
+    snapshot,
+    model,
+    isCurrent,
+    getCurrentModel: () => isCurrent() ? ctx.session.model : null,
+  };
+}
+
+async function runAgyIntent(ctx: TurnContext, text: string, snapshot: Snapshot, model: NonNullable<Session["model"]>): Promise<void> {
+  const provider = ctx.agyProvider;
+  if (provider === undefined) {
+    speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
+    return;
+  }
+
+  let timer: unknown;
+  let settled = false;
+  let rejectTimeout!: (error: Error) => void;
+  const watchdog = ctx.intentWatchdog ?? {
+    schedule: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs),
+    cancel: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  };
+  const timeout = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
+
   try {
-    const result = await hub.request(
-      "extension",
-      "snapshot.request",
-      { reason: "user" },
-      { expect: "snapshot.result", timeoutMs: ctx.snapshotTimeoutMs },
-    );
-    if (!result.payload.ok) return { ok: false, reply: MSG_READ_FAILED };
-    session.applySnapshot(result.payload.snapshot);
-    return { ok: true };
-  } catch (err) {
-    if (err instanceof HubRequestError && (err.code === "disconnected" || err.code === "no-connection")) {
-      return { ok: false, reply: MSG_NO_EXTENSION };
-    }
-    return { ok: false, reply: MSG_READ_FAILED };
+    await waitForIntentRecovery(provider);
+    const controller = new AbortController();
+    timer = watchdog.schedule(() => {
+      if (settled) return;
+      controller.abort(new Error("Agy intent watchdog expired."));
+      void startIntentRoleRecovery(provider).catch(() => {});
+      rejectTimeout(new Error("Agy intent watchdog expired."));
+    }, INTENT_WATCHDOG_MS);
+
+    const routed = routeIntent(text, currentIntentPage(ctx, snapshot, model), provider, controller.signal);
+    const result = await Promise.race([routed, timeout]);
+    settled = true;
+    if (result.kind === "intent") await runIntent(ctx, result.intent);
+    else if (result.kind === "handoff") await handlePrivacyHandoff(ctx, result.handoff);
+    else speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
+  } catch {
+    settled = true;
+    ctx.hub.send("voice", "earcon", { name: "error" });
+    speak(ctx.hub, ctx.session, MSG_MODEL_FAILED, "error");
+  } finally {
+    settled = true;
+    if (timer !== undefined) watchdog.cancel(timer);
   }
 }
 
 /** The intents that read the form back. Everything here is built from labels and counts only. */
-async function readOut(ctx: TurnContext, build: (model: NonNullable<Session["model"]>) => string): Promise<void> {
-  const ready = await ensureSnapshot(ctx);
+async function readOut(
+  ctx: TurnContext,
+  build: (model: NonNullable<Session["model"]>) => string,
+  maxAgeMs?: number,
+): Promise<void> {
+  const ready = await ensureSnapshot(ctx, maxAgeMs);
   if (!ready.ok) speak(ctx.hub, ctx.session, ready.reply, "error");
   else speak(ctx.hub, ctx.session, build(ctx.session.model!), "answer");
 }
 
+/** This command always reads the current page before repeating its detected errors. */
+async function reportCurrentErrors(ctx: TurnContext): Promise<void> {
+  const result = await ctx.refresher.request("user");
+  if (!result.ok) {
+    speak(ctx.hub, ctx.session, result.kind === "no-extension" ? MSG_NO_EXTENSION : MSG_READ_FAILED, "error");
+    return;
+  }
+  if (ctx.session.model === null || ctx.session.stale) {
+    speak(ctx.hub, ctx.session, MSG_READ_FAILED, "error");
+    return;
+  }
+  const errors = formatResultErrors(interpretCurrentErrors(ctx.session.model));
+  speak(ctx.hub, ctx.session, errors ?? MSG_NO_CURRENT_ERRORS, "answer");
+}
+
 /**
- * Carry out an Intent (from the grammar or the brain). The only intents Phase 1 understands are the
- * read-only ones. Every other type, including request_action, click_safe and set_fields, is refused
- * out loud and causes no act.request and no confirm.armed.
+ * Carry out an Intent (from the grammar or the brain). Only deterministic local commands are resolved
+ * in grammar; model-produced gated Intents enter the single Executor, while safe field actions retain
+ * the existing ungated path.
  */
 async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promise<void> {
   const { hub, session } = ctx;
@@ -93,9 +249,11 @@ async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promi
     case "describe":
       return readOut(ctx, describeReply);
     case "whats_required":
-      return readOut(ctx, requiredReply);
+      return readOut(ctx, requiredReply, ctx.freshnessMs);
     case "read_form":
-      return readOut(ctx, readFormReply);
+      return readOut(ctx, readFormReply, ctx.freshnessMs);
+    case "what_went_wrong":
+      return reportCurrentErrors(ctx);
     case "stop":
       return sayStop(hub, session);
     case "repeat":
@@ -106,10 +264,95 @@ async function runIntent(ctx: TurnContext, intent: Intent | LocalCommand): Promi
       return speak(hub, session, intent.text, "answer");
     case "unknown":
       return speak(hub, session, MSG_UNKNOWN, "answer");
+    case "set_fields":
+    case "go_to_field": {
+      const result = await executeUngated(ctx, intent);
+      return speak(hub, session, result.text, result.category);
+    }
+    case "request_action":
+      if (ctx.dialogueManaged) {
+        return speak(hub, session, "I can't act on that request directly. Ask me to read the form back to start its confirmation flow.", "error");
+      }
+      return createVoiceGateAdapter(ctx).arm({ actionId: intent.actionId });
+    case "click_safe":
+      if (ctx.dialogueManaged) {
+        return speak(hub, session, "I can't run that action from a model suggestion. Ask me to read the form back to start its confirmation flow.", "error");
+      }
+      return executeGatedAction(ctx, intent);
     default:
-      // request_action, click_safe, set_fields, fill_profile, ...: nothing acts in Phase 1 (T-01-26).
+      // No Intent approves an action; request_action and click_safe only enter the Executor above.
       return speak(hub, session, MSG_NOT_YET, "answer");
   }
+}
+
+/**
+ * Resolve a reducer-unmatched utterance through the configured brain while leaving busy state,
+ * transcript routing, and dialogue state ownership with the voice reducer runner.
+ */
+export async function handleDialogueFallback(ctx: TurnContext): Promise<void> {
+  const { message, hub, session } = ctx;
+  if (message.type !== "utterance") return;
+  const { text } = message.payload;
+  const fieldPhrase = matchFieldPhrase(text);
+
+  if (fieldPhrase !== null) {
+    if (fieldPhrase.type === "invalid") {
+      return speak(
+        hub,
+        session,
+        fieldPhrase.reason === "too-long" ? MSG_FIELD_PHRASE_TOO_LONG : "Say a field and the value to fill.",
+        "error",
+      );
+    }
+
+    if (ctx.agyProvider !== undefined) {
+      const captured = await captureIntentPage(ctx);
+      if (!captured.ok) return speak(hub, session, captured.reply, "error");
+      const decision = decideUtteranceForBrain(text, captured.model);
+      if (decision.kind === "withhold-and-handoff") {
+        await handlePrivacyHandoff(ctx, decision.handoff);
+        return;
+      }
+      await runIntent(ctx, resolveFieldPhrase(captured.model, fieldPhrase));
+      return;
+    }
+
+    hub.send("voice", "earcon", { name: "thinking" });
+    speak(hub, session, MSG_FILLER, "filler");
+    let modelIntent: Intent | null = null;
+    try {
+      modelIntent = await ctx.brain.parseIntent(safePhraseForBrain(fieldPhrase));
+    } catch {
+      // Field phrase matching is deterministic and does not depend on the offline brain.
+    }
+    if (modelIntent?.type === "request_action") {
+      await runIntent(ctx, modelIntent);
+      return;
+    }
+    const ready = await ensureSnapshot(ctx, ctx.freshnessMs);
+    if (!ready.ok) return speak(hub, session, ready.reply, "error");
+    await runIntent(ctx, resolveFieldPhrase(session.model!, fieldPhrase));
+    return;
+  }
+
+  hub.send("voice", "earcon", { name: "thinking" });
+  speak(hub, session, MSG_FILLER, "filler");
+  if (ctx.agyProvider !== undefined) {
+    const captured = await captureIntentPage(ctx);
+    if (!captured.ok) return speak(hub, session, captured.reply, "error");
+    await runAgyIntent(ctx, text, captured.snapshot, captured.model);
+    return;
+  }
+
+  let intent: Intent;
+  try {
+    intent = await ctx.brain.parseIntent(text);
+  } catch {
+    hub.send("voice", "earcon", { name: "error" });
+    speak(hub, session, MSG_BRAIN_FAILED, "error");
+    return;
+  }
+  await runIntent(ctx, intent);
 }
 
 export async function handleUtterance(ctx: TurnContext): Promise<void> {
@@ -117,31 +360,35 @@ export async function handleUtterance(ctx: TurnContext): Promise<void> {
   if (message.type !== "utterance") return;
   const { utteranceId, text } = message.payload;
 
-  const command = matchGrammar(text);
-  hub.send("voice", "transcript", { utteranceId, heardAs: text, routedTo: command !== null ? "grammar" : "model" });
+  const hasPendingConfirmation = session.pendingGatedAction !== null;
+  const command = hasPendingConfirmation ? null : matchGrammar(text);
+  const fieldPhrase = hasPendingConfirmation ? null : matchFieldPhrase(text);
+  const privateUtterance = containsSensitiveUtterance(text);
+  hub.send("voice", "transcript", {
+    utteranceId,
+    heardAs: privateUtterance
+      ? "private content withheld"
+      : hasPendingConfirmation ? text : fieldPhrase === null ? text : safePhraseForTranscript(fieldPhrase),
+    routedTo: hasPendingConfirmation || command !== null || fieldPhrase !== null ? "grammar" : "model",
+  });
 
   session.busy = true;
-  session.dialogue = "describing";
+  session.dialogue = hasPendingConfirmation ? "awaiting-confirm" : "describing";
   hub.pushState();
   try {
-    if (command !== null) {
-      await runIntent(ctx, command);
-    } else {
-      hub.send("voice", "earcon", { name: "thinking" });
-      speak(hub, session, MSG_FILLER, "filler");
-      let intent: Intent;
-      try {
-        intent = await ctx.brain.parseIntent(text);
-      } catch {
-        hub.send("voice", "earcon", { name: "error" });
-        speak(hub, session, MSG_BRAIN_FAILED, "error");
-        return;
-      }
-      await runIntent(ctx, intent);
+    if (hasPendingConfirmation) {
+      const confirmation: GatedCommand = { type: "confirmation", text };
+      await executeGatedAction(ctx, confirmation);
+      return;
     }
+
+    if (command !== null) await runIntent(ctx, command);
+    else await handleDialogueFallback(ctx);
   } finally {
     session.busy = false;
-    session.dialogue = session.model !== null && session.extensionConnected ? "ready" : "no-page";
+    session.dialogue = session.pendingGatedAction !== null
+      ? session.pendingGatedAction.grantId === undefined ? "reading-back" : "awaiting-confirm"
+      : session.model !== null && session.extensionConnected ? "ready" : "no-page";
     hub.pushState();
   }
 }

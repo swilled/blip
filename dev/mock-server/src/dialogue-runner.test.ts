@@ -216,7 +216,6 @@ describe("real voice dialogue runner", () => {
     expect(prompt.payload.text).toContain(armed.payload.phrase);
     await done(prompt);
 
-    const clearsBeforeRefusals = frames.filter((frame) => frame.type === "confirm.cleared").length;
     const phraseBeforeWindow = await utter(armed.payload.phrase);
     expect(phraseBeforeWindow.payload.text).toBe(`Not submitting. I need you to say '${armed.payload.phrase}'.`);
     await done(phraseBeforeWindow);
@@ -229,13 +228,23 @@ describe("real voice dialogue runner", () => {
     const stopped = await nextSpeak(frames, stoppedStart);
     expect(stopped.payload.text).toBe("Stopped.");
     const phraseAfterStop = await utter(armed.payload.phrase);
-    expect(phraseAfterStop.payload.text).toBe(`Not submitting. I need you to say '${armed.payload.phrase}'.`);
+    expect(phraseAfterStop.payload.category).toBe("readback");
     await done(stopped);
     await done(phraseAfterStop);
+    const rearmed = await waitFor(
+      () => frames.slice(stoppedStart).findLast((frame): frame is Extract<Message, { type: "confirm.armed" }> => frame.type === "confirm.armed"),
+      "confirm.armed after stop cancelled the previous grant",
+    );
+    const rearmedPrompt = frames.filter((frame): frame is Extract<Message, { type: "speak" }> =>
+      frame.type === "speak" && frame.payload.category === "confirm-prompt",
+    ).findLast((frame) => frame.payload.text.includes(rearmed.payload.phrase));
+    if (rearmedPrompt !== undefined) await done(rearmedPrompt);
+    expect(frames.filter((frame) => frame.type === "confirm.cleared").length).toBeGreaterThan(0);
+    const clearsBeforeRefusals = frames.filter((frame) => frame.type === "confirm.cleared").length;
 
     const blockedBeforeYes = frames.filter((frame) => frame.type === "earcon" && frame.payload.name === "blocked").length;
     const yes = await utter("yes");
-    expect(yes.payload.text).toBe(`Not submitting. I need you to say '${armed.payload.phrase}'.`);
+    expect(yes.payload.text).toBe(`Not submitting. I need you to say '${rearmed.payload.phrase}'.`);
     await waitFor(
       () => frames.filter((frame) => frame.type === "earcon" && frame.payload.name === "blocked").length === blockedBeforeYes + 1
         ? frames.filter((frame) => frame.type === "earcon" && frame.payload.name === "blocked").length
@@ -245,14 +254,14 @@ describe("real voice dialogue runner", () => {
     expect(frames.filter((frame) => frame.type === "confirm.cleared")).toHaveLength(clearsBeforeRefusals);
     await done(yes);
 
-    const earlyExact = await utter(armed.payload.phrase);
-    expect(earlyExact.payload.text).toBe(`Not submitting. I need you to say '${armed.payload.phrase}'.`);
+    const earlyExact = await utter(rearmed.payload.phrase);
+    expect(earlyExact.payload.text).toBe(`Not submitting. I need you to say '${rearmed.payload.phrase}'.`);
     await done(earlyExact);
 
     clock += 1_001;
     const afterWindowStart = frames.length;
-    const gateRefusal = await utter(armed.payload.phrase);
-    expect(gateRefusal.payload.text).toContain("safety gate is not connected");
+    const gateRefusal = await utter(rearmed.payload.phrase);
+    expect(gateRefusal.payload.text).toContain("The page refused the action");
     await waitFor(
       () => frames.slice(afterWindowStart).find((frame): frame is Extract<Message, { type: "confirm.cleared" }> => frame.type === "confirm.cleared"),
       "confirm.cleared after gate refusal",
@@ -680,18 +689,19 @@ describe("real voice dialogue runner", () => {
         : field),
     });
     session.stale = false;
-    let intentInput: unknown;
+    let intentInput: string | undefined;
+    let intentContext: HandlerContext | undefined;
     const handlers = createDialogueHandlers({
       gate: createStubGate(() => clock),
       now: () => clock,
-      parseIntent: async (input) => { intentInput = input; },
+      parseIntent: async (input, context) => { intentInput = input; intentContext = context; },
     });
     const ctx = voiceContext(hub, session, message("utterance", {
       utteranceId: "intent-projection", text: "an unmatched request", source: "typed",
     }));
     await handlers.utterance?.(ctx);
-    expect(JSON.stringify(intentInput)).not.toContain(sentinel);
-    expect(JSON.stringify(intentInput)).toContain('"hasValue":true');
+    expect(intentInput).toBe("an unmatched request");
+    expect(intentContext?.session.model?.fields.find((field) => field.id === "e2")?.hasValue).toBe(true);
     expect(JSON.stringify(sent)).not.toContain(sentinel);
   });
 
@@ -712,7 +722,7 @@ describe("real voice dialogue runner", () => {
       now: () => clock,
       gate: {
         async arm() {
-          return { ok: true, grantId: "grant-1", phrase: "submit survey", expiresAt: clock + 30_000 };
+          return { ok: true, grantId: "grant-1", speakId: "speak-1", phrase: "submit survey", expiresAt: clock + 30_000 };
         },
         async clear() {},
         async redeem() {

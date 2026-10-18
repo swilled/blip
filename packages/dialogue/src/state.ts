@@ -27,7 +27,7 @@ export type DialogueState = {
   outstanding: string[];
   lastDoneAt: number | null;
   readBack: { speakId: string; actionId: string; digest: string } | null;
-  confirm: { grantId: string; phrase: string; actionId: string; digest: string; expiresAt: number } | null;
+  confirm: { grantId: string; speakId: string; phrase: string; actionId: string; digest: string; expiresAt: number } | null;
   previousValues: Record<string, string>;
 };
 

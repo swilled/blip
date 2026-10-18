@@ -1,5 +1,5 @@
 // The walking skeleton over real sockets on port 0 (roadmap criterion 2, D-23, D-24). No fake timers,
-// no Chrome, no voice UI, no Claude. Servers and clients are always closed in finally blocks.
+// no Chrome, no voice UI, no Agy. Servers and clients are always closed in finally blocks.
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { newId } from "@blip/protocol";
@@ -160,12 +160,6 @@ describe("turn frame order (D-23)", () => {
   });
 });
 
-describe("brain selection (D-21)", () => {
-  it("startServer itself rejects brain claude with the Phase 4 message", async () => {
-    await expect(startServer({ port: 0, brain: "claude" })).rejects.toThrow(/not available yet.*Phase 4/);
-  });
-});
-
 describe("determinism (D-23)", () => {
   it("the same input gives the same text across turns and across server instances", async () => {
     const texts: string[][] = [];
@@ -222,11 +216,25 @@ describe("grammar commands", () => {
       const nothing = speaks(await turn(r.voice, "repeat"))[0]!;
       expect(nothing.payload.text).toBe("There's nothing to repeat.");
 
-      const said = speaks(await turn(r.voice, "what's here"))[0]!.payload.text;
+      const saidFrame = speaks(await turn(r.voice, "what's here"))[0]!;
+      const said = saidFrame.payload.text;
+      expect(r.server.session.activeSpeakId).toBe(saidFrame.payload.speakId);
       const stop = speaks(await turn(r.voice, "stop"))[0]!;
       expect(stop.payload.interrupt).toBe(true);
+      expect(stop.payload.speakId).not.toBe(saidFrame.payload.speakId);
+      r.voice.send("speak.done", { speakId: saidFrame.payload.speakId, interrupted: true });
+      await sleep(10);
+      expect(r.server.session.activeSpeakId).toBe(stop.payload.speakId);
+
       const again = speaks(await turn(r.voice, "say that again"))[0]!;
       expect(again.payload.text).toBe(said);
+      expect(again.payload.speakId).not.toBe(stop.payload.speakId);
+      r.voice.send("speak.done", { speakId: stop.payload.speakId, interrupted: true });
+      await sleep(10);
+      expect(r.server.session.activeSpeakId).toBe(again.payload.speakId);
+      r.voice.send("speak.done", { speakId: again.payload.speakId, interrupted: false });
+      await sleep(10);
+      expect(r.server.session.activeSpeakId).toBeNull();
     } finally {
       await r.cleanup();
     }
@@ -234,12 +242,13 @@ describe("grammar commands", () => {
 });
 
 describe("fail-closed brain (T-01-26, GATE-05 foundation)", () => {
-  it("a requested action is refused: no act.request reaches the extension and nothing is armed", async () => {
+  it("a requested gated action reads back but is not dispatched or armed before speech completes", async () => {
     const r = await rig({ server: { fakeRequestActionId: "e10" } });
     try {
       const frames = await turn(r.voice, "go ahead and book it");
-      const spoken = speaks(frames).map((f) => f.payload.text);
-      expect(spoken).toContain("I can't do that yet.");
+      const confirmationPrompt = speaks(frames).find((frame) => frame.payload.category === "confirm-prompt");
+      expect(confirmationPrompt?.payload.text).toContain("Page: Hotel booking.");
+      expect(confirmationPrompt?.payload.text).toContain("To continue, say: submit survey.");
       await sleep(100);
       expect(r.extension!.received().filter((m) => m.type === "act.request")).toHaveLength(0);
       expect(r.voice.frames.some((f) => f.type === "confirm.armed")).toBe(false);

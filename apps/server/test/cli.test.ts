@@ -79,10 +79,10 @@ describe("CLI flags (D-21)", () => {
     }
   });
 
-  it("--brain=claude exits 2 and says the Claude brain arrives in Phase 4", async () => {
-    const r = await runToExit(["--brain=claude"]);
+  it("an unknown brain mode exits 2 without starting a provider", async () => {
+    const r = await runToExit(["--brain=remote"]);
     expect(r.code).toBe(2);
-    expect(r.stderr).toMatch(/Phase 4/);
+    expect(r.stderr).toMatch(/--brain must be fake or agy/);
   });
 
   it("--allow-origin without --dev exits 2", async () => {

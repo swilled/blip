@@ -1,14 +1,11 @@
 # Blip: Teammate Setup (voice track)
 
-You own the **voice** track: the voice window, push-to-talk, speech in and out, NVDA mode, the dialogue logic (`packages/dialogue`) and the demo assets. Pranav owns **core**: the protocol, the server, the extension, the safety gate and Claude. The full plan is in `.planning/workstreams/voice/ROADMAP.md`.
+You own the **voice** track: the voice window, push-to-talk, speech in and out, NVDA mode, the dialogue logic (`packages/dialogue`) and the demo assets. Pranav owns **core**: the protocol, the server, the extension, the safety gate and the AGY Gemini provider. The full plan is in `.planning/workstreams/voice/ROADMAP.md`.
 
 ## 1. One-time setup (about 15 min)
 
-1. **Install:** Node 24 LTS, Git, Chrome, [NVDA](https://www.nvaccess.org/download/), and Claude Code, logged in with your own Claude subscription.
-2. **Check that no API key is set**, because a key overrides your subscription login:
-   ```powershell
-   echo $env:ANTHROPIC_API_KEY   # should print nothing
-   ```
+1. **Install:** Node 24 LTS, Git, Chrome, [NVDA](https://www.nvaccess.org/download/), and the Antigravity CLI. Sign in through an interactive `agy` session with your own Antigravity subscription. Claude Code is still used for the GSD planning commands below.
+2. **Verify the CLI:** run `agy --version` and `agy models`. The server uses the CLI's cached subscription login and Gemini Flash; no Gemini API key is required.
 3. **Clone the repo:**
    ```powershell
    git clone https://github.com/swilled/blip.git
@@ -32,7 +29,7 @@ You own the **voice** track: the voice window, push-to-talk, speech in and out, 
 |-------|-----------------------------|--------|
 | 1. Spikes and push-to-talk loop | Hold a key while the form tab is focused, speak or type, and hear Blip answer, with a live transcript | h0–8 |
 | 2. Fill and gated submit on the broken form | On the local broken survey form: fields read out, dictation, read-back, and submit only on "submit survey" | h6–12 |
-| 3. Full command set with real Claude | Profile fill, spell, change, undo, "where am I", guessed-label and injection warnings, password handoff | h12–20 |
+| 3. Full command set with real AGY Gemini | Profile fill, spell, change, undo, "where am I", guessed-label and injection warnings, password handoff | h12–20 |
 | 4. NVDA mode and demo-safe | Works with NVDA and on the real public form; fallback kit and backup video | h20–36 |
 
 **Hours 0–3 are spikes.** Check whether speech recognition and speech synthesis still work when the voice window isn't focused, whether NVDA can be driven through its controller DLL, and which push-to-talk hotkey approach works. Record what you decide. Everything after depends on it.
@@ -44,7 +41,7 @@ You own the **voice** track: the voice window, push-to-talk, speech in and out, 
 | ~h0.75 | **M0**: protocol frozen | Review and approve `packages/protocol` together before either of you builds on it |
 | ~h6–8 | **I1**: walking skeleton | Voice window connects to Pranav's real server; "what's here" works end to end |
 | ~h12 | **I2**: gated submit works | Full loop on the broken form, including the blocked submit |
-| ~h20 | **I3**: real Claude | Real public form, label repair, injection page blocked |
+| ~h20 | **I3**: real AGY Gemini | Local synthetic form, label repair, injection page blocked |
 | ~h30 | **Freeze** | Tag `demo-safe`; only demo fixes after this |
 
 Until I1, build against your own `dev/mock-server`, so you're never waiting on Pranav.
@@ -72,5 +69,5 @@ The full rules are in [CONTRIBUTING.md](../CONTRIBUTING.md). The short version: 
 
 - Blip never submits without a full read-back and the exact phrase. A bare "yes" never counts.
 - The mic is off while Blip is speaking, so Blip can't confirm itself.
-- Passwords and card numbers are never spoken, logged, or sent to Claude.
+- Passwords and card numbers are never spoken, logged, or sent to the model.
 - Don't run GSD sessions during judging. They share your subscription quota with Blip.

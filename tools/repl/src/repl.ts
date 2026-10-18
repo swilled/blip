@@ -2,7 +2,7 @@
 // prints one plain-text line per event. It stands in for the voice UI, so it auto-replies speak.done.
 //
 // Output formats (one line per event):
-//   welcome: session=<id> brain=<brain>      state: dialogue=<d> busy=<b> extension=<bool> page=<title|none>
+//   welcome: session=<id> brain=<brain>      state: dialogue=<d> busy=<b> extension=<bool> page=<title|none> injection-warning=<bool>
 //   transcript: "<text>" via <route>         earcon: <name>
 //   speak[<category>]: <text>                confirm.armed: ...   confirm.cleared: ...
 //   error: <code> - <message>
@@ -97,7 +97,7 @@ export function startRepl(options: ReplOptions): Repl {
           }
           break;
         case "state":
-          lastStateLine = `state: dialogue=${m.payload.dialogue} busy=${m.payload.busy} extension=${m.payload.extensionConnected} page=${m.payload.page?.title ?? "none"}`;
+          lastStateLine = `state: dialogue=${m.payload.dialogue} busy=${m.payload.busy} extension=${m.payload.extensionConnected} page=${m.payload.page?.title ?? "none"} injection-warning=${m.payload.page?.untrustedInstructionDetected === true}`;
           print(lastStateLine);
           if (!m.payload.busy && transcriptsSeen > turnsFinished) {
             turnsFinished++;

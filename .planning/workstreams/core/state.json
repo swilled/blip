@@ -11,28 +11,28 @@
     {
       "number": "2",
       "name": "Real Page Read and Fill",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "3",
       "name": "Gated Submit and Result Reading",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "4",
-      "name": "Claude Brain and Label Repair",
-      "status": "pending"
+      "name": "AGY Subscription Brain and Label Repair",
+      "status": "complete"
     },
     {
       "number": "5",
-      "name": "Hostile Pages, Real Web and Freeze",
-      "status": "pending"
+      "name": "Hostile Pages, Local Synthetic Web and Freeze",
+      "status": "in_progress"
     }
   ],
   "next": {
-    "command": "/gsd-progress --next",
-    "label": "Advance to the next step (verify)",
-    "reason": "Phase 1 of 5 · 0% · ready to verify"
+    "command": "/gsd-progress core",
+    "label": "Await M0 sign-off and release review",
+    "reason": "The core v1 milestone audit is recorded. Local requirements and integration are verified except PROT-01's written voice-owner M0 sign-off. Phase 5 technical acceptance passes; closeout still needs teammate review, mainline promotion, and demo-safe tagging."
   },
-  "updated_at": "2026-10-17T00:20:29.766Z"
+  "updated_at": "2026-10-18T02:14:38Z"
 }

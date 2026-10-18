@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Iframe contact form</title>
+    <script defer src="/report.js"></script>
+    <script defer>
+      window.addEventListener("DOMContentLoaded", () => {
+        const frame = new URLSearchParams(location.search).get("frame") || "unknown";
+        window.blipReport("frame-context", { frame, origin: location.origin });
+      });
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Iframe contact form</h1>
+      <form>
+        <label for="frame-message">Message for this frame</label>
+        <input id="frame-message" name="message" type="text" autocomplete="off">
+      </form>
+    </main>
+  </body>
+</html>

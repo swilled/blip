@@ -42,6 +42,14 @@
         "voice"
       ]
     },
+    "confirm.redeem": {
+      "senders": [
+        "voice"
+      ],
+      "receivers": [
+        "server"
+      ]
+    },
     "control": {
       "senders": [
         "voice"
@@ -238,6 +246,23 @@
     "reading-result",
     "ready"
   ],
+  "labelSources": {
+    "raw": [
+      "aria",
+      "label",
+      "nearby-text",
+      "placeholder",
+      "inferred"
+    ],
+    "resolved": [
+      "aria",
+      "label",
+      "nearby-text",
+      "placeholder",
+      "inferred",
+      "model"
+    ]
+  },
   "fixtures": [
     "booking.snapshot.json",
     "broken.snapshot.json",

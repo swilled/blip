@@ -1,11 +1,12 @@
 // CLI entry (D-21). Flag parsing only; everything real lives in startServer().
 //   --port <n>            default 7777 (0 = ephemeral)
 //   --dev                 allow no-Origin clients and the dev voice origins
-//   --brain=fake|claude   default fake; claude arrives in Phase 4
+//   --brain=fake|agy   default fake; agy uses the signed-in Antigravity CLI subscription
 //   --fake-delay <ms>     default 1500: how long a model-routed turn waits (the fake brain "thinking")
 //   --fake-request-action <actionId>
 //                         TEST ONLY: the fake brain answers model-routed turns with request_action for
-//                         this id. The server still refuses it (no act.request, no confirm.armed).
+//                         this id. The server requires completed read-back, cooldown, and exact phrase;
+//                         the fake extension still refuses the final gated click.
 //   --allow-origin <o>    repeatable; requires --dev; loopback http origins; grants voice only
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -13,7 +14,7 @@ import { parseArgs } from "node:util";
 import { DEFAULT_PORT, WS_PATH, LOOPBACK_HOST } from "@blip/protocol";
 import { parseAllowedOrigin } from "./hub/guard";
 import type { StaticRoot } from "./hub/static";
-import { BrainUnavailableError, CLAUDE_BRAIN_UNAVAILABLE, startServer } from "./server";
+import { startServer } from "./server";
 
 function die(message: string, code: number): never {
   process.stderr.write(`${message}\n`);
@@ -45,15 +46,12 @@ async function main(): Promise<void> {
       allowPositionals: false,
     }));
   } catch (err) {
-    die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
+        die(`${(err as Error).message}\nusage: main.ts [--port <n>] [--dev] [--brain=fake|agy] [--fake-delay <ms>] [--fake-request-action <actionId>] [--allow-origin <origin>]...`, 2);
   }
 
   const dev = values.dev === true;
   const brain = values.brain;
-  if (brain === "claude") {
-    die(CLAUDE_BRAIN_UNAVAILABLE, 2);
-  }
-  if (brain !== "fake") die(`--brain must be fake (claude arrives in Phase 4), got "${brain}"`, 2);
+  if (brain !== "fake" && brain !== "agy") die(`--brain must be fake or agy, got "${brain}"`, 2);
 
   const port = parseIntegerFlag("port", values.port, DEFAULT_PORT, 65535);
   const fakeDelayMs = parseIntegerFlag("fake-delay", values["fake-delay"], 1500, 600000);
@@ -71,11 +69,11 @@ async function main(): Promise<void> {
     }
   }
 
-  // Static roots only when the directories exist (the voice build and fixtures arrive in other plans).
+  // Static roots only when their directories exist so server-only setups remain lightweight.
   const staticRoots: StaticRoot[] = [];
-  const voiceDist = fileURLToPath(new URL("../../../apps/voice/dist", import.meta.url));
+  const voicePublic = fileURLToPath(new URL("../../../apps/voice/public", import.meta.url));
   const fixtures = fileURLToPath(new URL("../../../fixtures/forms", import.meta.url));
-  if (existsSync(voiceDist)) staticRoots.push({ urlPrefix: "/", dir: voiceDist });
+  if (existsSync(voicePublic)) staticRoots.push({ urlPrefix: "/voice", dir: voicePublic });
   if (existsSync(fixtures)) staticRoots.push({ urlPrefix: "/fixtures/forms", dir: fixtures });
 
   let running;
@@ -90,7 +88,6 @@ async function main(): Promise<void> {
       ...(values["fake-request-action"] !== undefined ? { fakeRequestActionId: values["fake-request-action"] } : {}),
     });
   } catch (err) {
-    if (err instanceof BrainUnavailableError) die(err.message, 2);
     if ((err as NodeJS.ErrnoException).code === "EADDRINUSE") {
       die(`port ${port} is already in use; stop the other process or pick another with --port <n>`, 1);
     }

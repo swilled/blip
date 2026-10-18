@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ActionTarget, Field, FormModel, LOW_CONFIDENCE_THRESHOLD, isLowConfidenceLabel } from "../src/index";
-import { makeField } from "./helpers";
+import { ActionTarget, Field, FormModel, LOW_CONFIDENCE_THRESHOLD, RawElement, isLowConfidenceLabel } from "../src/index";
+import { makeElement, makeField } from "./helpers";
 
 describe("Field sensitive-null refinement (D-09)", () => {
   it("rejects a card-number field with a non-null value, without echoing it", () => {
@@ -22,6 +22,28 @@ describe("Field sensitive-null refinement (D-09)", () => {
     const r = Field.safeParse({ ...makeField(), extra: 1 });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data).not.toHaveProperty("extra");
+  });
+});
+
+describe("label source boundary (D-05)", () => {
+  it("accepts deterministic raw candidate sources and rejects model provenance", () => {
+    const deterministicSources = ["aria", "label", "nearby-text", "placeholder", "inferred"] as const;
+    for (const source of deterministicSources) {
+      expect(RawElement.safeParse(makeElement({
+        labelCandidates: [{ text: "Email", source, confidence: 0.9 }],
+      })).success).toBe(true);
+    }
+    const rawWithModel: unknown = {
+      ...makeElement(),
+      labelCandidates: [{ text: "Email", source: "model", confidence: 0.9 }],
+    };
+    expect(RawElement.safeParse(rawWithModel).success).toBe(false);
+  });
+
+  it("accepts resolved model provenance and preserves the source/confidence pair", () => {
+    const parsed = Field.safeParse(makeField({ labelSource: "model", confidence: 0.92 }));
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data).toMatchObject({ labelSource: "model", confidence: 0.92 });
   });
 });
 

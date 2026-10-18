@@ -1,15 +1,13 @@
-import { dialogueStateName, initialState, reduce } from "@blip/dialogue";
+import { classifyUtterancePrivacy, dialogueStateName, initialState, reduce } from "@blip/dialogue";
 import {
   newId,
-  type ActionTarget,
-  type Field,
   type ActRequest,
   type FormModel,
 } from "@blip/protocol";
 import { type HandlerContext, type Handlers, type Hub } from "../hub/hub";
 import type { Session } from "../session/session";
+import type { Refresher } from "../session/refresh";
 import type { DialogueEvent, DialogueState, Effect, SpeakEffect } from "@blip/dialogue";
-import { classifyUtterancePrivacy } from "@blip/dialogue";
 import type { GatePort } from "./gate-port";
 import profileTemplate from "../../../../fixtures/demo/profile.template.json" with { type: "json" };
 
@@ -18,34 +16,28 @@ type RunnerOptions = {
   now?: () => number;
   snapshotTimeoutMs?: number;
   actTimeoutMs?: number;
+  refresher?: Refresher;
+  onTurnComplete?: () => void;
   onActRequest?: (request: ActRequest) => void;
-  parseIntent?: (input: ParseIntentInput) => Promise<void>;
-};
-
-type ParseIntentInput = {
-  utterance: string;
-  form: {
-    title: string;
-    step?: string;
-    fields: Array<Pick<Field, "id" | "type" | "label" | "required" | "autocomplete" | "hasValue" | "sensitive" | "disabled" | "order">>;
-    actions: Array<Pick<ActionTarget, "id" | "label" | "kind" | "primary">>;
-  } | null;
+  parseIntent?: (text: string, ctx: HandlerContext) => Promise<void>;
 };
 
 type ActEffect = Extract<Effect, { kind: "fill" | "select" | "focus" }>;
 
 /** Send a reducer-owned speech effect. Speech ids must already be tracked by DialogueState. */
-export function sendSpeakEffect(hub: Hub, effect: SpeakEffect): void {
+export function sendSpeakEffect(hub: Hub, effect: SpeakEffect, session?: Session): boolean {
   if (typeof effect.speakId !== "string" || effect.speakId.trim() === "") {
     throw new Error("speak effect requires a tracked speakId");
   }
 
-  hub.send("voice", "speak", {
+  const sent = hub.send("voice", "speak", {
     speakId: effect.speakId,
     text: effect.text,
     category: effect.category,
     interrupt: false,
   });
+  if (sent) session?.trackSpeech(effect.speakId, effect.category);
+  return sent;
 }
 
 function safeActionLabel(label: string): string {
@@ -72,6 +64,16 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
   }
 
   async function refreshSnapshot(session: Session, reason: "user" | "post-act"): Promise<boolean> {
+    if (options.refresher !== undefined) {
+      const refreshed = await options.refresher.request(reason === "post-act" ? "refresh" : "user");
+      if (!refreshed.ok) {
+        lastSnapshotTabId = undefined;
+        return false;
+      }
+      lastSnapshotTabId = refreshed.snapshot.tabId;
+      return true;
+    }
+
     if (!session.extensionConnected) {
       lastSnapshotTabId = undefined;
       return false;
@@ -102,17 +104,11 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     event: DialogueEvent,
     context?: HandlerContext,
     formOverride?: FormModel | null,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const session = context?.session ?? activeSession!;
     const form = formOverride !== undefined ? formOverride : currentForm(session);
-    const currentFieldId = state.currentFieldId;
     const utterancePrivacy = event.type === "utterance"
-      ? classifyUtterancePrivacy(
-        event.utterance.text,
-        form,
-        currentFieldId,
-        state.mode !== "awaiting-confirm" && state.mode !== "reading-back" && state.mode !== "executing",
-      )
+      ? classifyUtterancePrivacy(event.utterance.text, form, state.currentFieldId)
       : "safe";
     const injectionDetected = form !== null && session.page?.untrustedInstructionDetected === true;
     const result = reduce(state, event, {
@@ -120,10 +116,9 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       now: now(),
       profile: profileTemplate,
       untrustedInstructionDetected: injectionDetected,
-      ...(injectionDetected
-        ? { pageInjectionKey: `${lastSnapshotTabId ?? "unknown"}:${form.snapshotVersion}` }
-        : {}),
+      ...(injectionDetected ? { pageInjectionKey: `${lastSnapshotTabId ?? "unknown"}:${form.snapshotVersion}` } : {}),
     });
+    const redeemed = result.effects.some((effect) => effect.kind === "redeem");
     state = result.state;
     const hub = context?.hub ?? sessionHub;
 
@@ -140,11 +135,14 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       }
       for (const effect of result.effects) await runEffect(effect, session, hub, context);
     } finally {
-      session.dialogue = dialogueStateName(state.mode);
+      session.dialogue = session.pendingGatedAction !== null
+        ? session.pendingGatedAction.grantId === undefined ? "reading-back" : "awaiting-confirm"
+        : currentForm(session) === null ? "no-page" : dialogueStateName(state.mode);
       session.focusFieldId = state.currentFieldId ?? undefined;
       session.busy = false;
       hub.pushState();
     }
+    return redeemed;
   }
 
   let activeSession: Session | undefined;
@@ -215,10 +213,13 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
     context?: HandlerContext,
   ): Promise<void> {
     switch (effect.kind) {
-      case "speak":
-        sendSpeakEffect(hub, effect);
+      case "speak": {
+        sendSpeakEffect(hub, effect, session);
         if (effect.category !== "filler") session.lastSpoken = effect.text;
+        // NVDA dispatch acceptance is not completion. Hub falls back to agent voice before sending
+        // when NVDA cannot provide a safe signal; only the voice client's real done/cancel settles it.
         return;
+      }
       case "earcon":
         hub.send("voice", "earcon", { name: effect.name });
         return;
@@ -226,27 +227,19 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         if (typeof effect.speakId !== "string" || effect.speakId.trim() === "") {
           throw new Error("cancelSpeech effect requires a tracked speakId");
         }
-        hub.send("voice", "speak", {
+        const sent = hub.send("voice", "speak", {
           speakId: effect.speakId,
           text: "Stopped.",
           category: "answer",
           interrupt: true,
         });
+        if (sent) {
+          session.trackSpeech(effect.speakId, "answer");
+        }
         return;
       case "parseIntent":
         if (options.parseIntent && context) {
-          const observed = currentForm(session);
-          await options.parseIntent({
-            utterance: effect.text,
-            form: observed === null ? null : {
-              title: observed.title,
-              ...(observed.step === undefined ? {} : { step: observed.step }),
-              fields: observed.fields.map(({ id, type, label, required, autocomplete, hasValue, sensitive, disabled, order }) => ({
-                id, type, label, required, ...(autocomplete === undefined ? {} : { autocomplete }), hasValue, sensitive, disabled, order,
-              })),
-              actions: observed.actions.map(({ id, label, kind, primary }) => ({ id, label, kind, primary })),
-            },
-          });
+          await options.parseIntent(effect.text, context);
         } else {
           await dispatch({ type: "intent.reply", text: "I didn't understand that." });
         }
@@ -268,6 +261,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
             kind: effect.actionKind,
             title: effect.title,
             digest: effect.digest,
+            speakId: effect.speakId,
           });
         } catch {
           await dispatch({ type: "confirm.refused", reason: "gate-error" });
@@ -284,6 +278,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         );
         hub.send("voice", "confirm.armed", {
           grantId: armed.grantId,
+          speakId: armed.speakId,
           phrase: armed.phrase,
           kind: effect.actionKind,
           actionLabel,
@@ -292,6 +287,7 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         await dispatch({
           type: "confirm.armed",
           grantId: armed.grantId,
+          speakId: armed.speakId,
           phrase: armed.phrase,
           expiresAt: armed.expiresAt,
         });
@@ -301,10 +297,11 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
           void enqueue(async () => {
             if (state.confirm?.grantId !== armed.grantId) return;
             expiryTimers.delete(armed.grantId);
+            let clearedByGate = false;
             try {
-              await options.gate.clear(armed.grantId, "expired");
+              clearedByGate = (await options.gate.clear(armed.grantId, "expired")) === true;
             } finally {
-              hub.send("voice", "confirm.cleared", { grantId: armed.grantId, reason: "expired" });
+              if (!clearedByGate) hub.send("voice", "confirm.cleared", { grantId: armed.grantId, reason: "expired" });
               await dispatch({
                 type: "confirm.cleared",
                 grantId: armed.grantId,
@@ -320,21 +317,31 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       case "clearConfirm":
         clearTimeout(expiryTimers.get(effect.grantId));
         expiryTimers.delete(effect.grantId);
+        let clearedByGate = false;
         try {
-          await options.gate.clear(effect.grantId, effect.reason);
+          clearedByGate = (await options.gate.clear(effect.grantId, effect.reason)) === true;
         } catch {
           // Clearing an in-memory voice stub is best effort; the UI still needs the clear frame.
         }
-        hub.send("voice", "confirm.cleared", { grantId: effect.grantId, reason: effect.reason });
+        if (!clearedByGate) hub.send("voice", "confirm.cleared", { grantId: effect.grantId, reason: effect.reason });
         return;
       case "redeem": {
         clearTimeout(expiryTimers.get(effect.grantId));
         expiryTimers.delete(effect.grantId);
-        let outcome: { ok: boolean; reason?: string };
+        let outcome: { ok: boolean; reason?: string; handledByCore?: true };
         try {
-          outcome = await options.gate.redeem(effect.grantId);
+          outcome = await options.gate.redeem({
+            grantId: effect.grantId,
+            speakId: effect.speakId,
+            utteranceId: effect.utteranceId,
+            phrase: effect.phrase,
+          });
         } catch {
           outcome = { ok: false, reason: "gate-error" };
+        }
+        if (outcome.handledByCore) {
+          await dispatch({ type: "gated.result", ok: outcome.ok, silent: true }, context);
+          return;
         }
         await dispatch({
           type: "gated.result",
@@ -362,7 +369,67 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
         if (context.session.model === null || context.session.stale) {
           await refreshSnapshot(context.session, "user");
         }
-        await dispatch({ type: "utterance", utterance }, context);
+        try {
+          await dispatch({ type: "utterance", utterance }, context);
+        } finally {
+          options.onTurnComplete?.();
+        }
+      });
+    },
+    "confirm.redeem"(context) {
+      if (context.role !== "voice" || context.message.type !== "confirm.redeem") return;
+      const redemption = context.message.payload;
+      activeSession = context.session;
+      sessionHub = context.hub;
+      return enqueue(async () => {
+        context.session.busy = true;
+        context.hub.pushState();
+        try {
+          // The browser voice UI has already matched its exact phrase. Re-enter the same reducer
+          // path as a voice-role utterance so the server reducer clears its private pending state;
+          // the core GatePort still validates the tracked grant/speak ids before dispatch.
+          const confirm = state.confirm;
+          if (confirm === null || confirm.grantId !== redemption.grantId || confirm.speakId !== redemption.speakId) {
+            context.hub.send("voice", "confirm.cleared", {
+              grantId: redemption.grantId,
+              reason: "cancelled",
+            });
+            return;
+          }
+          const redeemed = await dispatch({
+            type: "utterance",
+            utterance: {
+              utteranceId: redemption.utteranceId,
+              text: redemption.phrase,
+              source: "typed",
+            },
+          }, context);
+          if (!redeemed && state.confirm?.grantId === redemption.grantId) {
+            clearTimeout(expiryTimers.get(redemption.grantId));
+            expiryTimers.delete(redemption.grantId);
+            let clearedByGate = false;
+            try {
+              clearedByGate = (await options.gate.clear(redemption.grantId, "cancelled")) === true;
+            } catch {
+              // A rejected UI confirmation must never leave its local redeeming lock armed.
+            }
+            if (!clearedByGate) {
+              context.hub.send("voice", "confirm.cleared", {
+                grantId: redemption.grantId,
+                reason: "cancelled",
+              });
+            }
+            await dispatch({
+              type: "confirm.cleared",
+              grantId: redemption.grantId,
+              reason: "cancelled",
+            }, context);
+          }
+        } finally {
+          context.session.busy = false;
+          context.hub.pushState();
+          options.onTurnComplete?.();
+        }
       });
     },
     "speak.done"(context) {
@@ -370,7 +437,25 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       const done = context.message.payload;
       activeSession = context.session;
       sessionHub = context.hub;
-      return enqueue(() => dispatch({ type: "speak.done", done }, context));
+      return enqueue(async () => {
+        // Never let an unknown, duplicate, NVDA-only, or otherwise untracked completion reach the
+        // reducer. Matching a read-back id alone is not evidence that its output actually finished.
+        if (!context.session.completeSpeech(done.speakId, done.interrupted, now())) return;
+        await dispatch({ type: "speak.done", done }, context);
+      });
+    },
+    settings(context) {
+      if (context.role !== "voice" || context.message.type !== "settings") return;
+      const nextMode = context.message.payload.outputMode;
+      activeSession = context.session;
+      sessionHub = context.hub;
+      if (context.session.outputMode === nextMode) return;
+      return enqueue(async () => {
+        // Cancel speech and clear any armed/read-back state through GatePort while the old output
+        // route is still active, then apply the new setting to this session.
+        await dispatch({ type: "control", cmd: "stop" }, context);
+        context.hub.setOutputMode(nextMode);
+      });
     },
     "page.changed"(context) {
       if (context.role !== "extension" || context.message.type !== "page.changed") return;
@@ -378,22 +463,43 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       sessionHub = context.hub;
       return enqueue(async () => {
         context.session.stale = true;
-        if (state.mode === "awaiting-confirm" && state.confirm !== null) {
-          const grantId = state.confirm.grantId;
-          clearTimeout(expiryTimers.get(grantId));
-          expiryTimers.delete(grantId);
+        const confirm = state.confirm;
+        if (confirm !== null) {
+          clearTimeout(expiryTimers.get(confirm.grantId));
+          expiryTimers.delete(confirm.grantId);
+          let clearedByGate = false;
           try {
-            await options.gate.clear(grantId, "page-changed");
+            clearedByGate = (await options.gate.clear(confirm.grantId, "page-changed")) === true;
           } catch {
-            // The confirm banner still has to clear when the voice-side gate is unavailable.
+            // The reducer still clears its local confirmation state when the gate is unavailable.
           }
-          context.hub.send("voice", "confirm.cleared", { grantId, reason: "page-changed" });
-          await dispatch({ type: "confirm.cleared", grantId, reason: "page-changed" }, context);
+          if (!clearedByGate) context.hub.send("voice", "confirm.cleared", { grantId: confirm.grantId, reason: "page-changed" });
+          await dispatch({ type: "confirm.cleared", grantId: confirm.grantId, reason: "page-changed" }, context, null);
+        } else if (state.mode === "reading-back") {
+          await dispatch({ type: "form.changed" }, context, null);
         }
-        // Re-snapshot on a page change so the warning-only GATE-07 bit can be spoken before
-        // the next page response. Snapshot text remains data and never enters gate matching.
         await refreshSnapshot(context.session, "user");
         await dispatch({ type: "form.changed" }, context);
+        options.onTurnComplete?.();
+      });
+    },
+    ptt(context) {
+      if (context.role !== "voice" || context.message.type !== "ptt" || context.message.payload.state !== "start") return;
+      activeSession = context.session;
+      sessionHub = context.hub;
+      return enqueue(async () => {
+        const confirm = state.confirm;
+        if (confirm === null) return;
+        clearTimeout(expiryTimers.get(confirm.grantId));
+        expiryTimers.delete(confirm.grantId);
+        let clearedByGate = false;
+        try {
+          clearedByGate = (await options.gate.clear(confirm.grantId, "cancelled")) === true;
+        } catch {
+          // Keep the UI fail-closed if the gate is unavailable.
+        }
+        if (!clearedByGate) context.hub.send("voice", "confirm.cleared", { grantId: confirm.grantId, reason: "cancelled" });
+        await dispatch({ type: "confirm.cleared", grantId: confirm.grantId, reason: "cancelled" }, context);
       });
     },
     control(context) {
@@ -403,9 +509,9 @@ export function createDialogueHandlers(options: RunnerOptions): Handlers {
       activeSession = context.session;
       sessionHub = context.hub;
       if (cmd !== "reconnect-browser") {
-        return enqueue(() =>
-          dispatch({ type: "control", cmd }, context),
-        );
+        return enqueue(async () => {
+          await dispatch({ type: "control", cmd }, context);
+        });
       }
       return enqueue(async () => {
         context.hub.send(

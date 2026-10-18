@@ -12,8 +12,8 @@ import { DEFAULT_PORT, type ActRequest } from "@blip/protocol";
 import { FIXTURE_NAMES, type FixtureName } from "@blip/protocol/fixtures-loader";
 import { startServer, type RunningServer } from "../../../apps/server/src/server";
 import type { GatePort } from "../../../apps/server/src/voice/gate-port";
-import { createStubGate } from "../../../apps/server/src/voice/gate-port";
 import { createDialogueHandlers } from "../../../apps/server/src/voice/dialogue-runner";
+import { createCoreDialogueGatePort } from "../../../apps/server/src/voice/core-gate-port";
 import { startFakeExtension } from "../../../tools/fake-extension/src/fake-extension";
 import type { FakeExtension } from "../../../tools/fake-extension/src/fake-extension";
 import { launchVoiceWindow } from "./launch-window";
@@ -74,11 +74,12 @@ export async function startReal(opts: RealOptions = {}): Promise<{
     port: opts.port ?? DEFAULT_PORT,
     dev: true, // the default fake extension has no Origin; browser mode is pinned by its extension id
     brain: "fake",
+    clock: now,
     ...(opts.browserExtension ? { extensionId: DEMO_EXTENSION_ID } : {}),
     fakeDelayMs: opts.fakeDelayMs ?? 1500,
     staticRoots,
-    handlers: createDialogueHandlers({
-      gate: opts.gate ?? createStubGate(now),
+    handlersFactory: (context) => createDialogueHandlers({
+      gate: opts.gate ?? createCoreDialogueGatePort(context),
       now,
       ...(opts.onActRequest !== undefined ? { onActRequest: opts.onActRequest } : {}),
     }),

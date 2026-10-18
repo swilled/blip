@@ -13,6 +13,7 @@ describe("matchGrammar", () => {
     ["which fields are required", "whats_required"],
     ["read the form", "read_form"],
     ["read form", "read_form"],
+    ["what went wrong", "what_went_wrong"],
     ["stop", "stop"],
     ["be quiet", "stop"],
     ["repeat", "repeat"],
@@ -24,6 +25,7 @@ describe("matchGrammar", () => {
   it("ignores case, punctuation and extra whitespace", () => {
     expect(matchGrammar("  WHAT'S   HERE?! ")).toEqual({ type: "describe" });
     expect(matchGrammar("Read, the form.")).toEqual({ type: "read_form" });
+    expect(matchGrammar("  WHAT  WENT WRONG?! ")).toEqual({ type: "what_went_wrong" });
     expect(matchGrammar("What’s required")).toEqual({ type: "whats_required" });
   });
 
@@ -44,11 +46,26 @@ describe("matchGrammar", () => {
 
   it("can never produce a gated or filling intent (type-level and value-level)", () => {
     // If LocalCommand ever grew request_action, click_safe or set_fields this assignment would stop compiling.
-    const allowed: LocalCommand["type"][] = ["describe", "whats_required", "read_form", "stop", "repeat"];
+    const allowed: LocalCommand["type"][] = ["describe", "whats_required", "read_form", "what_went_wrong", "stop", "repeat"];
     // @ts-expect-error request_action is not a local command
     const bad: LocalCommand["type"] = "request_action";
     expect(allowed).not.toContain(bad);
-    for (const phrase of ["click submit", "book the room", "pay now", "fill my name", "delete everything", "confirm", "yes submit"]) {
+    for (const phrase of [
+      "click submit",
+      "book the room",
+      "pay now",
+      "fill my name",
+      "delete everything",
+      "confirm",
+      "yes submit",
+      "submit survey",
+      "confirm payment",
+      "confirm deletion",
+      "confirm sending",
+      "leave this site",
+      "what is happening",
+      "why did this happen",
+    ]) {
       expect(matchGrammar(phrase)).toBeNull();
     }
   });

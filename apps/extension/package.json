@@ -1,0 +1,16 @@
+{
+  "name": "@blip/extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsx build.ts",
+    "watch": "tsx build.ts --watch",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.5",
+    "esbuild": "0.28.2",
+    "jsdom": "29.1.1"
+  }
+}

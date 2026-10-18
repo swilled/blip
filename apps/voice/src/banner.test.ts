@@ -58,6 +58,7 @@ function fakeSlot() {
 function armed(grantId: string, phrase: string): ConfirmArmedPayload {
   return {
     grantId,
+    speakId: "speak-1",
     phrase,
     kind: "submit",
     actionLabel: "Submit survey",

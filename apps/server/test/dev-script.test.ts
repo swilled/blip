@@ -117,12 +117,11 @@ describe("npm run dev (D-21)", () => {
     }
   }, 60000);
 
-  it("--brain=claude exits 2 with the Phase 4 message", async () => {
-    const r = run("--brain=claude");
+  it("an unknown brain mode exits 2 without initializing the provider", async () => {
+    const r = run("--brain=remote");
     try {
       expect(await exitWithin(r, 30000)).toBe(2);
-      expect(r.err()).toContain("--brain=claude is not available yet");
-      expect(r.err()).toContain("Phase 4");
+      expect(r.err()).toContain("--brain must be fake or agy");
     } finally {
       killTree(r);
     }
@@ -157,6 +156,28 @@ describe("npm run dev (D-21)", () => {
         voice.ws.terminate();
       }
       expect(await portIsOpen(port)).toBe(true);
+    } finally {
+      killTree(r);
+    }
+  }, 60000);
+
+  it("--no-fake-extension keeps the REPL available while waiting for a real browser extension", async () => {
+    const r = run("--no-fake-extension --port 0");
+    try {
+      const listening = await waitFor(r, /listening on ws:\/\/127\.0\.0\.1:(\d+)\/ws/);
+      const port = Number(listening[1]);
+      await waitFor(r, /^fake extension disabled; waiting for the real extension$/m);
+      await waitFor(r, /^ready\. type an utterance, or \/quit$/m);
+      const voice = await bindClient(port, "voice", { origin: undefined });
+      try {
+        const state = voice.frames.find((frame) => frame.type === "state");
+        expect(state?.payload.extensionConnected).toBe(false);
+      } finally {
+        voice.ws.terminate();
+      }
+      r.child.stdin?.write("/quit\n");
+      expect(await exitWithin(r, 10000)).toBe(0);
+      expect(await portIsOpen(port)).toBe(false);
     } finally {
       killTree(r);
     }

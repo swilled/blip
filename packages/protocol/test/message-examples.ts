@@ -37,7 +37,8 @@ export const EXAMPLES: { [T in MessageType]: PayloadOf<T> } = {
   control: { cmd: "stop" },
   speak: { speakId: "k1", text: "Hello", category: "answer", interrupt: false },
   earcon: { name: "listening" },
-  "confirm.armed": { grantId: "g1", phrase: "submit form", kind: "submit", actionLabel: "Book now", expiresAt: 1_000_000 },
+  "confirm.redeem": { grantId: "g1", speakId: "k1", utteranceId: "u2", phrase: "submit survey" },
+  "confirm.armed": { grantId: "g1", speakId: "k1", phrase: "submit survey", kind: "submit", actionLabel: "Book now", expiresAt: 1_000_000 },
   "confirm.cleared": { grantId: "g1", reason: "executed" },
   state: {
     dialogue: "ready",

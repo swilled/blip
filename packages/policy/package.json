@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./classify": "./src/classify.ts",
+    "./confirmation": "./src/confirmation.ts",
+    "./sensitive-shapes": "./src/sensitive-shapes.ts"
   },
   "dependencies": {
     "@blip/protocol": "*"

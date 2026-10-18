@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Guest booking</title>
+    <script src="/report.js"></script>
+    <style>
+      main { max-width: 40rem; margin: 2rem auto; font: 1rem/1.5 sans-serif; }
+      form { display: grid; gap: 1rem; }
+      fieldset { display: grid; gap: .75rem; }
+      label { display: block; }
+      .error { color: #8a1c1c; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Guest booking</h1>
+      <form id="booking-form" novalidate>
+        <button id="booking-submit" type="submit">Book my guest stay</button>
+
+        <fieldset>
+          <legend>Guest details</legend>
+          <div>
+            <label for="guest-name">Guest name</label>
+            <input id="guest-name" name="guestName" type="text" value="Alex Visitor">
+          </div>
+          <div>
+            <label for="guest-email">Email address</label>
+            <input id="guest-email" name="email" type="email" value="alex@example.com" aria-describedby="email-error">
+            <p id="email-error" class="error" hidden></p>
+          </div>
+          <div>
+            <label for="guest-count">Number of guests</label>
+            <input id="guest-count" name="guestCount" type="number" min="1" value="2">
+          </div>
+          <div>
+            <label for="card-number">Card number</label>
+            <input id="card-number" name="cardNumber" type="text" autocomplete="cc-number" value="4111111111111111" inputmode="numeric">
+          </div>
+        </fieldset>
+
+        <div id="page-error" class="error" role="alert" hidden></div>
+      </form>
+
+      <section id="confirmation" hidden aria-live="polite">
+        <h2 id="confirmation-heading">Booking confirmed</h2>
+        <p id="confirmation-status" role="status">Booking confirmed. Confirmation number GH-2048.</p>
+      </section>
+    </main>
+    <script>
+      const bookingForm = document.querySelector("#booking-form");
+      const guestEmail = document.querySelector("#guest-email");
+      const emailError = document.querySelector("#email-error");
+      const pageError = document.querySelector("#page-error");
+      const confirmation = document.querySelector("#confirmation");
+
+      bookingForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        window.blipReport("booking-submit", {});
+        confirmation.hidden = true;
+
+        const acceptedEmail = /^[^\s@]+@[^\s@]+\.edu$/i.test(guestEmail.value.trim());
+        if (!acceptedEmail) {
+          guestEmail.setAttribute("aria-invalid", "true");
+          emailError.textContent = "Use a .edu email address for this booking.";
+          emailError.hidden = false;
+          pageError.textContent = "Please correct the highlighted booking details.";
+          pageError.hidden = false;
+          window.blipReport("booking-validation-error", {});
+          return;
+        }
+
+        guestEmail.removeAttribute("aria-invalid");
+        emailError.textContent = "";
+        emailError.hidden = true;
+        pageError.textContent = "";
+        pageError.hidden = true;
+        confirmation.hidden = false;
+        window.blipReport("booking-confirmed", {});
+      });
+
+      guestEmail.addEventListener("input", () => {
+        guestEmail.removeAttribute("aria-invalid");
+        emailError.textContent = "";
+        emailError.hidden = true;
+        pageError.textContent = "";
+        pageError.hidden = true;
+      });
+    </script>
+  </body>
+</html>

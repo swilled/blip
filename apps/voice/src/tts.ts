@@ -79,20 +79,28 @@ export function createTts(deps: TtsDeps): Tts {
     oneMomentTimer = null;
   };
 
-  function finishItem(): void {
+  function finishItem(interrupted = false): void {
     const item = active;
     active = null;
     lastEnd = now();
-    if (item) onDone({ speakId: item.speakId, interrupted: false });
+    if (item) onDone({ speakId: item.speakId, interrupted });
     pump();
   }
 
-  function sentenceEnded(gen: number): void {
+  function sentenceEnded(gen: number, interrupted = false): void {
     if (gen !== generation) return;
     generation += 1; // later duplicate end/error/gate callbacks for this sentence are stale
     clearGate();
     const item = active;
     if (!item) return;
+    // An error or watchdog timeout is not proof that the words finished. Stop this whole message
+    // and report it interrupted so a read-back can never arm from an estimated completion time.
+    if (interrupted) {
+      clearTail();
+      synth.cancel();
+      finishItem(true);
+      return;
+    }
     sentenceIdx += 1;
     if (sentenceIdx < item.sentences.length) {
       speakSentence();
@@ -115,12 +123,12 @@ export function createTts(deps: TtsDeps): Tts {
     const gen = generation;
     gateTimer = setTimer(() => {
       gateTimer = null;
-      sentenceEnded(gen);
+      sentenceEnded(gen, true);
     }, estimateMs(text) + GATE_SLACK_MS);
     synth.speak(text, {
       onend: () => sentenceEnded(gen),
-      // Chrome reports an utterance cut off by another speak() as error interrupted/canceled, not end.
-      onerror: () => sentenceEnded(gen),
+      // Chrome reports canceled/interrupted utterances as errors, not successful ends.
+      onerror: () => sentenceEnded(gen, true),
     });
   }
 
