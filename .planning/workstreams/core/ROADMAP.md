@@ -248,7 +248,7 @@ Plans:
 **Goal:** Add generic, page-grounded workflows that can read requested content, summarize it on request, draft and revise text, read the final draft back, and carry out a send or other gated action only after explicit confirmation bound to that exact draft and page. Site names and the email example are not hardcoded.
 **Requirements**: No shared requirement changes in this phase
 **Depends on:** Phase 7
-**Plans:** 6 plans
+**Plans:** 7 plans
 
 Plans:
 - [x] 08-01-PLAN.md — Capture generic visible items with bounded recency evidence
@@ -257,6 +257,7 @@ Plans:
 - [x] 08-04-PLAN.md — Compose and revise drafts with observed field read-back
 - [x] 08-05-PLAN.md — Gate sending on exact phrase and draft-bound grant
 - [x] 08-06-PLAN.md — Integrate and verify the synthetic end-to-end workflow
+- [ ] 08-07-PLAN.md — Connect Phase 8 task routing and guarded send through the demo dialogue runner
 
 ---
 *Roadmap created: 2026-10-16*
