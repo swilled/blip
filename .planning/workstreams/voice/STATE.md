@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 4
 current_phase_name: NVDA Mode and Demo-Safe
 status: verifying
-stopped_at: Researched repair plans 04-04 through 04-08 ready; voice device acceptance pending
+stopped_at: Plans 04-04 through 04-07 executed; 04-08 device checkpoint pending
 last_updated: "2026-10-18T05:02:14Z"
 last_activity: 2026-10-18
-last_activity_desc: User-reported voice regressions researched and planned
+last_activity_desc: Capture, synthesis, rate and confirmation repairs implemented and regression checked
 state_head: 9b323c6b56063dbc074fa00cf199e1cec85d5516
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 30
-  completed_plans: 25
+  completed_plans: 29
 milestone_name: milestone
 ---
 
@@ -30,9 +30,9 @@ Workstream: voice (Person B). Roadmap: .planning/workstreams/voice/ROADMAP.md
 ## Current Position
 
 Phase: 4 (NVDA Mode and Demo-Safe) — EXECUTING
-Plan: 04-07 next; launch, capture, and speech-output repairs complete
-Status: Repair plans ready for execution; live verification remains open
-Last activity: 2026-10-18 — Research-backed voice repair planning completed
+Plan: 04-08 automated regression complete; microphone/speaker checkpoint next
+Status: Repairs implemented; live device verification remains open
+Last activity: 2026-10-18 — Root suite 1298 passed / 28 skipped, typecheck and voice build passed
 
 Progress: [█████░░░░░] 50%
 

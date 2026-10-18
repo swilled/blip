@@ -184,7 +184,7 @@ Plans:
 - If the NVDA path isn't solid by ~h30, demo in agent-voice mode and show NVDA only in the opening hook.
 - The demo script follows the four beats in research/FEATURES.md: hook, repair, fill, then the gate (bare "yes" blocked, injection ignored, phrase submits).
 
-**Plans**: 3/8 plans executed; 5 researched repair plans ready for execution
+**Plans**: 7/8 plans executed; final repair regression passed, device checkpoint pending
 
 Plans:
 - [x] 04-01-PLAN.md — Exclusive NVDA output routing and tracked completion
@@ -193,7 +193,7 @@ Plans:
 - [x] 04-04-PLAN.md — Current Chrome build, reopen flow, microphone readiness, and diagnostics
 - [x] 04-05-PLAN.md — Reliable held capture and complete speech transcription
 - [x] 04-06-PLAN.md — Audible Windows rate levels and speech-output recovery
-- [ ] 04-07-PLAN.md — Tracked acknowledgement speech and real PTT confirmation integration
+- [x] 04-07-PLAN.md — Tracked acknowledgement speech and real PTT confirmation integration
 - [ ] 04-08-PLAN.md — Regression proof, short device checklist, and remaining milestone evidence
 
 Repair research, coverage, and execution order: [04-REPAIR-OVERVIEW.md](phases/04-nvda-mode-and-demo-safe/04-REPAIR-OVERVIEW.md).
