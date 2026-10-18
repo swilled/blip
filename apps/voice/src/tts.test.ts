@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createTts, type Synth, type SynthHandlers, type TtsDeps, type TtsDone } from "./tts";
+import { createTts, type Synth, type SynthHandlers, type TtsDone } from "./tts";
 
 function setup() {
   const spoken: string[] = [];
@@ -23,7 +23,7 @@ function setup() {
     setTimer: (fn, ms) => setTimeout(fn, ms),
     clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     onDone: (d) => done.push(d),
-  } as unknown as TtsDeps);
+  });
   return { tts, spoken, spokenRates, handlers, done, cancel, setRate: (rate: number) => (currentRate = rate) };
 }
 

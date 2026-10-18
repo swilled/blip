@@ -9,7 +9,7 @@ export interface SynthHandlers {
 }
 
 export interface Synth {
-  speak(text: string, handlers: SynthHandlers): void;
+  speak(text: string, handlers: SynthHandlers, rate: number): void;
   cancel(): void;
 }
 
@@ -20,6 +20,7 @@ export interface TtsDone {
 
 export interface TtsDeps {
   synth: Synth;
+  getRate?: () => number;
   now: () => number;
   setTimer: (fn: () => void, ms: number) => unknown;
   clearTimer: (handle: unknown) => void;
@@ -57,6 +58,7 @@ function estimateMs(sentence: string): number {
 
 export function createTts(deps: TtsDeps): Tts {
   const { synth, now, setTimer, clearTimer, onDone } = deps;
+  const getRate = deps.getRate ?? (() => 1.0);
   const queue: Item[] = [];
   let active: Item | null = null;
   let sentenceIdx = 0;
@@ -125,11 +127,12 @@ export function createTts(deps: TtsDeps): Tts {
       gateTimer = null;
       sentenceEnded(gen, true);
     }, estimateMs(text) + GATE_SLACK_MS);
+    const rate = getRate();
     synth.speak(text, {
       onend: () => sentenceEnded(gen),
       // Chrome reports canceled/interrupted utterances as errors, not successful ends.
       onerror: () => sentenceEnded(gen, true),
-    });
+    }, rate);
   }
 
   function pump(): void {
