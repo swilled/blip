@@ -201,7 +201,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for how to work on Blip.
 
 ## Credits
 
-Blip's voice is [Kokoro](https://github.com/hexgrad/kokoro) (Apache-2.0), its ears are [Moonshine](https://github.com/moonshine-ai/moonshine), and its interface sounds are by [Kenney](https://kenney.nl/) (CC0). Screen reader output uses the [NVDA Controller Client](https://github.com/nvaccess/nvda/tree/master/extras/controllerClient). Blip started at GatorHacks 2026.
+Blip's voice is [Kokoro](https://github.com/hexgrad/kokoro) (Apache-2.0), its ears are [Moonshine](https://github.com/moonshine-ai/moonshine), and its interface sounds are by [Kenney](https://kenney.nl/) (CC0). Screen reader output uses the [NVDA Controller Client](https://github.com/nvaccess/nvda/tree/master/extras/controllerClient). Blip started at SwampHacks 2026.
 
 Released under the [MIT License](LICENSE).
 
